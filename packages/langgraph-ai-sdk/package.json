@@ -18,9 +18,9 @@
   "peerDependencies": {
     "@langchain/core": "^1.0.0",
     "@langchain/langgraph": "^1.0.0",
+    "@langchain/langgraph-checkpoint-postgres": "^1.0.0",
     "ai": "^5.0.0",
-    "langchain": "^1.0.0",
-    "@langchain/langgraph-checkpoint-postgres": "^1.0.0"
+    "langchain": "^1.0.0"
   },
   "devDependencies": {
     "@langchain/core": "^1.0.0",
@@ -36,6 +36,7 @@
   },
   "dependencies": {
     "@langgraph-ai-sdk/types": "workspace:*",
+    "@types/pg": "^8.15.6",
     "drizzle-orm": "^0.44.7",
     "uuid": "^13.0.0"
   }

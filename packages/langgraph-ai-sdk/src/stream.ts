@@ -30,7 +30,6 @@ export function getSchemaKeys<T extends z.ZodObject<any>>(
 ): Array<keyof z.infer<T>> {
   return Object.keys(schema.shape) as Array<keyof z.infer<T>>;
 }
-
 export interface LanggraphBridgeConfig<
   TGraphData extends LanggraphDataBase<any, any>,
 > {
@@ -56,6 +55,7 @@ export function createLanggraphUIStream<
   // type DataPartsType = TMessage extends StructuredMessage ? TState & TStructuredMessage : TState;
     
   return createUIMessageStream<LanggraphUIMessage<TGraphData>>({
+  // return createUIMessageStream<UIMessage<unknown, { 'message-text': string }>>({
     execute: async ({ writer }) => {
       const stream = await graph.stream(
         { messages, ...state },
@@ -108,7 +108,7 @@ export function createLanggraphUIStream<
               // Schema provided: stream raw JSON chunks for progressive parsing on frontend
               if (content) {
                 writer.write({
-                  type: 'data-message',
+                  type: 'data-message-text',
                   id: messagePartId,
                   data: messageBuffer,
                 });

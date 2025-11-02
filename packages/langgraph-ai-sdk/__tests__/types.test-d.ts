@@ -5,12 +5,15 @@ import type { UIMessage } from 'ai'
 import type {
   ExtractGraphState,
   LanggraphData,
+  LanggraphUIMessage
+} from '../src/types.ts'
+
+import type {
   InferState,
   InferMessage,
   InvalidStateError,
   LanggraphDataParts,
-  LanggraphUIMessage
-} from '../src/types.ts'
+} from '@langgraph-ai-sdk/types'
 
 type TextDataPart = { type: 'text'; text: string }
 type CustomMessagePart = {
