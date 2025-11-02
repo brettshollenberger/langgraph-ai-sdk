@@ -13,7 +13,8 @@ import type {
   LanggraphDataBase,
   LanggraphUIMessage,
   InferState, 
-  InferMessage, 
+  InferMessage,
+  InferMessageSchema,
   StructuredMessage 
 } from '@langgraph-ai-sdk/types'
 
@@ -37,6 +38,7 @@ export interface LanggraphBridgeConfig<
   graph: CompiledStateGraph<InferState<TGraphData>, any>;
   messages: BaseMessage[];
   threadId: string;
+  messageSchema?: InferMessageSchema<TGraphData>;
   checkpointer?: PostgresSaver;
   state?: Partial<InferState<TGraphData>>;
 }
@@ -47,6 +49,7 @@ export function createLanggraphUIStream<
   graph,
   messages,
   threadId,
+  messageSchema,
   state,
 }: LanggraphBridgeConfig<TGraphData>) {
   type TState = InferState<TGraphData>

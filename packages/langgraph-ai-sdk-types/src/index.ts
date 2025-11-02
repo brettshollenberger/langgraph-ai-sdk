@@ -1,5 +1,6 @@
 import type { UIMessage } from 'ai';
 import { type BaseMessage } from '@langchain/core/messages'
+import { z } from 'zod';
 
 export type InvalidStateError = {
   __error: "The graph state is invalid. It must contain a `messages: BaseMessage[]` property."
@@ -10,78 +11,33 @@ export type StructuredMessage = Record<string, unknown>
 
 export interface LanggraphDataBase<
     TGraphState extends ValidGraphState,
-    TStructuredMessage extends string | StructuredMessage = string
+    TMessageSchema extends z.ZodType | undefined = undefined
 > {
     state: TGraphState,
-    message: TStructuredMessage
+    messageSchema: TMessageSchema
 }
 
-// Extract state
 export type InferState<T> = T extends LanggraphDataBase<infer TGraphState, any>
 ? TGraphState
 : never
 
-// Extract custom message
-export type InferMessage<T> = T extends LanggraphDataBase<any, infer TMessage>
-? TMessage
+export type InferMessageSchema<T> = T extends LanggraphDataBase<any, infer TMessageSchema>
+? TMessageSchema
 : never
 
-// export type DataStateUIPart<TData extends LanggraphDataBase<any, any>> = ValueOf<{
-//     [NAME in keyof Omit<InferState<TData>, 'messages'> & string]: {
-//         type: `state-${NAME}`;
-//         id?: string;
-//         data: InferState<TData>[NAME];
-//     }
-// }>;
+export type InferMessage<T> = T extends LanggraphDataBase<any, infer TMessageSchema>
+  ? TMessageSchema extends z.ZodType
+    ? z.infer<TMessageSchema>
+    : string
+  : never
 
-// export type DataMessageUIPart<TData extends LanggraphDataBase<any, any>> =
-//     InferMessage<TData> extends StructuredMessage
-//         ? ValueOf<{
-//             [NAME in keyof InferMessage<TData> & string]: {
-//                 type: `message-${NAME}`;
-//                 id?: string;
-//                 data: InferMessage<TData>[NAME];
-//             }
-//         }>
-//         : InferMessage<TData> extends string
-//             ? {
-//                 type: 'message-text';
-//                 id?: string;
-//                 data: string;
-//             }
-//             : never;
-
-// export type LanggraphDataParts<T extends LanggraphDataBase<any, any>> =
-//     Merge<
-//         DataStateUIPart<T>,
-//         DataMessageUIPart<T>
-//     >;
 export type LanggraphDataParts<T extends LanggraphDataBase<any, any>> =
-& { [K in keyof Omit<InferState<T>, 'messages'> as `state-${K & string}`]:
-  InferState<T>[K] }
-    & (InferMessage<T> extends StructuredMessage
-        ? { [K in keyof InferMessage<T> as `message-${K & string}`]:
-  InferMessage<T>[K] }
-        : { 'message-text': string });
-
+& { [K in keyof Omit<InferState<T>, 'messages'> as `state-${K & string}`]: InferState<T>[K] }
+& (InferMessageSchema<T> extends z.ZodType
+    ? { [K in keyof InferMessage<T> as `message-${K & string}`]: InferMessage<T>[K] }
+    : { 'message-text': string });
 
 export type LanggraphUIMessage<T extends LanggraphDataBase<any, any>> = UIMessage<
-    unknown, // TODO: Add metadata type
+    unknown,
     LanggraphDataParts<T>
-    // TODO: Add tool calls type
 >
-
-// TODO:
-// I THINK WE CAN DELETE THESE
-// export interface FrontendMessagePart<TMessageMetadata extends Record<string, any>> {
-//   type: 'text' | keyof TMessageMetadata;
-//   id?: string;
-//   text?: string;
-//   data?: any;
-// }
-
-// export interface FrontendMessage<TMessageMetadata extends Record<string, any>> {
-//   id: string;
-//   role: 'user' | 'assistant' | 'system';
-//   parts: FrontendMessagePart<TMessageMetadata>[];
-// }
