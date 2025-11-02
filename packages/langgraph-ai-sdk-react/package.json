@@ -6,8 +6,8 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./index.d.ts",
-      "import": "./index.js"
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
     }
   },
   "keywords": [
@@ -22,6 +22,10 @@
     "@ai-sdk/react": "^2.0.0",
     "ai": "^5.0.0",
     "react": "^18.0.0 || ^19.0.0"
+  },
+  "dependencies": {
+    "@langgraph-ai-sdk/types": "workspace:*",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@ai-sdk/react": "^2.0.86",

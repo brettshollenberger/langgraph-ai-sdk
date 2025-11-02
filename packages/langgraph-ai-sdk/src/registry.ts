@@ -1,23 +1,17 @@
-import { z } from "zod";
 import { CompiledStateGraph } from "@langchain/langgraph";
-import type { LanggraphData, InferState } from "../types.ts";
+import type { LanggraphData, InferState } from "./types.ts";
 
-interface GraphConfig<TData extends LanggraphData<any, any>> {
-  graph: CompiledStateGraph<InferState<TData>, any>;
-  messageMetadataSchema?: z.ZodObject<any>;
-}
-
-const graphRegistry = new Map<string, GraphConfig<any>>();
+const graphRegistry = new Map<string, CompiledStateGraph<any, any>>();
 
 export function registerGraph<TData extends LanggraphData<any, any>>(
   name: string,
-  config: GraphConfig<TData>
+  graph: CompiledStateGraph<InferState<TData>, any>
 ) {
-  graphRegistry.set(name, config);
+  graphRegistry.set(name, graph);
 }
 
 export function getGraph<TData extends LanggraphData<any, any>>(
   name: string
-): GraphConfig<TData> | undefined {
+): CompiledStateGraph<InferState<TData>, any> | undefined {
   return graphRegistry.get(name);
 }

@@ -1,38 +1,40 @@
-import { z } from 'zod';
 import { useRef, useEffectEvent } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { useState, useEffect, useMemo } from 'react';
-import type { LanggraphMessage, FrontendMessage, FrontendMessagePart } from '../api/chat.ts';
+import type { LanggraphDataBase, InferState, InferMessage, LanggraphUIMessage } from '@langgraph-ai-sdk/types';
 import { DefaultChatTransport } from 'ai';
 import { parsePartialJson } from 'ai';
 import { v7 as uuidv7 } from 'uuid';
 
-function useLangGraphChat<
-  TState extends Record<string, any>,
-  TMessageMetadata extends Record<string, any>
+export function useLanggraph<
+  TLanggraphData extends LanggraphDataBase<any, any>
 >({
   api = '/api/chat',
   headers = {},
-  stateFields,
-  messageSchema,
+  // stateFields,
+  // messageSchema,
   getInitialThreadId,
 }: {
   api?: string;
   headers?: Record<string, string>;
-  stateFields: Array<keyof TState>;
-  messageSchema: z.ZodObject<any> & {
-    _output: TMessageMetadata
-  };
+  // stateFields: Array<keyof TState>;
+  // messageSchema: z.ZodObject<any> & {
+  //   _output: TMessageMetadata
+  // };
   getInitialThreadId?: () => string | undefined;
 }) {
+  type TState = InferState<TLanggraphData>
+  type TMessage = InferMessage<TLanggraphData>
+
   const threadIdRef = useRef<string>(getInitialThreadId?.() ?? uuidv7());
   const threadId = threadIdRef.current;
   const [error, setError] = useState<string | null>(null);
   const [serverState, setServerState] = useState<TState>({} as TState);
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const headersRef = useRef(headers);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
-  const chat = useChat<LanggraphMessage>({
+  const chat = useChat<LanggraphUIMessage<TLanggraphData>>({
     transport: new DefaultChatTransport({
       api,
       headers,
@@ -50,8 +52,6 @@ function useLangGraphChat<
     
     chat.sendMessage(...args);
   };
-
-  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
   const loadHistory = useEffectEvent(async () => {
     if (!threadId) {

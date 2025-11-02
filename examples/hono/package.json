@@ -21,12 +21,13 @@
         "@langchain/core": "^1.0.0",
         "@langchain/langgraph": "^1.0.0",
         "@langchain/ollama": "^1.0.0",
+        "@langgraph-ai-sdk/react": "workspace:*",
         "@tailwindcss/vite": "^4.1.16",
         "hono": "^4.10.4",
         "langchain": "^1.0.0",
-        "vite": "^7.1.12",
-        "zod": "^4.1.12",
         "langgraph-ai-sdk": "workspace:*",
-        "@langgraph-ai-sdk/react": "workspace:*"
+        "pg": "^8.16.3",
+        "vite": "^7.1.12",
+        "zod": "^4.1.12"
     }
 }

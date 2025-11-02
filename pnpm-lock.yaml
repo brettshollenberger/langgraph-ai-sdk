@@ -56,6 +56,9 @@ importers:
       langgraph-ai-sdk:
         specifier: workspace:*
         version: link:../../packages/langgraph-ai-sdk
+      pg:
+        specifier: ^8.16.3
+        version: 8.16.3
       vite:
         specifier: ^7.1.12
         version: 7.1.12(@types/node@24.9.2)(jiti@2.6.1)(lightningcss@1.30.2)
@@ -78,6 +81,9 @@ importers:
       '@langchain/langgraph-checkpoint-postgres':
         specifier: ^1.0.0
         version: 1.0.0(@langchain/core@1.0.2(@opentelemetry/api@1.9.0))(@langchain/langgraph-checkpoint@1.0.0(@langchain/core@1.0.2(@opentelemetry/api@1.9.0)))
+      '@langgraph-ai-sdk/types':
+        specifier: workspace:*
+        version: link:../langgraph-ai-sdk-types
       drizzle-orm:
         specifier: ^0.44.7
         version: 0.44.7(@opentelemetry/api@1.9.0)(pg@8.16.3)
@@ -117,6 +123,13 @@ importers:
         version: 3.25.76
 
   packages/langgraph-ai-sdk-react:
+    dependencies:
+      '@langgraph-ai-sdk/types':
+        specifier: workspace:*
+        version: link:../langgraph-ai-sdk-types
+      uuid:
+        specifier: ^13.0.0
+        version: 13.0.0
     devDependencies:
       '@ai-sdk/react':
         specifier: ^2.0.86
@@ -136,6 +149,15 @@ importers:
       tsdown:
         specifier: ^0.15.12
         version: 0.15.12(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/langgraph-ai-sdk-types:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.5
+        version: 22.18.13
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
