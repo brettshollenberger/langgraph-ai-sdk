@@ -89,16 +89,16 @@ export function useLanggraph<
     const latestAI = chat.messages.filter(m => m.role === 'assistant').at(-1);
     
     if (latestAI) {
-      stateFields.forEach((field) => {
-        const part = latestAI.parts.find(p => p.type === `data-${String(field)}`);
-        if (part && 'data' in part) {
-          stateObj[field] = part.data as TState[keyof TState];
-        }
-      });
+      // stateFields.forEach((field) => {
+      //   const part = latestAI.parts.find(p => p.type === `data-${String(field)}`);
+      //   if (part && 'data' in part) {
+      //     stateObj[field] = part.data as TState[keyof TState];
+      //   }
+      // });
     }
     
     return stateObj;
-  }, [chat.messages, stateFields]);
+  }, [chat.messages]); //, stateFields]);
 
   const state = Object.keys(derivedState).length > 0 ? derivedState : serverState;
 
@@ -129,13 +129,13 @@ export function useLanggraph<
                 
                 if (metadata && typeof metadata === 'object') {
                   for (const [key, value] of Object.entries(metadata)) {
-                    if (key in messageSchema.shape) {
-                      results.push({
-                        type: key as keyof TMessageMetadata,
-                        id: crypto.randomUUID(),
-                        data: value as any,
-                      } as FrontendMessagePart<TMessageMetadata>);
-                    }
+                    // if (key in messageSchema.shape) {
+                    //   results.push({
+                    //     type: key as keyof TMessageMetadata,
+                    //     id: crypto.randomUUID(),
+                    //     data: value as any,
+                    //   } as FrontendMessagePart<TMessageMetadata>);
+                    // }
                   }
                 }
               } catch {
@@ -155,7 +155,7 @@ export function useLanggraph<
     };
     
     transformMessages();
-  }, [chat.messages, messageSchema]);
+  }, [chat.messages]); //, messageSchema]);
 
   return {
     ...chat,

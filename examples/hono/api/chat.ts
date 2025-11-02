@@ -147,6 +147,7 @@ function authMiddleware(handler: (req: Request) => Promise<Response>) {
   return async (req: Request): Promise<Response> => {
     const authHeader = req.headers.get('Authorization');
     
+    console.log(`Auth header: ${authHeader}`)
     if (authHeader !== 'Bearer 12345') {
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
@@ -159,9 +160,9 @@ function authMiddleware(handler: (req: Request) => Promise<Response>) {
 }
 
 export const POST = authMiddleware(async (req: Request): Promise<Response> => {
-  return streamLanggraph('default')(req);
+  return streamLanggraph<MyLanggraphData>('default')(req);
 });
 
 export const GET = authMiddleware((req: Request): Promise<Response> => {
-  return fetchLanggraphHistory('default')(req);
+  return fetchLanggraphHistory<MyLanggraphData>('default')(req);
 });

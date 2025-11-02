@@ -1,4 +1,4 @@
-// import type { FrontendMessage, MessageMetadata, FrontendMessagePart } from '../api/chat.ts';
+import type { LanggraphUIMessage } from '@langgraph-ai-sdk/react';
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 
@@ -15,7 +15,7 @@ export const Wrapper = (props: {
 export const Message = ({
   message,
 }: {
-  message: FrontendMessage<MessageMetadata>;
+  message: LanggraphUIMessage;
 }) => {
   const prefix = message.role === 'user' ? 'User: ' : 'AI: ';
   const isText = message.parts.every((part) => part.type === 'text');
@@ -30,7 +30,7 @@ export const Message = ({
       </div>
     );
   } else {
-    const structuredParts = message.parts.filter((part): part is Exclude<FrontendMessagePart<MessageMetadata>, { type: 'text' }> => part.type !== 'text');
+    const structuredParts = []; // message.parts.filter((part): part is Exclude<FrontendMessagePart<MessageMetadata>, { type: 'text' }> => part.type !== 'text');
     
     return (
       <div className="prose prose-invert my-6">

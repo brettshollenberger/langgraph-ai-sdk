@@ -38,6 +38,8 @@ export type LanggraphUIMessage<T extends LanggraphDataBase<any, any>> = UIMessag
     // TODO: Add tool calls type
 >
 
+// TODO:
+// I THINK WE CAN DELETE THESE
 // export interface FrontendMessagePart<TMessageMetadata extends Record<string, any>> {
 //   type: 'text' | keyof TMessageMetadata;
 //   id?: string;

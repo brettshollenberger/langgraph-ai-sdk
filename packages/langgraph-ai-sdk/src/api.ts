@@ -5,7 +5,7 @@ import { createLanggraphStreamResponse, loadThreadHistory } from './stream.ts';
 import { getGraph } from './registry.ts';
 import { ensureThread } from './ops.js';
 import type { UIMessage } from 'ai';
-import type { LanggraphData } from './types.ts';
+import type { LanggraphDataBase } from '@langgraph-ai-sdk/types';
 
 function convertUIMessagesToLanggraph(messages: UIMessage[]): BaseMessage[] {
   return messages.map((msg) => {
@@ -25,7 +25,7 @@ function convertUIMessagesToLanggraph(messages: UIMessage[]): BaseMessage[] {
   });
 }
 
-export function streamLanggraph<TGraphData extends LanggraphData<any, any>>(graphName: string) {
+export function streamLanggraph<TGraphData extends LanggraphDataBase<any, any>>(graphName: string) {
   return async (req: Request): Promise<Response> => {
     const body = await req.json();
     const uiMessages: UIMessage[] = body.messages;
@@ -36,9 +36,9 @@ export function streamLanggraph<TGraphData extends LanggraphData<any, any>>(grap
       await ensureThread(threadId);
     }
     
-    const graphConfig = getGraph<TGraphData>(graphName);
+    const graph = getGraph<TGraphData>(graphName);
     
-    if (!graphConfig) {
+    if (!graph) {
       return new Response(
         JSON.stringify({ error: `Graph '${graphName}' not found` }),
         { status: 404, headers: { 'Content-Type': 'application/json' } }
@@ -56,9 +56,8 @@ export function streamLanggraph<TGraphData extends LanggraphData<any, any>>(grap
     }
     
     const response = createLanggraphStreamResponse<TGraphData>({
-      graph: graphConfig.graph,
+      graph,
       messages: [newMessage],
-      messageMetadataSchema: graphConfig.messageMetadataSchema,
       threadId,
     });
     
@@ -68,7 +67,7 @@ export function streamLanggraph<TGraphData extends LanggraphData<any, any>>(grap
   };
 }
 
-export function fetchLanggraphHistory<TGraphData extends LanggraphData<any, any>>(graphName: string) {
+export function fetchLanggraphHistory<TGraphData extends LanggraphDataBase<any, any>>(graphName: string) {
   return async (req: Request): Promise<Response> => {
     const url = new URL(req.url);
     const threadId = url.searchParams.get('threadId');
@@ -80,9 +79,9 @@ export function fetchLanggraphHistory<TGraphData extends LanggraphData<any, any>
       );
     }
     
-    const graphConfig = getGraph<TGraphData>(graphName);
+    const graph = getGraph<TGraphData>(graphName);
     
-    if (!graphConfig) {
+    if (!graph) {
       return new Response(
         JSON.stringify({ error: `Graph '${graphName}' not found` }),
         { status: 404, headers: { 'Content-Type': 'application/json' } }
@@ -90,9 +89,8 @@ export function fetchLanggraphHistory<TGraphData extends LanggraphData<any, any>
     }
     
     const { messages, state } = await loadThreadHistory<TGraphData>(
-      graphConfig.graph,
+      graph,
       threadId,
-      graphConfig.messageMetadataSchema
     );
     
     return new Response(

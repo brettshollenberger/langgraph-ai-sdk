@@ -7,7 +7,14 @@ import {
 import type { CompiledStateGraph } from '@langchain/langgraph';
 import { BaseMessage, AIMessage } from '@langchain/core/messages';
 import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
-import type { LanggraphData, InferState, InferMessage, StructuredMessage } from './types.ts';
+import type { LanggraphData } from './types.ts'
+import type { 
+  LanggraphDataBase,
+  LanggraphUIMessage,
+  InferState, 
+  InferMessage, 
+  StructuredMessage 
+} from '@langgraph-ai-sdk/types'
 
 type StreamChunk = [
   'messages' | 'updates',
@@ -25,16 +32,16 @@ export function getSchemaKeys<T extends z.ZodObject<any>>(
 }
 
 export interface LanggraphBridgeConfig<
-  TGraphData extends LanggraphData<any, any>,
+  TGraphData extends LanggraphDataBase<any, any>,
 > {
-  graph: CompiledStateGraph<TGraphData, any>;
+  graph: CompiledStateGraph<InferState<TGraphData>, any>;
   messages: BaseMessage[];
   threadId: string;
   checkpointer?: PostgresSaver;
 }
 
 export function createLanggraphUIStream<
-  TGraphData extends LanggraphData<any, any>,
+  TGraphData extends LanggraphDataBase<any, any>,
 >({
   graph,
   messages,
@@ -66,6 +73,7 @@ export function createLanggraphUIStream<
         const chunkArray = chunk as StreamChunk;
         let kind: string;
         let data: any;
+        console.log(chunkArray);
         
         if (chunkArray.length === 2) {
           [kind, data] = chunkArray;
@@ -153,31 +161,27 @@ export function createLanggraphUIStream<
 }
 
 export function createLanggraphStreamResponse<
-  TState extends { messages: BaseMessage[] },
-  TMessageMetadataSchema extends z.ZodObject<any> | undefined = undefined
+  TGraphData extends LanggraphDataBase<any, any>,
 >(
-  options: LanggraphBridgeConfig<TState, TMessageMetadataSchema>
+  options: LanggraphBridgeConfig<TGraphData>
 ): Response {
-  const stream = createLanggraphUIStream(options);
+  const stream = createLanggraphUIStream<TGraphData>(options);
   return createUIMessageStreamResponse({ stream });
 }
 
 export async function loadThreadHistory<
-  TState extends { messages: BaseMessage[] },
-  TMessageMetadataSchema extends z.ZodObject<any> | undefined = undefined
+  TGraphData extends LanggraphDataBase<any, any>,
 >(
-  graph: CompiledStateGraph<TState, any>,
+  graph: CompiledStateGraph<InferState<TGraphData>, any>,
   threadId: string,
-  messageMetadataSchema?: TMessageMetadataSchema
+  // messageMetadataSchema?: TMessageMetadataSchema
 ): Promise<{
-  messages: UIMessage<never, Omit<TState, 'messages'> & (TMessageMetadataSchema extends z.ZodObject<any> ? z.infer<TMessageMetadataSchema> : Record<never, never>)>[];
-  state: Partial<Omit<TState, 'messages'>>;
+  messages: LanggraphUIMessage<TGraphData>[];
+  state: Partial<InferState<TGraphData>>;
 }> {
-  type StateDataParts = Omit<TState, 'messages'>;
-  type MessageMetadataParts = TMessageMetadataSchema extends z.ZodObject<any> 
-    ? z.infer<TMessageMetadataSchema> 
-    : Record<never, never>;
-  type DataPartsType = StateDataParts & MessageMetadataParts;
+  type TState = InferState<TGraphData>
+  type TMessage = InferMessage<TGraphData>
+  type DataPartsType = TState & TMessage;
   
   const stateSnapshot = await graph.getState({ configurable: { thread_id: threadId } });
   
@@ -188,7 +192,7 @@ export async function loadThreadHistory<
   const messages = (stateSnapshot.values.messages as BaseMessage[]) || [];
   const fullState = stateSnapshot.values as TState;
   
-  const globalState: Partial<StateDataParts> = {};
+  const globalState: Partial<TState> = {};
   
   for (const key in fullState) {
     if (key !== 'messages') {
@@ -207,7 +211,8 @@ export async function loadThreadHistory<
       { type: 'text', text: content }
     ];
     
-    if (msg instanceof AIMessage && msg.response_metadata && messageMetadataSchema) {
+    // Else type would be string... in which case do we send as string?
+    if (msg instanceof AIMessage && msg.response_metadata && typeof msg.response_metadata === 'object') {
       parts.push({
         type: 'data-metadata',
         id: crypto.randomUUID(),

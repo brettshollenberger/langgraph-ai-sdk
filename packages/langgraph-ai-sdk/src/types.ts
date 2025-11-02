@@ -15,3 +15,5 @@ export type LanggraphData<
 > = ExtractGraphState<TGraph> extends ValidGraphState
         ? LanggraphDataBase<ExtractGraphState<TGraph>, TStructuredMessage>
         : InvalidStateError
+
+export { type LanggraphUIMessage } from '@langgraph-ai-sdk/types';

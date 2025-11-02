@@ -1,7 +1,7 @@
 import React from 'react';
 import { useState, useEffect } from 'react';
 import { Wrapper, ChatInput, Message } from './components.tsx';
-import { messageMetadataSchema, } from '../types.ts';
+import { structuredMessageSchema, } from '../types.ts';
 import { type MyLanggraphData } from '../api/chat.ts';
 import { useLanggraph } from '@langgraph-ai-sdk/react';
 
@@ -12,8 +12,8 @@ export function LangGraphChat() {
       'Content-Type': 'application/json',
       'Authorization': `Bearer 12345`,
     },
-    stateFields: ['projectName'],
-    messageSchema: messageMetadataSchema,
+    // stateFields: ['projectName'],
+    // messageSchema: messageMetadataSchema,
     getInitialThreadId: () => {
       if (typeof window !== 'undefined') {
         const urlParams = new URLSearchParams(window.location.search);
