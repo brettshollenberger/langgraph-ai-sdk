@@ -1,4 +1,4 @@
-import { pool } from './index.js';
+import { pool } from './index.ts';
 
 const SCHEMA_TABLES = {
   threads: 'threads'

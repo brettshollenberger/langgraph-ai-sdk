@@ -1,11 +1,11 @@
 import { v7 as uuidv7 } from 'uuid';
 import type { BaseMessage } from '@langchain/core/messages';
 import { HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
-import { createLanggraphStreamResponse, loadThreadHistory } from './stream.js';
-import { getGraph } from './registry.js';
+import { createLanggraphStreamResponse, loadThreadHistory } from './stream.ts';
+import { getGraph } from './registry.ts';
 import { ensureThread } from './ops.js';
 import type { UIMessage } from 'ai';
-import type { LanggraphData } from '../types.ts';
+import type { LanggraphData } from './types.ts';
 
 function convertUIMessagesToLanggraph(messages: UIMessage[]): BaseMessage[] {
   return messages.map((msg) => {

@@ -10,7 +10,7 @@ import type {
   InvalidStateError,
   LanggraphDataParts,
   LanggraphUIMessage
-} from '../types.js'
+} from '../src/types.ts'
 
 type TextDataPart = { type: 'text'; text: string }
 type CustomMessagePart = {

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { CompiledStateGraph } from "@langchain/langgraph";
-import type { LanggraphData, InferState } from "../types.js";
+import type { LanggraphData, InferState } from "../types.ts";
 
 interface GraphConfig<TData extends LanggraphData<any, any>> {
   graph: CompiledStateGraph<InferState<TData>, any>;

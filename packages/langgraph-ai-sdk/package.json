@@ -1,0 +1,47 @@
+{
+  "name": "langgraph-ai-sdk",
+  "version": "1.0.0",
+  "description": "Server utilities for LangGraph AI SDK",
+  "main": "index.js",
+  "type": "module",
+  "exports": {
+    "./server": {
+      "types": "./server/index.d.ts",
+      "import": "./server/index.js"
+    },
+    "./types": {
+      "types": "./types/index.d.ts",
+      "import": "./types/index.js"
+    }
+  },
+  "keywords": [
+    "langgraph",
+    "ai",
+    "server"
+  ],
+  "author": "",
+  "license": "ISC",
+  "peerDependencies": {
+    "@langchain/core": "^1.0.0",
+    "@langchain/langgraph": "^1.0.0",
+    "ai": "^5.0.0",
+    "langchain": "^1.0.0",
+    "@langchain/langgraph-checkpoint-postgres": "^1.0.0"
+  },
+  "devDependencies": {
+    "@langchain/core": "^1.0.0",
+    "@langchain/langgraph": "^1.0.0",
+    "@types/node": "^22.10.5",
+    "ai": "^5.0.0",
+    "langchain": "^1.0.0",
+    "tsdown": "^0.15.12",
+    "type-fest": "^5.1.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.0",
+    "zod": "^3.24.1"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.44.7",
+    "uuid": "^13.0.0"
+  }
+}

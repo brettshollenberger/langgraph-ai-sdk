@@ -7,7 +7,7 @@ import {
 import type { CompiledStateGraph } from '@langchain/langgraph';
 import { BaseMessage, AIMessage } from '@langchain/core/messages';
 import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
-import type { LanggraphData, InferState, InferMessage, StructuredMessage } from '../types.ts';
+import type { LanggraphData, InferState, InferMessage, StructuredMessage } from './types.ts';
 
 type StreamChunk = [
   'messages' | 'updates',

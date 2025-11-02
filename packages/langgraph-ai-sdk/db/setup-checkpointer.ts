@@ -1,4 +1,4 @@
-import { checkpointer } from '../api.js';
+import { checkpointer } from '../src/api.ts';
 
 async function setup() {
   try {
