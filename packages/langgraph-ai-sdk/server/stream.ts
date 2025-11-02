@@ -7,6 +7,7 @@ import {
 import type { CompiledStateGraph } from '@langchain/langgraph';
 import { BaseMessage, AIMessage } from '@langchain/core/messages';
 import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
+import type { LanggraphData, InferState, InferMessage, StructuredMessage } from '../types.ts';
 
 type StreamChunk = [
   'messages' | 'updates',
@@ -24,31 +25,27 @@ export function getSchemaKeys<T extends z.ZodObject<any>>(
 }
 
 export interface LanggraphBridgeConfig<
-  TState extends { messages: BaseMessage[] },
-  TMessageMetadataSchema extends z.ZodObject<any> | undefined = undefined
+  TGraphData extends LanggraphData<any, any>,
 > {
-  graph: CompiledStateGraph<TState, any>;
+  graph: CompiledStateGraph<TGraphData, any>;
   messages: BaseMessage[];
-  messageMetadataSchema?: TMessageMetadataSchema;
   threadId: string;
   checkpointer?: PostgresSaver;
 }
 
 export function createLanggraphUIStream<
-  TState extends { messages: BaseMessage[] },
-  TMessageMetadataSchema extends z.ZodObject<any> | undefined = undefined
+  TGraphData extends LanggraphData<any, any>,
 >({
   graph,
   messages,
-  messageMetadataSchema,
   threadId,
-}: LanggraphBridgeConfig<TState, TMessageMetadataSchema>) {
+}: LanggraphBridgeConfig<TGraphData>) {
+  type TState = InferState<TGraphData>
+  type TMessage = InferMessage<TGraphData>
   type StateDataParts = Omit<TState, 'messages'>;
-  type MessageMetadataParts = TMessageMetadataSchema extends z.ZodObject<any> 
-    ? z.infer<TMessageMetadataSchema> 
-    : Record<never, never>;
-  type DataPartsType = StateDataParts & MessageMetadataParts;
-  
+  type TStructuredMessage = TMessage extends StructuredMessage ? TMessage : never;
+  type DataPartsType = TMessage extends StructuredMessage ? TState & TStructuredMessage : TState;
+    
   return createUIMessageStream<UIMessage<never, DataPartsType>>({
     execute: async ({ writer }) => {
       const stream = await graph.stream(

@@ -1,33 +1,11 @@
-import { z } from 'zod';
 import { v7 as uuidv7 } from 'uuid';
-import { eq } from 'drizzle-orm';
-import { db } from './db/index.js';
-import { threads as threadsTable } from './db/schema.js';
-import type { CompiledStateGraph } from '@langchain/langgraph';
 import type { BaseMessage } from '@langchain/core/messages';
 import { HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
-// import { createLanggraphStreamResponse, loadThreadHistory } from './stream.js';
+import { createLanggraphStreamResponse, loadThreadHistory } from './stream.js';
+import { getGraph } from './registry.js';
+import { ensureThread } from './ops.js';
 import type { UIMessage } from 'ai';
-
-interface GraphConfig<TState extends { messages: BaseMessage[] }> {
-  graph: CompiledStateGraph<TState, any>;
-  messageMetadataSchema?: z.ZodObject<any>;
-}
-
-const graphRegistry = new Map<string, GraphConfig<any>>();
-
-export function registerGraph<TState extends { messages: BaseMessage[] }>(
-  name: string,
-  config: GraphConfig<TState>
-) {
-  graphRegistry.set(name, config);
-}
-
-export function getGraph<TState extends { messages: BaseMessage[] }>(
-  name: string
-): GraphConfig<TState> | undefined {
-  return graphRegistry.get(name);
-}
+import type { LanggraphData } from '../types.ts';
 
 function convertUIMessagesToLanggraph(messages: UIMessage[]): BaseMessage[] {
   return messages.map((msg) => {
@@ -47,26 +25,7 @@ function convertUIMessagesToLanggraph(messages: UIMessage[]): BaseMessage[] {
   });
 }
 
-async function ensureThread(threadId: string) {
-  const existing = await db.select().from(threadsTable).where(eq(threadsTable.threadId, threadId)).limit(1);
-  
-  if (existing.length === 0) {
-    await db.insert(threadsTable).values({
-      threadId,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      metadata: {},
-      status: 'idle',
-      config: {},
-      values: null,
-      interrupts: {},
-    });
-  }
-  
-  return threadId;
-}
-
-export function streamLanggraph(graphName: string) {
+export function streamLanggraph<TGraphData extends LanggraphData<any, any>>(graphName: string) {
   return async (req: Request): Promise<Response> => {
     const body = await req.json();
     const uiMessages: UIMessage[] = body.messages;
@@ -77,7 +36,7 @@ export function streamLanggraph(graphName: string) {
       await ensureThread(threadId);
     }
     
-    const graphConfig = getGraph(graphName);
+    const graphConfig = getGraph<TGraphData>(graphName);
     
     if (!graphConfig) {
       return new Response(
@@ -96,7 +55,7 @@ export function streamLanggraph(graphName: string) {
       );
     }
     
-    const response = createLanggraphStreamResponse({
+    const response = createLanggraphStreamResponse<TGraphData>({
       graph: graphConfig.graph,
       messages: [newMessage],
       messageMetadataSchema: graphConfig.messageMetadataSchema,
@@ -109,7 +68,7 @@ export function streamLanggraph(graphName: string) {
   };
 }
 
-export function fetchLanggraphHistory(graphName: string) {
+export function fetchLanggraphHistory<TGraphData extends LanggraphData<any, any>>(graphName: string) {
   return async (req: Request): Promise<Response> => {
     const url = new URL(req.url);
     const threadId = url.searchParams.get('threadId');
@@ -121,7 +80,7 @@ export function fetchLanggraphHistory(graphName: string) {
       );
     }
     
-    const graphConfig = getGraph(graphName);
+    const graphConfig = getGraph<TGraphData>(graphName);
     
     if (!graphConfig) {
       return new Response(
@@ -130,7 +89,7 @@ export function fetchLanggraphHistory(graphName: string) {
       );
     }
     
-    const { messages, state } = await loadThreadHistory(
+    const { messages, state } = await loadThreadHistory<TGraphData>(
       graphConfig.graph,
       threadId,
       graphConfig.messageMetadataSchema
@@ -141,61 +100,4 @@ export function fetchLanggraphHistory(graphName: string) {
       { headers: { 'Content-Type': 'application/json' } }
     );
   };
-}
-
-export async function createThread(req: Request): Promise<Response> {
-  const body = await req.json();
-  const threadId = body.threadId || uuidv7();
-  
-  const existing = await db.select().from(threadsTable).where(eq(threadsTable.threadId, threadId)).limit(1);
-  
-  if (existing.length > 0) {
-    return new Response(
-      JSON.stringify({ error: 'Thread already exists' }),
-      { status: 409, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-  
-  const [thread] = await db.insert(threadsTable).values({
-    threadId,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    metadata: body.metadata || {},
-    status: 'idle',
-    config: {},
-    values: null,
-    interrupts: {},
-  }).returning();
-  
-  return new Response(
-    JSON.stringify(thread),
-    { headers: { 'Content-Type': 'application/json' } }
-  );
-}
-
-export async function getThread(req: Request): Promise<Response> {
-  const url = new URL(req.url);
-  const pathParts = url.pathname.split('/');
-  const threadId = pathParts[pathParts.length - 1];
-  
-  if (!threadId) {
-    return new Response(
-      JSON.stringify({ error: 'threadId required' }),
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-  
-  const thread = await db.select().from(threadsTable).where(eq(threadsTable.threadId, threadId)).limit(1);
-  
-  if (thread.length === 0) {
-    return new Response(
-      JSON.stringify({ error: 'Thread not found' }),
-      { status: 404, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-  
-  return new Response(
-    JSON.stringify(thread[0]),
-    { headers: { 'Content-Type': 'application/json' } }
-  );
 }
