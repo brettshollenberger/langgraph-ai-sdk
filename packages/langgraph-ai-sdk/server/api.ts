@@ -6,7 +6,7 @@ import { threads as threadsTable } from './db/schema.js';
 import type { CompiledStateGraph } from '@langchain/langgraph';
 import type { BaseMessage } from '@langchain/core/messages';
 import { HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
-// import { createLangGraphStreamResponse, loadThreadHistory } from './stream.js';
+// import { createLanggraphStreamResponse, loadThreadHistory } from './stream.js';
 import type { UIMessage } from 'ai';
 
 interface GraphConfig<TState extends { messages: BaseMessage[] }> {
@@ -29,7 +29,7 @@ export function getGraph<TState extends { messages: BaseMessage[] }>(
   return graphRegistry.get(name);
 }
 
-function convertUIMessagesToLangGraph(messages: UIMessage[]): BaseMessage[] {
+function convertUIMessagesToLanggraph(messages: UIMessage[]): BaseMessage[] {
   return messages.map((msg) => {
     const textPart = msg.parts.find(p => p.type === 'text');
     const text = textPart?.type === 'text' ? textPart.text : '';
@@ -66,7 +66,7 @@ async function ensureThread(threadId: string) {
   return threadId;
 }
 
-export function streamLangGraph(graphName: string) {
+export function streamLanggraph(graphName: string) {
   return async (req: Request): Promise<Response> => {
     const body = await req.json();
     const uiMessages: UIMessage[] = body.messages;
@@ -86,7 +86,7 @@ export function streamLangGraph(graphName: string) {
       );
     }
     
-    const langGraphMessages = convertUIMessagesToLangGraph(uiMessages);
+    const langGraphMessages = convertUIMessagesToLanggraph(uiMessages);
     const newMessage = langGraphMessages.at(-1);
 
     if (!newMessage) {
@@ -96,7 +96,7 @@ export function streamLangGraph(graphName: string) {
       );
     }
     
-    const response = createLangGraphStreamResponse({
+    const response = createLanggraphStreamResponse({
       graph: graphConfig.graph,
       messages: [newMessage],
       messageMetadataSchema: graphConfig.messageMetadataSchema,
@@ -109,7 +109,7 @@ export function streamLangGraph(graphName: string) {
   };
 }
 
-export function fetchLangGraphHistory(graphName: string) {
+export function fetchLanggraphHistory(graphName: string) {
   return async (req: Request): Promise<Response> => {
     const url = new URL(req.url);
     const threadId = url.searchParams.get('threadId');

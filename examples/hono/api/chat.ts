@@ -6,7 +6,7 @@
 // import { messageMetadataSchema, type MessageMetadata } from '../types.ts';
 // import { StructuredOutputParser } from '@langchain/core/output_parsers';
 // import { AIMessage } from '@langchain/core/messages';
-// // import { checkpointer, registerGraph, streamLangGraph, fetchLangGraphHistory } from '../core/api.js';
+// // import { checkpointer, registerGraph, streamLanggraph, fetchLanggraphHistory } from '../core/api.js';
 
 // const GraphAnnotation = Annotation.Root({
 //   messages: Annotation<BaseMessage[]>({
@@ -151,9 +151,9 @@
 // }
 
 // export const POST = authMiddleware(async (req: Request): Promise<Response> => {
-//   return streamLangGraph('default')(req);
+//   return streamLanggraph('default')(req);
 // });
 
 // export const GET = authMiddleware((req: Request): Promise<Response> => {
-//   return fetchLangGraphHistory('default')(req);
+//   return fetchLanggraphHistory('default')(req);
 // });

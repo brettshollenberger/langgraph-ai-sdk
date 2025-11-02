@@ -23,7 +23,7 @@ export function getSchemaKeys<T extends z.ZodObject<any>>(
   return Object.keys(schema.shape) as Array<keyof z.infer<T>>;
 }
 
-export interface LangGraphBridgeConfig<
+export interface LanggraphBridgeConfig<
   TState extends { messages: BaseMessage[] },
   TMessageMetadataSchema extends z.ZodObject<any> | undefined = undefined
 > {
@@ -34,7 +34,7 @@ export interface LangGraphBridgeConfig<
   checkpointer?: PostgresSaver;
 }
 
-export function createLangGraphUIStream<
+export function createLanggraphUIStream<
   TState extends { messages: BaseMessage[] },
   TMessageMetadataSchema extends z.ZodObject<any> | undefined = undefined
 >({
@@ -42,7 +42,7 @@ export function createLangGraphUIStream<
   messages,
   messageMetadataSchema,
   threadId,
-}: LangGraphBridgeConfig<TState, TMessageMetadataSchema>) {
+}: LanggraphBridgeConfig<TState, TMessageMetadataSchema>) {
   type StateDataParts = Omit<TState, 'messages'>;
   type MessageMetadataParts = TMessageMetadataSchema extends z.ZodObject<any> 
     ? z.infer<TMessageMetadataSchema> 
@@ -155,13 +155,13 @@ export function createLangGraphUIStream<
   });
 }
 
-export function createLangGraphStreamResponse<
+export function createLanggraphStreamResponse<
   TState extends { messages: BaseMessage[] },
   TMessageMetadataSchema extends z.ZodObject<any> | undefined = undefined
 >(
-  options: LangGraphBridgeConfig<TState, TMessageMetadataSchema>
+  options: LanggraphBridgeConfig<TState, TMessageMetadataSchema>
 ): Response {
-  const stream = createLangGraphUIStream(options);
+  const stream = createLanggraphUIStream(options);
   return createUIMessageStreamResponse({ stream });
 }
 
