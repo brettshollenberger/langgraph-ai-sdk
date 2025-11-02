@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   createUIMessageStream,
   createUIMessageStreamResponse,
+  type InferUIMessageChunk,
   type UIMessage,
 } from 'ai';
 import type { CompiledStateGraph } from '@langchain/langgraph';
@@ -147,7 +148,7 @@ export function createLanggraphUIStream<
                 type: `data-${keyStr}`,
                 id: dataPartId,
                 data: value
-              });
+              } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
             });
             
           }
