@@ -6,7 +6,7 @@ export type InvalidStateError = {
   __error: "The graph state is invalid. It must contain a `messages: BaseMessage[]` property."
 };
 
-type ValidGraphState = { messages: BaseMessage[] }
+export type ValidGraphState = { messages: BaseMessage[] }
 
 export type ExtractGraphState<T> = T extends CompiledStateGraph<infer S, any, any, any, any, any, any, any, any> ? S : never
 
