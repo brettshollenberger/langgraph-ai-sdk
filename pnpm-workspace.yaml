@@ -1,0 +1,5 @@
+cleanupUnusedCatalogs: true
+
+packages:
+  - "packages/*"
+  - "examples/*"
