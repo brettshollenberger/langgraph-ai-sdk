@@ -110,21 +110,27 @@ export function createLanggraphUIStream<
                 cleanedBuffer = cleanedBuffer.split('```')[0] as string;
               }
               cleanedBuffer = cleanedBuffer.trim();
-              const parsed = (await parsePartialJson(cleanedBuffer)).value as Partial<TMessage>;
 
-              Object.entries(parsed).forEach(([key, value]) => {
-                writer.write({
-                  type: `data-message-${key}`,
-                  id: messagePartId[key],
-                  data: value,
+              const parseResult = await parsePartialJson(cleanedBuffer);
+              const parsed = parseResult.value as Partial<TMessage>;
+
+              if (parsed) {
+                Object.entries(parsed).forEach(([key, value]) => {
+                  if (value !== undefined) {
+                    writer.write({
+                      type: `data-message-${key}`,
+                      id: messagePartId[key],
+                      data: value,
+                    } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+                  }
                 });
-              });
+              }
             } else {
               writer.write({
                 type: 'data-message-text',
                 id: messagePartId.text,
                 data: messageBuffer,
-              });
+              } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
             }
           }
         } else if (kind === 'updates') {
