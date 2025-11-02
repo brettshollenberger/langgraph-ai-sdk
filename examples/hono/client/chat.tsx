@@ -1,8 +1,7 @@
 import React from 'react';
 import { useState, useEffect } from 'react';
 import { Wrapper, ChatInput, Message } from './components.tsx';
-import { structuredMessageSchema, } from '../types.ts';
-import { type MyLanggraphData } from '../api/chat.ts';
+import { type MyLanggraphData } from '../types.ts';
 import { useLanggraph } from '@langgraph-ai-sdk/react';
 
 export function LangGraphChat() {

@@ -3,10 +3,10 @@ import { StateGraph, Annotation, START, END, messagesStateReducer } from '@langc
 import { type BaseMessage } from '@langchain/core/messages';
 import { ChatAnthropic } from '@langchain/anthropic';
 import { ChatOllama } from '@langchain/ollama';
-import { structuredMessageSchema, type StructuredMessage } from '../types.ts';
+import { structuredMessageSchema, type StructuredMessage, type StateType, type MyLanggraphData } from '../types.ts';
 import { StructuredOutputParser } from '@langchain/core/output_parsers';
 import { AIMessage } from '@langchain/core/messages';
-import { registerGraph, streamLanggraph, fetchLanggraphHistory, type LanggraphData } from 'langgraph-ai-sdk';
+import { registerGraph, streamLanggraph, fetchLanggraphHistory } from 'langgraph-ai-sdk';
 import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
 import pkg from 'pg';
 
@@ -27,13 +27,6 @@ const GraphAnnotation = Annotation.Root({
     reducer: (curr, next) => next ?? curr,
   }),
 });
-
-export type StateType = {
-  messages: BaseMessage[];
-  projectName?: string;
-};
-
-export type MyLanggraphData = LanggraphData<StateType, structuredMessageSchema>;
 
 // const llm = new ChatOllama({
 //   model: 'gpt-oss:20b',

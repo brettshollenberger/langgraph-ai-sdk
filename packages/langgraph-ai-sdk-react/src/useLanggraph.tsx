@@ -1,7 +1,14 @@
 import { useRef, useEffectEvent } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { useState, useEffect, useMemo } from 'react';
-import type { LanggraphDataBase, InferState, InferMessage, InferMessageSchema, LanggraphUIMessage } from '@langgraph-ai-sdk/types';
+import type { 
+  LanggraphDataBase, 
+  InferState, 
+  InferMessage, 
+  InferMessageSchema, 
+  LanggraphUIMessage,
+  LanggraphMessage 
+} from '@langgraph-ai-sdk/types';
 import { DefaultChatTransport } from 'ai';
 import { v7 as uuidv7 } from 'uuid';
 
@@ -97,38 +104,55 @@ export function useLanggraph<
     return serverState;
   }, [chat.messages, serverState]);
 
-  const messagesWithParsedParts = useMemo(() => {
+  const messages: LanggraphMessage<TLanggraphData>[] = useMemo(() => {
     return chat.messages.map(msg => {
       if (msg.role !== 'assistant') {
-        return msg;
+        return {
+          id: msg.id,
+          role: msg.role,
+          parts: msg.parts
+            .filter(p => p.type === 'text')
+            .map(p => ({
+              type: 'text' as const,
+              text: (p as any).text,
+              id: (p as any).id || crypto.randomUUID()
+            }))
+        } as LanggraphMessage<TLanggraphData>;
       }
 
       const textParts = msg.parts.filter(p => p.type === 'data-message-text');
       if (textParts.length > 0) {
         return {
-          ...msg,
+          id: msg.id,
+          role: msg.role,
           parts: textParts.map(p => ({
-            ...p,
-            type: 'text',
+            type: 'text' as const,
+            text: (p as any).data,
+            id: (p as any).id
           }))
-        };
+        } as LanggraphMessage<TLanggraphData>;
       }
 
-      const messageParts = msg.parts.filter(p => p.type.startsWith('data-message-'));
-      return {
-        ...msg,
-        parts: messageParts.map(p => ({
-          ...p,
+      const messageParts = msg.parts
+        .filter(p => p.type.startsWith('data-message-'))
+        .map(p => ({
           type: p.type.replace('data-message-', '') as keyof TMessage,
-        }))
-      };
+          data: (p as any).data,
+          id: (p as any).id
+        }));
+
+      return {
+        id: msg.id,
+        role: msg.role,
+        parts: messageParts
+      } as LanggraphMessage<TLanggraphData>;
     });
   }, [chat.messages]);
 
   return {
     ...chat,
     sendMessage,
-    messages: messagesWithParsedParts,
+    messages,
     state,
     threadId: hasSubmitted ? threadId : undefined,
     error,
