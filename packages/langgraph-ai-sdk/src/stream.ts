@@ -53,9 +53,9 @@ export function createLanggraphUIStream<
   type TMessage = InferMessage<TGraphData>
   type StateDataParts = Omit<TState, 'messages'>;
   type TStructuredMessage = TMessage extends StructuredMessage ? TMessage : never;
-  type DataPartsType = TMessage extends StructuredMessage ? TState & TStructuredMessage : TState;
+  // type DataPartsType = TMessage extends StructuredMessage ? TState & TStructuredMessage : TState;
     
-  return createUIMessageStream<UIMessage<never, DataPartsType>>({
+  return createUIMessageStream<LanggraphUIMessage<TGraphData>>({
     execute: async ({ writer }) => {
       const stream = await graph.stream(
         { messages, ...state },
@@ -66,9 +66,9 @@ export function createLanggraphUIStream<
       );
       
       const stateDataPartIds: Record<string, string> = {};
-      const metadataPartId = crypto.randomUUID();
+      const messagePartId = crypto.randomUUID();
       const textId = crypto.randomUUID();
-      let jsonBuffer = '';
+      let messageBuffer = '';
       let isFirstTextChunk = true;
       
       for await (const chunk of stream) {
@@ -93,24 +93,24 @@ export function createLanggraphUIStream<
               ? message.content 
               : '';
             
-            jsonBuffer += content;
+            messageBuffer += content;
             
-            let cleanedBuffer = jsonBuffer;
-            if (cleanedBuffer.includes('```json')) {
-              cleanedBuffer = cleanedBuffer.replace(/```json/g, '').trim();
-            }
-            if (cleanedBuffer.includes('```')) {
-              cleanedBuffer = cleanedBuffer.split('```')[0] as string;
-            }
-            cleanedBuffer = cleanedBuffer.trim();
+            // let cleanedBuffer = jsonBuffer;
+            // if (cleanedBuffer.includes('```json')) {
+            //   cleanedBuffer = cleanedBuffer.replace(/```json/g, '').trim();
+            // }
+            // if (cleanedBuffer.includes('```')) {
+            //   cleanedBuffer = cleanedBuffer.split('```')[0] as string;
+            // }
+            // cleanedBuffer = cleanedBuffer.trim();
             
-            if (messageMetadataSchema) {
+            if (typeof message.content === 'string') {
               // Schema provided: stream raw JSON chunks for progressive parsing on frontend
               if (content) {
                 writer.write({
-                  type: 'data-metadata',
-                  id: metadataPartId,
-                  data: jsonBuffer,
+                  type: 'data-message',
+                  id: messagePartId,
+                  data: messageBuffer,
                 });
               }
             } else {

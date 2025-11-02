@@ -1,5 +1,6 @@
 import type { UIMessage } from 'ai';
 import { type BaseMessage } from '@langchain/core/messages'
+import { type ValueOf } from 'type-fest';
 
 export type InvalidStateError = {
   __error: "The graph state is invalid. It must contain a `messages: BaseMessage[]` property."
@@ -26,11 +27,33 @@ export type InferMessage<T> = T extends LanggraphDataBase<any, infer TMessage>
 ? TMessage
 : never
 
-export type LanggraphDataParts<T extends LanggraphDataBase<any, any>> = 
-    | { type: 'state', data: InferState<T> }
-    | ([InferMessage<T>] extends [never] 
-        ? never 
-        : { type: 'message', data: InferMessage<T> })
+export type DataStateUIPart<TData extends LanggraphDataBase<any, any>> = ValueOf<{
+    [NAME in keyof Omit<InferState<TData>, 'messages'> & string]: {
+        type: `data-state-${NAME}`;
+        id?: string;
+        data: InferState<TData>[NAME];
+    }
+}>;
+
+export type DataMessageUIPart<TData extends LanggraphDataBase<any, any>> =
+    InferMessage<TData> extends StructuredMessage
+        ? ValueOf<{
+            [NAME in keyof InferMessage<TData> & string]: {
+                type: `data-message-${NAME}`;
+                id?: string;
+                data: InferMessage<TData>[NAME];
+            }
+        }>
+        : InferMessage<TData> extends string
+            ? {
+                type: 'data-message-text';
+                id?: string;
+                data: string;
+            }
+            : never;
+
+export type LanggraphDataParts<T extends LanggraphDataBase<any, any>> =
+    DataStateUIPart<T> | DataMessageUIPart<T>;
 
 export type LanggraphUIMessage<T extends LanggraphDataBase<any, any>> = UIMessage<
     unknown, // TODO: Add metadata type
