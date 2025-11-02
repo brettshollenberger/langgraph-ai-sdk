@@ -5,7 +5,7 @@ import { createLanggraphStreamResponse, loadThreadHistory } from './stream.ts';
 import { getGraph } from './registry.ts';
 import { ensureThread } from './ops.js';
 import type { UIMessage } from 'ai';
-import type { LanggraphDataBase, InferState } from '@langgraph-ai-sdk/types';
+import type { LanggraphDataBase, InferMessageSchema } from '@langgraph-ai-sdk/types';
 
 function convertUIMessagesToLanggraph(messages: UIMessage[]): BaseMessage[] {
   return messages.map((msg) => {
@@ -25,7 +25,7 @@ function convertUIMessagesToLanggraph(messages: UIMessage[]): BaseMessage[] {
   });
 }
 
-export function streamLanggraph<TGraphData extends LanggraphDataBase<any, any>>(graphName: string) {
+export function streamLanggraph<TGraphData extends LanggraphDataBase<any, any>>({ graphName, messageSchema }: { graphName: string, messageSchema?: InferMessageSchema<TGraphData> }) {
   return async (req: Request): Promise<Response> => {
     const body = await req.json();
     const uiMessages: UIMessage[] = body.messages;
@@ -61,6 +61,7 @@ export function streamLanggraph<TGraphData extends LanggraphDataBase<any, any>>(
       messages: [newMessage],
       threadId,
       state,
+      messageSchema,
     });
     
     response.headers.set('X-Thread-ID', threadId);
@@ -69,7 +70,7 @@ export function streamLanggraph<TGraphData extends LanggraphDataBase<any, any>>(
   };
 }
 
-export function fetchLanggraphHistory<TGraphData extends LanggraphDataBase<any, any>>(graphName: string) {
+export function fetchLanggraphHistory<TGraphData extends LanggraphDataBase<any, any>>({ graphName, messageSchema }: { graphName: string, messageSchema?: InferMessageSchema<TGraphData> }) {
   return async (req: Request): Promise<Response> => {
     const url = new URL(req.url);
     const threadId = url.searchParams.get('threadId');

@@ -11,7 +11,7 @@ export type StructuredMessage = Record<string, unknown>
 
 export interface LanggraphDataBase<
     TGraphState extends ValidGraphState,
-    TMessageSchema extends z.ZodType | undefined = undefined
+    TMessageSchema = undefined
 > {
     state: TGraphState,
     messageSchema: TMessageSchema
@@ -26,14 +26,14 @@ export type InferMessageSchema<T> = T extends LanggraphDataBase<any, infer TMess
 : never
 
 export type InferMessage<T> = T extends LanggraphDataBase<any, infer TMessageSchema>
-  ? TMessageSchema extends z.ZodType
+  ? TMessageSchema extends z.ZodSchema
     ? z.infer<TMessageSchema>
     : string
   : never
 
 export type LanggraphDataParts<T extends LanggraphDataBase<any, any>> =
 & { [K in keyof Omit<InferState<T>, 'messages'> as `state-${K & string}`]: InferState<T>[K] }
-& (InferMessageSchema<T> extends z.ZodType
+& (InferMessageSchema<T> extends z.ZodSchema
     ? { [K in keyof InferMessage<T> as `message-${K & string}`]: InferMessage<T>[K] }
     : { 'message-text': string });
 

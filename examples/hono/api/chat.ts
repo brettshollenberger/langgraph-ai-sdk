@@ -33,7 +33,7 @@ export type StateType = {
   projectName?: string;
 };
 
-export type MyLanggraphData = LanggraphData<StateType, StructuredMessage>;
+export type MyLanggraphData = LanggraphData<StateType, structuredMessageSchema>;
 
 // const llm = new ChatOllama({
 //   model: 'gpt-oss:20b',
@@ -160,9 +160,15 @@ function authMiddleware(handler: (req: Request) => Promise<Response>) {
 }
 
 export const POST = authMiddleware(async (req: Request): Promise<Response> => {
-  return streamLanggraph<MyLanggraphData>('default')(req);
+  return streamLanggraph<MyLanggraphData>({ 
+    graphName: 'default', 
+    messageSchema: structuredMessageSchema 
+  })(req);
 });
 
 export const GET = authMiddleware((req: Request): Promise<Response> => {
-  return fetchLanggraphHistory<MyLanggraphData>('default')(req);
+  return fetchLanggraphHistory<MyLanggraphData>({ 
+    graphName: 'default', 
+    messageSchema: structuredMessageSchema 
+  })(req);
 });

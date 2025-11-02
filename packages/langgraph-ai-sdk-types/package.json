@@ -13,8 +13,16 @@
   "keywords": ["langgraph", "ai", "types", "typescript"],
   "author": "",
   "license": "ISC",
+  "peerDependencies": {
+    "ai": "^5.0.0",
+    "zod": "^3.0.0",
+    "@langchain/core": "^1.0.0"
+  },
   "devDependencies": {
     "@types/node": "^22.10.5",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "zod": "^3.24.1",
+    "ai": "^5.0.0",
+    "@langchain/core": "^1.0.0"
   }
 }

@@ -10,7 +10,7 @@ export type ExtractGraphState<T> = T extends CompiledStateGraph<infer S, any, an
 
 export type LanggraphData<
     TGraph,
-    TMessageSchema extends z.ZodType | undefined = undefined
+    TMessageSchema = undefined
 > = ExtractGraphState<TGraph> extends ValidGraphState
         ? LanggraphDataBase<ExtractGraphState<TGraph>, TMessageSchema>
         : InvalidStateError

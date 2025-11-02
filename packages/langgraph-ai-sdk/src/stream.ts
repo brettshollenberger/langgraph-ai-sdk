@@ -77,7 +77,6 @@ export function createLanggraphUIStream<
         const chunkArray = chunk as StreamChunk;
         let kind: string;
         let data: any;
-        console.log(chunkArray);
         
         if (chunkArray.length === 2) {
           [kind, data] = chunkArray;
@@ -113,11 +112,12 @@ export function createLanggraphUIStream<
               if (parsed) {
                 Object.entries(parsed).forEach(([key, value]) => {
                   if (value !== undefined) {
-                    writer.write({
+                    const structuredMessagePart = {
                       type: `data-message-${key}`,
                       id: messagePartId[key],
                       data: value,
-                    } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+                    };
+                    writer.write(structuredMessagePart as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
                   }
                 });
               }
