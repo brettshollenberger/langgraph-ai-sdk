@@ -55,7 +55,6 @@ const GraphAnnotation = Annotation.Root({
 })
 
 const graph = new StateGraph(GraphAnnotation).compile()
-type ExtractGraphState<T> = T extends CompiledStateGraph<infer S, any, any, any, any, any, any, any, any> ? S : never
 
 test('We can extract the Graph State from the graph itself', () => {
   type GraphState = ExtractGraphState<typeof graph>
@@ -63,37 +62,46 @@ test('We can extract the Graph State from the graph itself', () => {
   expectTypeOf<GraphState>().toEqualTypeOf<{ messages: BaseMessage[] }>()
 })
 
-export type StructuredMessage = Record<string, unknown>
-
-interface LanggraphData<
-    TGraph extends CompiledStateGraph<any, any, any, any, any, any, any, any, any>,
-    TCustomMessage = never
-> = Merge<
-  ExtractGraphState<TGraph>,
-  ([TCustomMessage] extends [never] ? {} : TCustomMessage)
->
-
 test('We can combine the graph state and custom message', () => {
   type MyData = LanggraphData<typeof graph, CustomMessagePart>
+  const myData: MyData = {
+    state: { messages: [] },
+    message: {
+      intro: 'intro',
+      examples: ['example'],
+      conclusion: 'conclusion',
+    },
+  }
 
-  expectTypeOf<MyData>().toEqualTypeOf<{ 
-    messages: BaseMessage[],
-    intro: string,
-    examples: string[],
-    conclusion: string,
-   }>()
+  expectTypeOf(myData.state).toEqualTypeOf<{ messages: BaseMessage[] }>()
+  expectTypeOf(myData.message).toEqualTypeOf<CustomMessagePart>()
 })
 
-test('If we provide no custom message, we get the graph state', () => {
+test('If we provide no custom message, the expected message type is string', () => {
   type MyData = LanggraphData<typeof graph>
+  const myData: MyData = {
+    state: { messages: [] },
+    message: "Hello world"
+  }
 
-  expectTypeOf<MyData>().toEqualTypeOf<{ messages: BaseMessage[] }>()
+  expectTypeOf(myData.state).toEqualTypeOf<{ messages: BaseMessage[] }>()
+  expectTypeOf(myData.message).toEqualTypeOf<string>()
 })
-
-type InferLanggraphState<T> = T extends LanggraphData<infer TState> ? TState : never
 
 test('We can grab TState from LanggraphData', () => {
   type MyData = LanggraphData<typeof graph, CustomMessagePart>
 
-  expectTypeOf<InferLanggraphState<MyData>>().toEqualTypeOf<{ messages: BaseMessage[] }>()
+  expectTypeOf<InferState<MyData>>().toEqualTypeOf<{ messages: BaseMessage[] }>()
+})
+
+test('We can grab TMessage from LanggraphData', () => {
+  type MyData = LanggraphData<typeof graph, CustomMessagePart>
+
+  expectTypeOf<InferStructuredMessage<MyData>>().toEqualTypeOf<CustomMessagePart>()
+})
+
+test('We can grab string from LanggraphData', () => {
+  type MyData = LanggraphData<typeof graph>
+
+  expectTypeOf<InferStructuredMessage<MyData>>().toEqualTypeOf<string>()
 })

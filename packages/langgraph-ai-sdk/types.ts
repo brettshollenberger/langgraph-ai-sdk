@@ -1,16 +1,15 @@
 import { CompiledStateGraph } from '@langchain/langgraph'
 import { type UIMessage } from 'ai'
-import type { Merge } from 'type-fest'
 
 export type ExtractGraphState<T> = T extends CompiledStateGraph<infer S, any, any, any, any, any, any, any, any> ? S : never
 
 export type StructuredMessage = Record<string, unknown>
 interface LanggraphData<
     TGraph extends CompiledStateGraph<any, any, any, any, any, any, any, any, any>,
-    TStructuredMessage = never
+    TStructuredMessage extends string | StructuredMessage = string
 > {
     state: ExtractGraphState<TGraph>,
-    message?: TStructuredMessage
+    message: TStructuredMessage
 }
 // Extract graph type
 type InferGraph<T> = T extends LanggraphData<infer TGraph, any>
@@ -37,6 +36,7 @@ type LanggraphUIMessage<T extends LanggraphData<any, any>> = UIMessage<
     unknown,
     LanggraphDataParts<T>
 >
+
 
 // export type LanggraphUIMessage<TLanggraphMessage extends LanggraphMessage<any, any>> = UIMessage<
 //     ExtractGraphState<TLanggraphMessage>,
