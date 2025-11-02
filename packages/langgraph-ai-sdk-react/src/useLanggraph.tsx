@@ -1,9 +1,8 @@
 import { useRef, useEffectEvent } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { useState, useEffect, useMemo } from 'react';
-import type { LanggraphDataBase, InferState, InferMessage, LanggraphUIMessage } from '@langgraph-ai-sdk/types';
+import type { LanggraphDataBase, InferState, InferMessage, InferMessageSchema, LanggraphUIMessage } from '@langgraph-ai-sdk/types';
 import { DefaultChatTransport } from 'ai';
-import { parsePartialJson } from 'ai';
 import { v7 as uuidv7 } from 'uuid';
 
 export function useLanggraph<
@@ -11,16 +10,10 @@ export function useLanggraph<
 >({
   api = '/api/chat',
   headers = {},
-  // stateFields,
-  // messageSchema,
   getInitialThreadId,
 }: {
   api?: string;
   headers?: Record<string, string>;
-  // stateFields: Array<keyof TState>;
-  // messageSchema: z.ZodObject<any> & {
-  //   _output: TMessageMetadata
-  // };
   getInitialThreadId?: () => string | undefined;
 }) {
   type TState = InferState<TLanggraphData>
@@ -29,7 +22,7 @@ export function useLanggraph<
   const threadIdRef = useRef<string>(getInitialThreadId?.() ?? uuidv7());
   const threadId = threadIdRef.current;
   const [error, setError] = useState<string | null>(null);
-  const [serverState, setServerState] = useState<TState>({} as TState);
+  const [serverState, setServerState] = useState<Partial<TState>>({});
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const headersRef = useRef(headers);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
@@ -69,7 +62,6 @@ export function useLanggraph<
           chat.setMessages(data.messages);
         }
         if (data.state) {
-          console.log(`here it is! State!!!`, data.state);
           setServerState(data.state);
         }
       }
@@ -84,83 +76,59 @@ export function useLanggraph<
     loadHistory();
   }, [threadId, api]);
 
-  const derivedState = useMemo(() => {
-    const stateObj: Partial<TState> = {};
+  const state = useMemo(() => {
     const latestAI = chat.messages.filter(m => m.role === 'assistant').at(-1);
     
     if (latestAI) {
-      // stateFields.forEach((field) => {
-      //   const part = latestAI.parts.find(p => p.type === `data-${String(field)}`);
-      //   if (part && 'data' in part) {
-      //     stateObj[field] = part.data as TState[keyof TState];
-      //   }
-      // });
+      const newState: Partial<TState> = { ...serverState };
+      
+      for (const part of latestAI.parts) {
+        if (part.type.startsWith('data-state-')) {
+          const key = part.type.replace('data-state-', '') as keyof TState;
+          if ('data' in part) {
+            newState[key] = part.data as TState[keyof TState];
+          }
+        }
+      }
+      
+      return newState;
     }
     
-    return stateObj;
-  }, [chat.messages]); //, stateFields]);
+    return serverState;
+  }, [chat.messages, serverState]);
 
-  const state = Object.keys(derivedState).length > 0 ? derivedState : serverState;
+  const messagesWithParsedParts = useMemo(() => {
+    return chat.messages.map(msg => {
+      if (msg.role !== 'assistant') {
+        return msg;
+      }
 
-  const [messageStream, setMessageStream] = useState<FrontendMessage<TMessageMetadata>[]>([]);
+      const textParts = msg.parts.filter(p => p.type === 'data-message-text');
+      if (textParts.length > 0) {
+        return {
+          ...msg,
+          parts: textParts.map(p => ({
+            ...p,
+            type: 'text',
+          }))
+        };
+      }
 
-  useEffect(() => {
-    const transformMessages = async () => {
-      const transformed = await Promise.all(
-        chat.messages.map(async (msg) => {
-          const results: FrontendMessagePart<TMessageMetadata>[] = [];
-          
-          for (const part of msg.parts) {
-            if (part.type === 'text') {
-              results.push({ type: 'text', text: part.text });
-            } else if (part.type === 'data-metadata') {
-              try {
-                let cleanedData = part.data;
-                if (cleanedData.includes('```json')) {
-                  cleanedData = cleanedData.replace(/```json/g, '').trim();
-                }
-                if (cleanedData.includes('```')) {
-                  cleanedData = cleanedData.split('```')[0] as string;
-                }
-                cleanedData = cleanedData.trim();
-                
-                const parsed = await parsePartialJson(cleanedData);
-                const metadata = parsed?.value || parsed;
-                
-                if (metadata && typeof metadata === 'object') {
-                  for (const [key, value] of Object.entries(metadata)) {
-                    // if (key in messageSchema.shape) {
-                    //   results.push({
-                    //     type: key as keyof TMessageMetadata,
-                    //     id: crypto.randomUUID(),
-                    //     data: value as any,
-                    //   } as FrontendMessagePart<TMessageMetadata>);
-                    // }
-                  }
-                }
-              } catch {
-                // Partial JSON not ready yet, skip
-              }
-            }
-          }
-          
-          return {
-            ...msg,
-            parts: results,
-          };
-        })
-      );
-      
-      setMessageStream(transformed);
-    };
-    
-    transformMessages();
-  }, [chat.messages]); //, messageSchema]);
+      const messageParts = msg.parts.filter(p => p.type.startsWith('data-message-'));
+      return {
+        ...msg,
+        parts: messageParts.map(p => ({
+          ...p,
+          type: p.type.replace('data-message-', '') as keyof TMessage,
+        }))
+      };
+    });
+  }, [chat.messages]);
 
   return {
     ...chat,
     sendMessage,
-    messages: messageStream,
+    messages: messagesWithParsedParts,
     state,
     threadId: hasSubmitted ? threadId : undefined,
     error,

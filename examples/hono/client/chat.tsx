@@ -12,8 +12,6 @@ export function LangGraphChat() {
       'Content-Type': 'application/json',
       'Authorization': `Bearer 12345`,
     },
-    // stateFields: ['projectName'],
-    // messageSchema: messageMetadataSchema,
     getInitialThreadId: () => {
       if (typeof window !== 'undefined') {
         const urlParams = new URLSearchParams(window.location.search);

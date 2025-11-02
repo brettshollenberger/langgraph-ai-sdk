@@ -138,6 +138,7 @@ export function createLanggraphUIStream<
             (Object.keys(nodeUpdates) as Array<keyof StateDataParts>).forEach((key) => {
               const value = nodeUpdates[key as string];
               if (value === undefined || value === null) return;
+              if (key === 'messages') return;
               
               const keyStr = String(key) as Exclude<keyof TState, 'messages'> & string;
               const dataPartId = stateDataPartIds[keyStr] || crypto.randomUUID();

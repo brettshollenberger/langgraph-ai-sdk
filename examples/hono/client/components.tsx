@@ -30,7 +30,7 @@ export const Message = ({
       </div>
     );
   } else {
-    const structuredParts = []; // message.parts.filter((part): part is Exclude<FrontendMessagePart<MessageMetadata>, { type: 'text' }> => part.type !== 'text');
+    const structuredParts = message.parts;
     
     return (
       <div className="prose prose-invert my-6">
