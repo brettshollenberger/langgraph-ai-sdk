@@ -4,7 +4,7 @@ import { type UIMessage } from 'ai'
 export type ExtractGraphState<T> = T extends CompiledStateGraph<infer S, any, any, any, any, any, any, any, any> ? S : never
 
 export type StructuredMessage = Record<string, unknown>
-interface LanggraphData<
+export interface LanggraphData<
     TGraph extends CompiledStateGraph<any, any, any, any, any, any, any, any, any>,
     TStructuredMessage extends string | StructuredMessage = string
 > {
@@ -12,27 +12,27 @@ interface LanggraphData<
     message: TStructuredMessage
 }
 // Extract graph type
-type InferGraph<T> = T extends LanggraphData<infer TGraph, any>
+export type InferGraph<T> = T extends LanggraphData<infer TGraph, any>
 ? TGraph
 : never
 
 // Extract state
-type InferState<T> = T extends LanggraphData<infer TGraph, any>
+export type InferState<T> = T extends LanggraphData<infer TGraph, any>
 ? ExtractGraphState<TGraph>
 : never
 
 // Extract custom message
-type InferStructuredMessage<T> = T extends LanggraphData<any, infer TStructuredMessage>
+export type InferStructuredMessage<T> = T extends LanggraphData<any, infer TStructuredMessage>
 ? TStructuredMessage
 : never
 
-type LanggraphDataParts<T extends LanggraphData<any, any>> = 
+export type LanggraphDataParts<T extends LanggraphData<any, any>> = 
     | { type: 'state', data: InferState<T> }
     | ([InferStructuredMessage<T>] extends [never] 
         ? never 
         : { type: 'message', data: InferStructuredMessage<T> })
 
-type LanggraphUIMessage<T extends LanggraphData<any, any>> = UIMessage<
+export type LanggraphUIMessage<T extends LanggraphData<any, any>> = UIMessage<
     unknown,
     LanggraphDataParts<T>
 >

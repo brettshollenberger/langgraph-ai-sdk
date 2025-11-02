@@ -1,8 +1,15 @@
 import { expectTypeOf, test } from 'vitest'
 import { BaseMessage } from '@langchain/core/messages'
-import { StateGraph, Annotation, messagesStateReducer, CompiledStateGraph } from '@langchain/langgraph'
+import { StateGraph, Annotation, messagesStateReducer } from '@langchain/langgraph'
 import type { UIMessage } from 'ai'
-import type { Merge } from 'type-fest'
+import type {
+  ExtractGraphState,
+  LanggraphData,
+  InferState,
+  InferStructuredMessage,
+  LanggraphDataParts,
+  LanggraphUIMessage
+} from '../types.js'
 
 type TextDataPart = { type: 'text'; text: string }
 type CustomMessagePart = {
