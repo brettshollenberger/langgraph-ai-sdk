@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { parsePartialJson } from 'ai';
 import {
   createUIMessageStream,
   createUIMessageStreamResponse,
@@ -15,7 +16,8 @@ import type {
   InferState, 
   InferMessage,
   InferMessageSchema,
-  StructuredMessage 
+  StructuredMessage, 
+  LanggraphDataParts
 } from '@langgraph-ai-sdk/types'
 
 type StreamChunk = [
@@ -70,7 +72,7 @@ export function createLanggraphUIStream<
       );
       
       const stateDataPartIds: Record<string, string> = {};
-      const messagePartId = crypto.randomUUID();
+      const messagePartId = !messageSchema ? { text: crypto.randomUUID() } : Object.fromEntries(getSchemaKeys(messageSchema).map((key) => [key, crypto.randomUUID()]));
       const textId = crypto.randomUUID();
       let messageBuffer = '';
       let isFirstTextChunk = true;
@@ -98,39 +100,31 @@ export function createLanggraphUIStream<
               : '';
             
             messageBuffer += content;
-            
-            // let cleanedBuffer = jsonBuffer;
-            // if (cleanedBuffer.includes('```json')) {
-            //   cleanedBuffer = cleanedBuffer.replace(/```json/g, '').trim();
-            // }
-            // if (cleanedBuffer.includes('```')) {
-            //   cleanedBuffer = cleanedBuffer.split('```')[0] as string;
-            // }
-            // cleanedBuffer = cleanedBuffer.trim();
-            
-            if (typeof message.content === 'string') {
-              // Schema provided: stream raw JSON chunks for progressive parsing on frontend
-              if (content) {
-                writer.write({
-                  type: 'data-message-text',
-                  id: messagePartId,
-                  data: messageBuffer,
-                });
+
+            if (messageSchema) {
+              let cleanedBuffer = messageBuffer;
+              if (cleanedBuffer.includes('```json')) {
+                cleanedBuffer = cleanedBuffer.replace(/```json/g, '').trim();
               }
+              if (cleanedBuffer.includes('```')) {
+                cleanedBuffer = cleanedBuffer.split('```')[0] as string;
+              }
+              cleanedBuffer = cleanedBuffer.trim();
+              const parsed = (await parsePartialJson(cleanedBuffer)).value as Partial<TMessage>;
+
+              Object.entries(parsed).forEach(([key, value]) => {
+                writer.write({
+                  type: `data-message-${key}`,
+                  id: messagePartId[key],
+                  data: value,
+                });
+              });
             } else {
-              // No schema: stream as plain text
-              if (content) {
-                if (isFirstTextChunk) {
-                  isFirstTextChunk = false;
-                  writer.write({ type: 'text-start', id: textId });
-                }
-                
-                writer.write({
-                  type: 'text-delta',
-                  id: textId,
-                  delta: content
-                });
-              }
+              writer.write({
+                type: 'data-message-text',
+                id: messagePartId.text,
+                data: messageBuffer,
+              });
             }
           }
         } else if (kind === 'updates') {
@@ -156,11 +150,6 @@ export function createLanggraphUIStream<
             
           }
         }
-      }
-      
-      // End text stream if no schema was provided
-      if (!messageMetadataSchema && !isFirstTextChunk) {
-        writer.write({ type: 'text-end', id: textId });
       }
     }
   });
