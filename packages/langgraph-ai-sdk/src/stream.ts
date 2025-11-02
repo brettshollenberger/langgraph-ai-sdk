@@ -38,6 +38,7 @@ export interface LanggraphBridgeConfig<
   messages: BaseMessage[];
   threadId: string;
   checkpointer?: PostgresSaver;
+  state?: Partial<InferState<TGraphData>>;
 }
 
 export function createLanggraphUIStream<
@@ -46,6 +47,7 @@ export function createLanggraphUIStream<
   graph,
   messages,
   threadId,
+  state,
 }: LanggraphBridgeConfig<TGraphData>) {
   type TState = InferState<TGraphData>
   type TMessage = InferMessage<TGraphData>
@@ -56,7 +58,7 @@ export function createLanggraphUIStream<
   return createUIMessageStream<UIMessage<never, DataPartsType>>({
     execute: async ({ writer }) => {
       const stream = await graph.stream(
-        { messages } as Partial<TState>,
+        { messages, ...state },
         { 
           streamMode: ['messages', 'updates'],
           configurable: { thread_id: threadId }

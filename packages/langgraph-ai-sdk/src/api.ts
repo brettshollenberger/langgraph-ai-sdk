@@ -5,7 +5,7 @@ import { createLanggraphStreamResponse, loadThreadHistory } from './stream.ts';
 import { getGraph } from './registry.ts';
 import { ensureThread } from './ops.js';
 import type { UIMessage } from 'ai';
-import type { LanggraphDataBase } from '@langgraph-ai-sdk/types';
+import type { LanggraphDataBase, InferState } from '@langgraph-ai-sdk/types';
 
 function convertUIMessagesToLanggraph(messages: UIMessage[]): BaseMessage[] {
   return messages.map((msg) => {
@@ -29,6 +29,7 @@ export function streamLanggraph<TGraphData extends LanggraphDataBase<any, any>>(
   return async (req: Request): Promise<Response> => {
     const body = await req.json();
     const uiMessages: UIMessage[] = body.messages;
+    const state = body.state || {};
     let threadId: string = body.threadId;
     
     if (!threadId) {
@@ -59,6 +60,7 @@ export function streamLanggraph<TGraphData extends LanggraphDataBase<any, any>>(
       graph,
       messages: [newMessage],
       threadId,
+      state,
     });
     
     response.headers.set('X-Thread-ID', threadId);
