@@ -5,6 +5,7 @@ import {
   createUIMessageStreamResponse,
   type InferUIMessageChunk,
   type UIMessage,
+  type DataUIPart,
 } from 'ai';
 import type { CompiledStateGraph } from '@langchain/langgraph';
 import { BaseMessage, AIMessage } from '@langchain/core/messages';
@@ -57,11 +58,8 @@ export function createLanggraphUIStream<
   type TState = InferState<TGraphData>
   type TMessage = InferMessage<TGraphData>
   type StateDataParts = Omit<TState, 'messages'>;
-  type TStructuredMessage = TMessage extends StructuredMessage ? TMessage : never;
-  // type DataPartsType = TMessage extends StructuredMessage ? TState & TStructuredMessage : TState;
     
   return createUIMessageStream<LanggraphUIMessage<TGraphData>>({
-  // return createUIMessageStream<UIMessage<unknown, { 'message-text': string }>>({
     execute: async ({ writer }) => {
       const stream = await graph.stream(
         { messages, ...state },
@@ -73,9 +71,7 @@ export function createLanggraphUIStream<
       
       const stateDataPartIds: Record<string, string> = {};
       const messagePartId = !messageSchema ? { text: crypto.randomUUID() } : Object.fromEntries(getSchemaKeys(messageSchema).map((key) => [key, crypto.randomUUID()]));
-      const textId = crypto.randomUUID();
       let messageBuffer = '';
-      let isFirstTextChunk = true;
       
       for await (const chunk of stream) {
         const chunkArray = chunk as StreamChunk;
@@ -130,7 +126,7 @@ export function createLanggraphUIStream<
                 type: 'data-message-text',
                 id: messagePartId.text,
                 data: messageBuffer,
-              } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+              } as unknown as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
             }
           }
         } else if (kind === 'updates') {
@@ -148,12 +144,11 @@ export function createLanggraphUIStream<
               stateDataPartIds[keyStr] = dataPartId;
               
               writer.write({
-                type: `data-${keyStr}`,
+                type: `data-state-${keyStr}`,
                 id: dataPartId,
                 data: value
               } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
             });
-            
           }
         }
       }
@@ -175,15 +170,12 @@ export async function loadThreadHistory<
 >(
   graph: CompiledStateGraph<InferState<TGraphData>, any>,
   threadId: string,
-  // messageMetadataSchema?: TMessageMetadataSchema
+  messageSchema?: InferMessageSchema<TGraphData>
 ): Promise<{
   messages: LanggraphUIMessage<TGraphData>[];
   state: Partial<InferState<TGraphData>>;
 }> {
   type TState = InferState<TGraphData>
-  type TMessage = InferMessage<TGraphData>
-  type DataPartsType = TState & TMessage;
-  
   const stateSnapshot = await graph.getState({ configurable: { thread_id: threadId } });
   
   if (!stateSnapshot || !stateSnapshot.values || !('messages' in stateSnapshot.values)) {
@@ -191,7 +183,7 @@ export async function loadThreadHistory<
   }
   
   const messages = (stateSnapshot.values.messages as BaseMessage[]) || [];
-  const fullState = stateSnapshot.values as TState;
+  const fullState = stateSnapshot.values;
   
   const globalState: Partial<TState> = {};
   
@@ -207,17 +199,15 @@ export async function loadThreadHistory<
   const uiMessages = messages.map((msg, idx) => {
     const isUser = msg._getType() === 'human';
     const content = typeof msg.content === 'string' ? msg.content : '';
+    const parts = [];
     
-    const parts: any[] = [
-      { type: 'text', text: content }
-    ];
-    
-    // Else type would be string... in which case do we send as string?
-    if (msg instanceof AIMessage && msg.response_metadata && typeof msg.response_metadata === 'object') {
-      parts.push({
-        type: 'data-metadata',
-        id: crypto.randomUUID(),
-        data: JSON.stringify(msg.response_metadata)
+    if (msg instanceof AIMessage && msg.response_metadata && messageSchema) {
+      Object.entries(msg.response_metadata).forEach(([key, value]) => {
+        parts.push({
+          type: `data-message-${key}`,
+          id: crypto.randomUUID(),
+          data: value
+        });
       });
     }
     
@@ -225,7 +215,7 @@ export async function loadThreadHistory<
       id: `msg-${idx}`,
       role: isUser ? 'user' : 'assistant',
       parts
-    } as UIMessage<never, DataPartsType>;
+    } as LanggraphUIMessage<TGraphData>;
   });
 
   return { messages: uiMessages, state: globalState };
