@@ -6,7 +6,7 @@
     "type": "module",
     "scripts": {
         "dev": "tsx index.ts",
-        "test": "echo \"Error: no test specified\" && exit 1"
+        "test": "echo \"No tests for examples\""
     },
     "keywords": [],
     "author": "",
@@ -22,6 +22,7 @@
         "@langchain/anthropic": "^0.3.33",
         "@langchain/core": "^1.0.0",
         "@langchain/langgraph": "^1.0.0",
+        "@langchain/langgraph-checkpoint-postgres": "^1.0.0",
         "@langchain/ollama": "^1.0.0",
         "@langgraph-ai-sdk/react": "workspace:*",
         "@tailwindcss/typography": "^0.5.19",
