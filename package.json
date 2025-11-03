@@ -1,28 +1,23 @@
 {
-  "name": "langgraph-ai-sdk",
+  "name": "langgraph-ai-sdk-monorepo",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "private": true,
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest",
+    "typecheck": "tsc --noEmit",
+    "test:run": "vitest run",
+    "test:types": "vitest typecheck"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "workspaces": [
+    "packages/*",
+    "examples/*"
+  ],
   "devDependencies": {
-    "tsdown": "^0.15.12",
-    "typescript": "^5.9.3",
     "@types/node": "^22.10.5",
-    "ai": "^5.0.0",
-    "langchain": "^1.0.0",
-    "@langchain/core": "^1.0.0",
-    "@langchain/langgraph": "^1.0.0",
-    "zod": "^3.24.1"
-  },
-  "peerDependencies": {
-    "ai": "^5.0.0",
-    "langchain": "^1.0.0",
-    "@langchain/core": "^1.0.0",
-    "@langchain/langgraph": "^1.0.0"
+    "tsdown": "^0.15.12",
+    "type-fest": "^5.1.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.0"
   }
 }

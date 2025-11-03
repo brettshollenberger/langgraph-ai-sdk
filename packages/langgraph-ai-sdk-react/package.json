@@ -1,0 +1,39 @@
+{
+  "name": "@langgraph-ai-sdk/react",
+  "version": "1.0.0",
+  "description": "React hooks for LangGraph AI SDK",
+  "main": "index.js",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "keywords": [
+    "langgraph",
+    "ai",
+    "react",
+    "hooks"
+  ],
+  "author": "",
+  "license": "ISC",
+  "peerDependencies": {
+    "@ai-sdk/react": "^2.0.0",
+    "ai": "^5.0.0",
+    "react": "^18.0.0 || ^19.0.0"
+  },
+  "dependencies": {
+    "@langgraph-ai-sdk/types": "workspace:*",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "@ai-sdk/react": "^2.0.86",
+    "@types/node": "^22.10.5",
+    "@types/react": "^19.0.0",
+    "ai": "^5.0.0",
+    "react": "^19.2.0",
+    "tsdown": "^0.15.12",
+    "typescript": "^5.9.3"
+  }
+}

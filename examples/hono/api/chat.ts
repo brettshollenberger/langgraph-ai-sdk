@@ -3,10 +3,19 @@ import { StateGraph, Annotation, START, END, messagesStateReducer } from '@langc
 import { type BaseMessage } from '@langchain/core/messages';
 import { ChatAnthropic } from '@langchain/anthropic';
 import { ChatOllama } from '@langchain/ollama';
-import { messageMetadataSchema, type MessageMetadata } from '../types.ts';
+import { structuredMessageSchema, type StructuredMessage, type StateType, type MyLanggraphData } from '../types.ts';
 import { StructuredOutputParser } from '@langchain/core/output_parsers';
 import { AIMessage } from '@langchain/core/messages';
-import { checkpointer, registerGraph, streamLangGraph, fetchLangGraphHistory } from '../core/api.js';
+import { registerGraph, streamLanggraph, fetchLanggraphHistory } from 'langgraph-ai-sdk';
+import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
+import pkg from 'pg';
+
+const { Pool } = pkg;
+const connectionString = process.env.DATABASE_URL || 'postgresql://localhost/langgraph_backend_test';
+const pool = new Pool({
+  connectionString
+});
+const checkpointer = new PostgresSaver(pool);
 
 const GraphAnnotation = Annotation.Root({
   messages: Annotation<BaseMessage[]>({
@@ -18,11 +27,6 @@ const GraphAnnotation = Annotation.Root({
     reducer: (curr, next) => next ?? curr,
   }),
 });
-
-export type StateType = {
-  messages: BaseMessage[];
-  projectName?: string;
-};
 
 // const llm = new ChatOllama({
 //   model: 'gpt-oss:20b',
@@ -72,7 +76,7 @@ const responseNode = async (state: StateType) => {
     ? `Project: "${state.projectName}"\n\n` 
     : '';
 
-  const parser = StructuredOutputParser.fromZodSchema(messageMetadataSchema);
+  const parser = StructuredOutputParser.fromZodSchema(structuredMessageSchema);
   const prompt = `${projectContext}
     Answer the user's question using this structure:
       1. An introduction (2-3 sentences)
@@ -100,9 +104,9 @@ const responseNode = async (state: StateType) => {
   
   content = content.replace(/```json/g, '').replace(/```/g, '').trim();
   
-  let structured: MessageMetadata;
+  let structured: StructuredMessage;
   try {
-    structured = messageMetadataSchema.parse(JSON.parse(content));
+    structured = structuredMessageSchema.parse(JSON.parse(content));
   } catch (e) {
     structured = {
       intro: 'I apologize, I had trouble formatting my response properly.',
@@ -130,15 +134,13 @@ export const graph = new StateGraph(GraphAnnotation)
   .addEdge('responseNode', END)
   .compile({ checkpointer });
 
-registerGraph('default', {
-  graph,
-  messageMetadataSchema,
-});
+registerGraph<MyLanggraphData>('default', graph);
 
 function authMiddleware(handler: (req: Request) => Promise<Response>) {
   return async (req: Request): Promise<Response> => {
     const authHeader = req.headers.get('Authorization');
     
+    console.log(`Auth header: ${authHeader}`)
     if (authHeader !== 'Bearer 12345') {
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
@@ -151,9 +153,15 @@ function authMiddleware(handler: (req: Request) => Promise<Response>) {
 }
 
 export const POST = authMiddleware(async (req: Request): Promise<Response> => {
-  return streamLangGraph('default')(req);
+  return streamLanggraph<MyLanggraphData>({ 
+    graphName: 'default', 
+    messageSchema: structuredMessageSchema 
+  })(req);
 });
 
 export const GET = authMiddleware((req: Request): Promise<Response> => {
-  return fetchLangGraphHistory('default')(req);
+  return fetchLanggraphHistory<MyLanggraphData>({ 
+    graphName: 'default', 
+    messageSchema: structuredMessageSchema 
+  })(req);
 });
