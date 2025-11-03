@@ -2,16 +2,17 @@
   "name": "langgraph-ai-sdk",
   "version": "1.0.0",
   "description": "Server utilities for LangGraph AI SDK",
-  "main": "index.js",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "type": "module",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
-      "default": "./src/index.ts"
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     },
     "./testing": {
-      "types": "./src/testing/index.ts",
-      "default": "./src/testing/index.ts"
+      "types": "./dist/testing/index.d.ts",
+      "default": "./dist/testing/index.js"
     }
   },
   "scripts": {

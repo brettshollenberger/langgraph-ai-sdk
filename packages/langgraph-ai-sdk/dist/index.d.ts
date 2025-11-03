@@ -1,8 +1,9 @@
+import { i as LanggraphUIMessage, n as InferMessageSchema, r as LanggraphData, t as ExtractGraphState } from "./types-I07lV9Sd.js";
 import { BaseMessage } from "@langchain/core/messages";
-import { z } from "zod";
 import { InferUIMessageChunk } from "ai";
+import { z } from "zod";
 import { CompiledStateGraph } from "@langchain/langgraph";
-import { InferMessageSchema, InferMessageSchema as InferMessageSchema$1, InferState, InvalidStateError, LanggraphDataBase, LanggraphUIMessage, LanggraphUIMessage as LanggraphUIMessage$1, ValidGraphState } from "@langgraph-ai-sdk/types";
+import { InferMessageSchema as InferMessageSchema$1, InferState, LanggraphDataBase, LanggraphUIMessage as LanggraphUIMessage$1 } from "@langgraph-ai-sdk/types";
 
 //#region src/api.d.ts
 declare function streamLanggraph<TGraphData extends LanggraphDataBase<any, any>>({
@@ -46,8 +47,4 @@ declare function loadThreadHistory<TGraphData extends LanggraphDataBase<any, any
 declare function registerGraph<TData extends LanggraphDataBase<any, any>>(name: string, graph: CompiledStateGraph<InferState<TData>, any, any, any, any, any, any, any, any>): void;
 declare function getGraph<TData extends LanggraphDataBase<any, any>>(name: string): CompiledStateGraph<InferState<TData>, any, any, any, any, any, any, any, any> | undefined;
 //#endregion
-//#region src/types.d.ts
-type ExtractGraphState<T> = T extends CompiledStateGraph<infer S, any, any, any, any, any, any, any, any> ? S : never;
-type LanggraphData<TState, TMessageSchema = undefined> = TState extends ValidGraphState ? LanggraphDataBase<TState, TMessageSchema> : InvalidStateError;
-//#endregion
-export { ExtractGraphState, type InferMessageSchema, LanggraphBridgeConfig, LanggraphData, type LanggraphUIMessage, createLanggraphStreamResponse, createLanggraphUIStream, fetchLanggraphHistory, getGraph, getSchemaKeys, loadThreadHistory, registerGraph, streamLanggraph };
+export { ExtractGraphState, InferMessageSchema, LanggraphBridgeConfig, LanggraphData, LanggraphUIMessage, createLanggraphStreamResponse, createLanggraphUIStream, fetchLanggraphHistory, getGraph, getSchemaKeys, loadThreadHistory, registerGraph, streamLanggraph };

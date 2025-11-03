@@ -212,3 +212,17 @@ function App() {
 ## Contributing
 
 We'd love to hear from you! Please open an issue or submit a PR if you'd like to contribute to this project.
+
+## Running Tests
+
+```bash
+pnpm test
+```
+
+## Releasing
+
+```bash
+pnpm version patch|minor|major
+pnpm build
+pnpm publish
+```

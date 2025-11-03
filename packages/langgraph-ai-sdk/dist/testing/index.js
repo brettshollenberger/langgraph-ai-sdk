@@ -1,22 +1,11 @@
-import { z } from "zod";
-import "@langchain/core/language_models/chat_models";
-import "type-fest";
+import { AIMessage } from "@langchain/core/messages";
 import { FakeListChatModel } from "@langchain/core/utils/testing";
 import { AsyncLocalStorage } from "node:async_hooks";
+import { z } from "zod";
 import { ChatAnthropic } from "@langchain/anthropic";
+import { Annotation, END, START, StateGraph, messagesStateReducer } from "@langchain/langgraph";
+import { StructuredOutputParser } from "@langchain/core/output_parsers";
 
-//#region src/testing/llm/types.ts
-const LLMNames = {
-	Haiku: "claude-4-5-haiku-latest",
-	Sonnet: "claude-4-5-sonnet-latest",
-	GptOss: "gpt-oss:20b",
-	GeminiFlash: "gemini-1.5-flash-latest",
-	LlamaInstant: "llama-3.1-8b-instant",
-	Fake: "fake"
-};
-const temperatureSchema = z.number().min(0).max(1);
-
-//#endregion
 //#region src/testing/node/withContext.ts
 const nodeContext = new AsyncLocalStorage();
 function getNodeContext() {
@@ -29,7 +18,7 @@ function getNodeContext() {
 const withContext = (nodeFunction) => {
 	return (state, config) => {
 		const nodeName = config?.metadata?.langgraph_node;
-		const graphName = config?.configurable?.thread_id || config?.configurable?.checkpoint_ns;
+		const graphName = config?.context?.graphName;
 		return nodeContext.run({
 			name: nodeName,
 			graphName
@@ -40,7 +29,40 @@ const withContext = (nodeFunction) => {
 };
 
 //#endregion
+//#region src/testing/llm/types.ts
+const LLMNames = {
+	Haiku: "claude-haiku-4-5",
+	Sonnet: "claude-sonnet-4-5",
+	GptOss: "gpt-oss:20b",
+	GeminiFlash: "gemini-1.5-flash-latest",
+	LlamaInstant: "llama-3.1-8b-instant",
+	Fake: "fake"
+};
+const temperatureSchema = z.number().min(0).max(1);
+
+//#endregion
 //#region src/testing/llm/test.ts
+var StructuredOutputAwareFakeModel = class extends FakeListChatModel {
+	useStructuredOutput = false;
+	withStructuredOutput(schema, config) {
+		const clone = Object.create(Object.getPrototypeOf(this));
+		Object.assign(clone, this);
+		clone.useStructuredOutput = true;
+		return clone;
+	}
+	async invoke(input, options) {
+		const response = await super.invoke(input, options);
+		if (this.useStructuredOutput && typeof response.content === "string") {
+			const stripped = response.content.replace(/```json\n?/g, "").replace(/```/g, "").trim();
+			try {
+				return JSON.parse(stripped);
+			} catch (e) {
+				return response.content;
+			}
+		}
+		return response;
+	}
+};
 const FakeConfig = {
 	provider: "fake",
 	model: "Fake",
@@ -57,28 +79,48 @@ var TestLLMManager = class {
 		if (!graphName || !nodeName) throw new Error("Graph name or node name is missing! Cannot get test LLM without proper context.");
 		const graphResponses = this.responses[graphName];
 		if (!graphResponses || !graphResponses[nodeName]) throw new Error("No responses configured for this graph/node combination.");
-		return new FakeListChatModel({ responses: graphResponses[nodeName] });
+		return new StructuredOutputAwareFakeModel({ responses: graphResponses[nodeName] });
 	}
 };
 const manager = new TestLLMManager();
 /**
+* Convert a response value to a string format suitable for FakeListChatModel
+* - Objects are converted to ```json ... ``` format
+* - Strings are returned as-is
+*/
+function normalizeResponse(response) {
+	if (typeof response === "string") return response;
+	return `\`\`\`json\n${JSON.stringify(response, null, 2)}\n\`\`\``;
+}
+/**
 * Configure mock responses for specific nodes in test environment
 * Organized by graph identifier (thread_id or checkpoint_ns) to avoid collisions
+*
+* Supports both string responses and object responses:
+* - Strings are used as-is
+* - Objects are automatically converted to ```json ... ``` format
 *
 * @example
 * configureResponses({
 *   "thread-123": {
 *     nameProjectNode: ["project-paris"],
-*     responseNode: ["```json { intro: 'It just works' }```"]
+*     // Both formats work:
+*     responseNode: [{ intro: 'It just works', examples: ['ex1'], conclusion: 'Done' }]
+*     // Or: responseNode: ["```json { \"intro\": \"It just works\" }```"]
 *   },
 *   "thread-456": {
 *     nameProjectNode: ["project-london"],
-*     responseNode: ["```json { intro: 'Also works' }```"]
+*     responseNode: [{ intro: 'Also works' }]
 *   }
 * })
 */
 function configureResponses$1(responses) {
-	manager.responses = responses;
+	const normalizedResponses = {};
+	for (const [graphName, graphResponses] of Object.entries(responses)) {
+		normalizedResponses[graphName] = {};
+		for (const [nodeName, nodeResponses] of Object.entries(graphResponses)) normalizedResponses[graphName][nodeName] = nodeResponses.map(normalizeResponse);
+	}
+	manager.responses = normalizedResponses;
 }
 /**
 * Reset all configured responses
@@ -93,7 +135,7 @@ function resetLLMConfig$1() {
 	manager.responses = {};
 }
 /**
-* Get a test LLM instance (FakeListChatModel) based on the current node context
+* Get a test LLM instance (StructuredOutputAwareFakeModel) based on the current node context
 * Returns null if no responses are configured for the current graph/node combination,
 * allowing the main getLLM function to fall back to core LLM
 */
@@ -171,7 +213,6 @@ var LLMManager = class {
 	get(llmSkill, llmSpeed, llmCost) {
 		const cacheKey = `${llmSkill}-${llmSpeed}-${llmCost}`;
 		if (this.llmInstances[cacheKey]) return this.llmInstances[cacheKey];
-		console.log(`Initializing LLM for skill: ${llmSkill}, speed: ${llmSpeed} using ${llmCost} tier.`);
 		const speedConfig = coreLLMConfig[llmCost]?.[llmSpeed];
 		if (!speedConfig) throw new Error(`LLM configuration not found for tier '${llmCost}' and speed '${llmSpeed}'.`);
 		const config = speedConfig[llmSkill];
@@ -205,6 +246,7 @@ function getCoreLLM(llmSkill, llmSpeed, llmCost = "free") {
 const isTestEnvironment = process.env.NODE_ENV === "test";
 const LLM_SPEED_DEFAULT = process.env.LLM_SPEED === "fast" ? "fast" : "slow";
 const LLM_COST_DEFAULT = process.env.LLM_COST === "paid" ? "paid" : "free";
+const LLM_SKILL_DEFAULT = "writing";
 /**
 * Get an LLM instance based on the current environment
 *
@@ -223,7 +265,7 @@ const LLM_COST_DEFAULT = process.env.LLM_COST === "paid" ? "paid" : "free";
 * @param llmSpeed - Speed preference (fast or slow), defaults to LLM_SPEED env var
 * @returns BaseChatModel instance
 */
-function getLLM(llmSkill, llmSpeed = LLM_SPEED_DEFAULT, llmCost = LLM_COST_DEFAULT) {
+function getLLM(llmSkill = LLM_SKILL_DEFAULT, llmSpeed = LLM_SPEED_DEFAULT, llmCost = LLM_COST_DEFAULT) {
 	const nodeContext$1 = getNodeContext();
 	const graphName = nodeContext$1?.graphName;
 	const nodeName = nodeContext$1?.name;
@@ -256,4 +298,126 @@ const configureResponses = configureResponses$1;
 const resetLLMConfig = resetLLMConfig$1;
 
 //#endregion
-export { configureResponses, configureResponses$1 as configureTestResponses, coreLLMConfig, getCoreLLM, getLLM, getNodeContext, getTestLLM, hasConfiguredResponses, resetLLMConfig, resetLLMConfig$1 as resetTestConfig, withContext };
+//#region src/testing/graphs/types.ts
+/**
+* Schema for structured messages with intro, examples, and conclusion
+*/
+const structuredMessageSchema = z.object({
+	intro: z.string().describe("Introduction to the response"),
+	examples: z.array(z.string()).describe("List of examples"),
+	conclusion: z.string().describe("Conclusion of the response")
+});
+/**
+* Schema for simple text messages
+*/
+const simpleMessageSchema = z.object({ content: z.string().describe("Content of the message") });
+/**
+* Union schema allowing either simple or structured messages
+*/
+const sampleMessageSchema = z.union([simpleMessageSchema, structuredMessageSchema]);
+/**
+* Graph state annotation for the sample graph
+*/
+const SampleGraphAnnotation = Annotation.Root({
+	messages: Annotation({
+		default: () => [],
+		reducer: messagesStateReducer
+	}),
+	projectName: Annotation({
+		default: () => void 0,
+		reducer: (curr, next) => next ?? curr
+	})
+});
+
+//#endregion
+//#region src/testing/graphs/sampleGraph.ts
+/**
+* Node that generates a project name based on the user's message
+* Only runs if projectName is not already set in state
+*/
+const nameProjectNode = async (state, config) => {
+	if (state.projectName) return {};
+	const userMessage = state.messages.find((m) => m._getType() === "human");
+	if (!userMessage) return {};
+	const prompt = `Based on this user message, generate a short, catchy project name (2-4 words max):
+
+"${userMessage.content}"
+
+Return ONLY the project name, nothing else.`;
+	const schema = z.object({ projectName: z.string().describe("Project name") });
+	let projectName;
+	const llm = getLLM();
+	try {
+		projectName = (await llm.withStructuredOutput(schema).invoke(prompt)).projectName;
+	} catch (e) {
+		console.error(`failed to name project: ${e}`);
+		return {};
+	}
+	return { projectName };
+};
+/**
+* Node that generates a response to the user's message
+* Uses the messageSchema to return either simple or structured messages
+* Tagged with 'notify' for streaming support
+*/
+const responseNode = async (state, config) => {
+	const userPrompt = state.messages[state.messages.length - 1];
+	if (!userPrompt) throw new Error("Need user prompt");
+	const projectContext = state.projectName ? `Project: "${state.projectName}"\n\n` : "";
+	const parser = StructuredOutputParser.fromZodSchema(sampleMessageSchema);
+	const prompt = `${projectContext}
+    <task>
+      Answer the user's question
+    </task>
+
+    <message-history>
+      ${state.messages.map((m) => {
+		return `<role>${m.getType()}</role><content>${m.content}</content>`;
+	}).join("\n")}
+    </message-history>
+
+    <question>
+      ${userPrompt.content}
+    </question>
+
+    <choose>
+      Choose whichever output format you think is most appropriate, given
+      the answer you are about to provide.
+    </choose>
+
+    <output>
+      ${parser.getFormatInstructions()}
+    </output>
+  `;
+	const rawMessage = await getLLM().withConfig({ tags: ["notify"] }).invoke(prompt);
+	let content = typeof rawMessage.content === "string" ? rawMessage.content : "";
+	content = content.replace(/```json/g, "").replace(/```/g, "").trim();
+	let structured;
+	try {
+		structured = sampleMessageSchema.parse(JSON.parse(content));
+	} catch (e) {
+		structured = { content: "I apologize, I had trouble formatting my response properly." };
+	}
+	return { messages: [new AIMessage({
+		content,
+		response_metadata: structured
+	})] };
+};
+/**
+* Creates a compiled sample graph with the given checkpointer
+*
+* Graph flow: START → nameProjectNode → responseNode → END
+*
+* @param checkpointer - Optional checkpointer for state persistence
+* @param graphName - Name to identify the graph (default: 'sample')
+* @returns Compiled LangGraph
+*/
+function createSampleGraph(checkpointer, graphName = "sample") {
+	return new StateGraph(SampleGraphAnnotation).addNode("nameProjectNode", withContext(nameProjectNode)).addNode("responseNode", withContext(responseNode)).addEdge(START, "nameProjectNode").addEdge("nameProjectNode", "responseNode").addEdge("responseNode", END).compile({
+		checkpointer,
+		name: graphName
+	});
+}
+
+//#endregion
+export { SampleGraphAnnotation, configureResponses, configureResponses$1 as configureTestResponses, coreLLMConfig, createSampleGraph, getCoreLLM, getLLM, getNodeContext, getTestLLM, hasConfiguredResponses, nameProjectNode, resetLLMConfig, resetLLMConfig$1 as resetTestConfig, responseNode, sampleMessageSchema, simpleMessageSchema, structuredMessageSchema, withContext };
