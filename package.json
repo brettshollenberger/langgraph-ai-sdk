@@ -1,7 +1,6 @@
 {
   "name": "langgraph-ai-sdk-monorepo",
   "version": "1.0.1",
-  "private": true,
   "type": "module",
   "scripts": {
     "build": "pnpm -r build",
