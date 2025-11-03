@@ -1,9 +1,20 @@
 import { z } from 'zod';
-import { StateGraph, START, END } from '@langchain/langgraph';
+import { StateGraph, START, END, Annotation, messagesStateReducer } from '@langchain/langgraph';
 import { LangGraphRunnableConfig } from '@langchain/langgraph';
-import { messageSchema, type Message, type StateType, type LanggraphChatData, GraphAnnotation } from '../types.ts';
+import { messageSchema, type Message, type StateType, type LanggraphChatData } from '../types.ts';
 import { StructuredOutputParser } from '@langchain/core/output_parsers';
-import { AIMessage } from '@langchain/core/messages';
+import { AIMessage, type BaseMessage } from '@langchain/core/messages';
+
+const GraphAnnotation = Annotation.Root({
+  messages: Annotation<BaseMessage[]>({
+    default: () => [],
+    reducer: messagesStateReducer,
+  }),
+  projectName: Annotation<string | undefined>({
+    default: () => undefined,
+    reducer: (curr, next) => next ?? curr,
+  }),
+});
 import { registerGraph, streamLanggraph, fetchLanggraphHistory } from 'langgraph-ai-sdk';
 import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
 import { getLLM, withContext } from 'langgraph-ai-sdk/testing';
@@ -37,12 +48,14 @@ Return ONLY the project name, nothing else.`;
   let projectName;
   const llm = getLLM();
   try {
-    projectName = (await llm.withStructuredOutput(schema).invoke(prompt)).projectName;
+    projectName = (await llm.invoke(prompt))
   } catch (e) {
+    console.log(`....error......`)
     console.error(`failed to name project: ${e}`);
     return {};
   }
 
+  console.log(projectName);
   return { projectName };
 };
 
@@ -88,6 +101,7 @@ const responseNode = async (state: StateType, config: LangGraphRunnableConfig) =
   
   plainContent = plainContent.replace(/```json/g, '').replace(/```/g, '').trim();
   
+  console.log(`raw message: ${rawMessage}`)
   let structured: Message;
   try {
     structured = messageSchema.parse(JSON.parse(plainContent));

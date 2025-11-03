@@ -44,6 +44,9 @@ importers:
       '@langgraph-ai-sdk/react':
         specifier: workspace:*
         version: link:../../packages/langgraph-ai-sdk-react
+      '@langgraph-ai-sdk/types':
+        specifier: workspace:*
+        version: link:../../packages/langgraph-ai-sdk-types
       '@tailwindcss/typography':
         specifier: ^0.5.19
         version: 0.5.19(tailwindcss@4.1.16)

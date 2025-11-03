@@ -42,15 +42,18 @@ export function getLLM(
   const graphName = nodeContext?.graphName;
   const nodeName = nodeContext?.name!; // Langgraph sets this, so assert that we will always have it
 
+  console.log(`let's get the context....`)
   if (!graphName) {
     console.log(`oh noes idk what's going on!!!`)
     throw new Error("No graph name found in context, configure it with .config({name: 'my-graph-name'})");
   }
 
   if (isTestEnvironment && hasConfiguredResponses(graphName, nodeName)) {
+    console.log(`test llm........`)
     return getTestLLM(llmSkill, llmSpeed, llmCost);
   }
 
+  console.log(`core llm........`)
   return getCoreLLM(llmSkill, llmSpeed, llmCost);
 }
 

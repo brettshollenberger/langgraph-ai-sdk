@@ -62,11 +62,8 @@ export type LanggraphMessage<T extends LanggraphDataBase<any, any>> =
       // Conditionally define the shape of the assistant message
       InferMessageSchema<T> extends z.ZodSchema
         // Case 1: The message is a structured object from a Zod schema.
-        // Merge its properties with the base assistant message.
-        // Usually, InferMessage<T> will define its own type that will override 'structured', but just in case it doesn't, we'll define it here.
-        ? Merge<{ id: string; role: 'assistant', type: 'structured' }, Partial<InferMessage<T>>>
+        ? { id: string; role: 'assistant', type: 'structured', data: Partial<InferMessage<T>> }
         // Case 2: The message is a simple string.
-        // Add a 'content' property to the base assistant message.
         : { id: string; role: 'assistant'; text: string, type: 'simple' }
     )
   | {

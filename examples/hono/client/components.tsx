@@ -1,4 +1,4 @@
-import type { LanggraphPartsMessage } from '@langgraph-ai-sdk/react';
+import type { LanggraphMessage } from '@langgraph-ai-sdk/types';
 import type { LanggraphChatData } from '../types.ts';
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
@@ -16,47 +16,56 @@ export const Wrapper = (props: {
 export const Message = ({
   message,
 }: {
-  message: LanggraphPartsMessage<LanggraphChatData>;
+  message: LanggraphMessage<LanggraphChatData>;
 }) => {
   const prefix = message.role === 'user' ? 'User: ' : 'AI: ';
-  const isText = message.parts.every((part) => part.type === 'text');
+  const isText = message.type === 'simple';
 
   if (isText) {
-    const text = message.parts
-      .filter((part): part is Extract<typeof part, { type: 'text' }> => part.type === 'text')
-      .map((part) => part.text);
+    const text = message.text;
     return (
       <div className="prose prose-invert my-6">
         <ReactMarkdown>{prefix + text}</ReactMarkdown>
       </div>
     );
   } else {
-    const structuredParts = message.parts;
+    const structuredParts = message.data;
     
-    return (
-      <div className="prose prose-invert my-6">
-        <div className="font-bold">{prefix}</div>
-        {structuredParts.map((part, idx) => {
-          const key = String(part.type);
-          const value = 'data' in part ? part.data : '';
-          
-          return (
-            <div key={idx} className="my-2">
-              <div className="text-blue-400 font-semibold capitalize">{key}:</div>
-              {Array.isArray(value) ? (
-                <ul className="list-disc pl-5">
-                  {value.map((item, i) => (
-                    <li key={i}>{String(item)}</li>
-                  ))}
-                </ul>
-              ) : (
-                <ReactMarkdown>{String(value)}</ReactMarkdown>
-              )}
+    if (!structuredParts.type) {
+      return (
+        <div className="prose prose-invert my-6">
+        </div>
+      );
+    }
+
+    if (structuredParts.type === 'plain') {
+      return (
+        <div className="prose prose-invert my-6">
+          <ReactMarkdown>{prefix + structuredParts.content}</ReactMarkdown>
+        </div>
+      );
+    }
+
+    if (structuredParts.type === 'structured') {
+      return (
+        <div className="prose prose-invert my-6">
+          <div className="font-bold">{prefix}</div>
+            <div key={0} className="my-2">
+              <div className="text-blue-400 font-semibold capitalize">{structuredParts.intro}</div>
+              {
+                structuredParts.examples && (
+                  <ul className="list-disc pl-5">
+                    {structuredParts.examples.map((example, i) => (
+                      <li key={i}>{String(example)}</li>
+                    ))}
+                  </ul>
+                )
+              }
+              <div className="text-blue-400 font-semibold capitalize">{structuredParts.conclusion}</div>
             </div>
-          );
-        })}
-      </div>
-    );
+          </div>
+        );
+      }
   }
 };
 

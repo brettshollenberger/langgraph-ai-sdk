@@ -133,7 +133,7 @@ export function useLanggraph<
         }
       }
 
-      const structuredMessage: Partial<TMessage> = msg.parts
+      const structuredMessage = msg.parts
         .filter(p => p.type.startsWith('data-message-'))
         .reduce((builtObject, currentPart) => {
           const key = currentPart.type.replace('data-message-', '') as keyof TMessage;
@@ -145,11 +145,13 @@ export function useLanggraph<
 
       return {
         id: msg.id,
-        role: 'assistant',
-        ...structuredMessage
+        role: 'assistant' as const,
+        type: 'structured' as const,
+        data: structuredMessage,
       } satisfies LanggraphMessage<TLanggraphData>;
     });
   }, [chat.messages]);
+  console.log(chat.messages);
 
   return {
     ...chat,

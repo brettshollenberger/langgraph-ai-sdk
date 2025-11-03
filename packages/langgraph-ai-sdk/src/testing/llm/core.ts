@@ -127,8 +127,10 @@ class LLMManager implements ILLMManager {
           model: config.modelCard,
           temperature: config.temperature,
         });
+        console.log(`...antrhropic...`)
         break;
       default:
+        console.log(`Unsupported LLM provider: ${config.provider}`)
         throw new Error(`Unsupported LLM provider: ${config.provider}`);
     }
 
