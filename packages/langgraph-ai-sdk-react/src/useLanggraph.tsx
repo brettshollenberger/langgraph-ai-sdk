@@ -34,6 +34,7 @@ export function useLanggraph<
   const headersRef = useRef(headers);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
+  console.log(`connecting to api ${api}`)
   const chat = useChat<LanggraphUIMessage<TLanggraphData>>({
     transport: new DefaultChatTransport({
       api,

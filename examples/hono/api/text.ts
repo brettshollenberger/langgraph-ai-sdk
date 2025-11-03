@@ -1,8 +1,7 @@
 import { z } from 'zod';
 import { StateGraph, START, END } from '@langchain/langgraph';
 import { LangGraphRunnableConfig } from '@langchain/langgraph';
-import { structuredMessageSchema, type StructuredMessage, type StateType, type MyLanggraphData, GraphAnnotation } from '../types.ts';
-import { StructuredOutputParser } from '@langchain/core/output_parsers';
+import { type StateType, type MyLanggraphData, GraphAnnotation } from '../types.ts';
 import { AIMessage } from '@langchain/core/messages';
 import { registerGraph, streamLanggraph, fetchLanggraphHistory } from 'langgraph-ai-sdk';
 import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
@@ -54,12 +53,8 @@ const responseNode = async (state: StateType, config: LangGraphRunnableConfig) =
     ? `Project: "${state.projectName}"\n\n` 
     : '';
 
-  const parser = StructuredOutputParser.fromZodSchema(structuredMessageSchema);
   const prompt = `${projectContext}
-    Answer the user's question using this structure:
-      1. An introduction (2-3 sentences)
-      2. Three specific examples
-      3. A conclusion (1-2 sentences)
+    Answer the user's question in a clear, conversational manner.
 
     <message-history>
       ${state.messages.map((m) => {
@@ -68,35 +63,17 @@ const responseNode = async (state: StateType, config: LangGraphRunnableConfig) =
     </message-history>
 
     Question: ${userPrompt.content}
-
-    <output>
-      ${parser.getFormatInstructions()}
-    </output>
   `;
 
   const llm = getLLM();
   const rawMessage = await llm.withConfig({ tags: ['notify'] }).invoke(prompt);
   
-  let content = typeof rawMessage.content === 'string' 
+  const content = typeof rawMessage.content === 'string' 
     ? rawMessage.content 
     : '';
-  
-  content = content.replace(/```json/g, '').replace(/```/g, '').trim();
-  
-  let structured: StructuredMessage;
-  try {
-    structured = structuredMessageSchema.parse(JSON.parse(content));
-  } catch (e) {
-    structured = {
-      intro: 'I apologize, I had trouble formatting my response properly.',
-      examples: ['Example 1', 'Example 2', 'Example 3'],
-      conclusion: 'Please try asking your question again.',
-    };
-  }
 
   const aiMessage = new AIMessage({
     content: content,
-    response_metadata: structured,
   });
 
   return {
@@ -110,9 +87,9 @@ export const graph = new StateGraph(GraphAnnotation)
   .addEdge(START, 'nameProjectNode')
   .addEdge('nameProjectNode', 'responseNode')
   .addEdge('responseNode', END)
-  .compile({ checkpointer, name: 'default' });
+  .compile({ checkpointer, name: 'text' });
 
-registerGraph<MyLanggraphData>('default', graph);
+registerGraph<MyLanggraphData>('text', graph);
 
 function authMiddleware(handler: (req: Request) => Promise<Response>) {
   return async (req: Request): Promise<Response> => {
@@ -130,18 +107,16 @@ function authMiddleware(handler: (req: Request) => Promise<Response>) {
 }
 
 export const POST = authMiddleware(async (req: Request): Promise<Response> => {
-  console.log(`running chat endpoint`)
-  console.log(`running chat endpoint`)
-  console.log(`running chat endpoint`)
+  console.log(`running text endpoint`)
+  console.log(`running text endpoint`)
+  console.log(`running text endpoint`)
   return streamLanggraph<MyLanggraphData>({ 
-    graphName: 'default', 
-    messageSchema: structuredMessageSchema 
+    graphName: 'text'
   })(req);
 });
 
 export const GET = authMiddleware((req: Request): Promise<Response> => {
   return fetchLanggraphHistory<MyLanggraphData>({ 
-    graphName: 'default', 
-    messageSchema: structuredMessageSchema 
+    graphName: 'text'
   })(req);
 });

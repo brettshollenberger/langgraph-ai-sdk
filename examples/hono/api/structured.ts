@@ -110,9 +110,9 @@ export const graph = new StateGraph(GraphAnnotation)
   .addEdge(START, 'nameProjectNode')
   .addEdge('nameProjectNode', 'responseNode')
   .addEdge('responseNode', END)
-  .compile({ checkpointer, name: 'default' });
+  .compile({ checkpointer, name: 'structured' });
 
-registerGraph<MyLanggraphData>('default', graph);
+registerGraph<MyLanggraphData>('structured', graph);
 
 function authMiddleware(handler: (req: Request) => Promise<Response>) {
   return async (req: Request): Promise<Response> => {
@@ -130,18 +130,18 @@ function authMiddleware(handler: (req: Request) => Promise<Response>) {
 }
 
 export const POST = authMiddleware(async (req: Request): Promise<Response> => {
-  console.log(`running chat endpoint`)
-  console.log(`running chat endpoint`)
-  console.log(`running chat endpoint`)
+  console.log(`running structured endpoint`)
+  console.log(`running structured endpoint`)
+  console.log(`running structured endpoint`)
   return streamLanggraph<MyLanggraphData>({ 
-    graphName: 'default', 
+    graphName: 'structured', 
     messageSchema: structuredMessageSchema 
   })(req);
 });
 
 export const GET = authMiddleware((req: Request): Promise<Response> => {
   return fetchLanggraphHistory<MyLanggraphData>({ 
-    graphName: 'default', 
+    graphName: 'structured', 
     messageSchema: structuredMessageSchema 
   })(req);
 });

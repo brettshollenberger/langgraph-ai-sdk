@@ -4,9 +4,9 @@ import { Wrapper, ChatInput, Message } from './components.tsx';
 import { type MyLanggraphData } from '../types.ts';
 import { useLanggraph } from '@langgraph-ai-sdk/react';
 
-export function LangGraphChat() {
+function ChatInstance({ responseType }: { responseType: 'structured' | 'text' }) {
   const { messages, sendMessage, status, state, threadId, error, isLoadingHistory } = useLanggraph<MyLanggraphData>({
-    api: '/api/chat',
+    api: `/api/${responseType}`,
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer 12345`,
@@ -59,5 +59,26 @@ export function LangGraphChat() {
         }}
       />
     </Wrapper>
+  );
+}
+
+export function LangGraphChat() {
+  const [responseType, setResponseType] = useState<'structured' | 'text'>('structured');
+
+  return (
+    <div>
+      <div className="mb-4 p-4 bg-gray-700 rounded">
+        <label className="text-sm text-gray-400 mr-2">Response Type:</label>
+        <select
+          value={responseType}
+          onChange={(e) => setResponseType(e.target.value as 'structured' | 'text')}
+          className="bg-gray-600 text-white px-3 py-1 rounded"
+        >
+          <option value="structured">Structured</option>
+          <option value="text">Text</option>
+        </select>
+      </div>
+      <ChatInstance key={responseType} responseType={responseType} />
+    </div>
   );
 }
