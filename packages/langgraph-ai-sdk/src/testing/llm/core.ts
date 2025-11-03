@@ -101,8 +101,6 @@ class LLMManager implements ILLMManager {
       return this.llmInstances[cacheKey]!;
     }
 
-    console.log(`Initializing LLM for skill: ${llmSkill}, speed: ${llmSpeed} using ${llmCost} tier.`);
-
     // Get the specific config for the requested skill, speed, and tier
     const speedConfig = coreLLMConfig[llmCost]?.[llmSpeed];
     if (!speedConfig) {

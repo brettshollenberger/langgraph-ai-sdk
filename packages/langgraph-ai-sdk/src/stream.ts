@@ -72,7 +72,6 @@ export function createLanggraphUIStream<
         const chunkArray = chunk as StreamChunk;
         let kind: string;
         let data: any;
-        console.log('chunk', chunk)
         
         if (chunkArray.length === 2) {
           [kind, data] = chunkArray;

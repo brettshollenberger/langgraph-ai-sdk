@@ -1,9 +1,6 @@
 import { v7 } from "uuid";
-import { AIMessage, BaseMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
-import { z } from "zod";
+import { AIMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { createUIMessageStream, createUIMessageStreamResponse, parsePartialJson } from "ai";
-import "@langchain/langgraph-checkpoint-postgres";
-import { CompiledStateGraph } from "@langchain/langgraph";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pkg from "pg";
@@ -32,10 +29,11 @@ function createLanggraphUIStream({ graph, messages, threadId, messageSchema, sta
 			...state
 		}, {
 			streamMode: ["messages", "updates"],
+			context: { graphName: graph.name },
 			configurable: { thread_id: threadId }
 		});
 		const stateDataPartIds = {};
-		const messagePartId = !messageSchema ? { text: crypto.randomUUID() } : Object.fromEntries(getSchemaKeys(messageSchema).map((key) => [key, crypto.randomUUID()]));
+		const messagePartIds = messageSchema ? {} : { text: crypto.randomUUID() };
 		let messageBuffer = "";
 		for await (const chunk of stream) {
 			const chunkArray = chunk;
@@ -57,9 +55,11 @@ function createLanggraphUIStream({ graph, messages, threadId, messageSchema, sta
 						const parsed = (await parsePartialJson(cleanedBuffer)).value;
 						if (parsed) Object.entries(parsed).forEach(([key, value]) => {
 							if (value !== void 0) {
+								const partId = messagePartIds[key] || crypto.randomUUID();
+								messagePartIds[key] = partId;
 								const structuredMessagePart = {
 									type: `data-message-${key}`,
-									id: messagePartId[key],
+									id: partId,
 									data: value
 								};
 								writer.write(structuredMessagePart);
@@ -67,7 +67,7 @@ function createLanggraphUIStream({ graph, messages, threadId, messageSchema, sta
 						});
 					} else writer.write({
 						type: "data-message-text",
-						id: messagePartId.text,
+						id: messagePartIds.text,
 						data: messageBuffer
 					});
 				}

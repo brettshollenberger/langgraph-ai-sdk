@@ -49,7 +49,7 @@ export function useLanggraph<
     if (!hasSubmitted) {
       setHasSubmitted(true);
     }
-    
+
     chat.sendMessage(...args);
   };
 
@@ -58,20 +58,17 @@ export function useLanggraph<
       setIsLoadingHistory(false);
       return;
     }
-    
+
     try {
       const response = await fetch(`${api}?threadId=${threadId}`, {
         headers: headersRef.current,
       });
       if (response.ok) {
         const data = await response.json();
-        console.log('[useLanggraph] Received history:', data);
         if (data.messages && data.messages.length > 0) {
-          console.log('[useLanggraph] Setting', data.messages.length, 'messages');
           chat.setMessages(data.messages);
         }
         if (data.state) {
-          console.log('[useLanggraph] Setting state:', data.state);
           setServerState(data.state);
         }
       }

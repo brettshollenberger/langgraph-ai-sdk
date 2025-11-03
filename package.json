@@ -1,13 +1,13 @@
 {
   "name": "langgraph-ai-sdk-monorepo",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "vitest",
-    "typecheck": "tsc --noEmit",
-    "test:run": "vitest run",
-    "test:types": "vitest typecheck"
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "test:watch": "pnpm -r test:watch",
+    "typecheck": "tsc --noEmit"
   },
   "workspaces": [
     "packages/*",

@@ -13,9 +13,7 @@ async function setup() {
     const checkpointer = new PostgresSaver(pool);
 
     await checkpointer.setup();
-    console.log('PostgresSaver checkpointer tables created successfully');
   } catch (error) {
-    console.error('Checkpointer setup failed:', error);
     throw error;
   }
 }
