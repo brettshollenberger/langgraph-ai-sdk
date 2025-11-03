@@ -6,6 +6,7 @@ import { StructuredOutputParser } from '@langchain/core/output_parsers';
 import { AIMessage } from '@langchain/core/messages';
 import { registerGraph, streamLanggraph, fetchLanggraphHistory } from 'langgraph-ai-sdk';
 import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
+import { getLLM } from 'langgraph-ai-sdk/testing';
 import pkg from 'pg';
 
 const { Pool } = pkg;
@@ -19,12 +20,6 @@ const checkpointer = new PostgresSaver(pool);
 //   model: 'gpt-oss:20b',
 //   temperature: 0,
 // });
-
-const llm = new ChatAnthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-  model: 'claude-haiku-4-5',
-  temperature: 0,
-});
 
 const nameProjectNode = async (state: StateType) => {
   if (state.projectName) {
@@ -45,6 +40,7 @@ Return ONLY the project name, nothing else.`;
   });
 
   let projectName;
+  const llm = getLLM();
   try {
     projectName = (await llm.withStructuredOutput(schema).invoke(prompt)).projectName;
   } catch (e) {
@@ -75,14 +71,15 @@ const responseNode = async (state: StateType) => {
         return `<role>${m.getType()}</role><content>${m.content}</content>`
       }).join('\n')}
     </message-history>
-    
+
     Question: ${userPrompt.content}
-    
+
     <output>
       ${parser.getFormatInstructions()}
     </output>
   `;
 
+  const llm = getLLM();
   const rawMessage = await llm.withConfig({ tags: ['notify'] }).invoke(prompt);
   
   let content = typeof rawMessage.content === 'string' 

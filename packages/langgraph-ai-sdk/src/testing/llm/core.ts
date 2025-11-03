@@ -10,7 +10,7 @@ import {
   type LLMCost,
   type ILLMManager,
   LLMNames,
-} from "./types.js";
+} from "./types";
 
 // API Keys
 const anthropicApiKey = process.env.ANTHROPIC_API_KEY;

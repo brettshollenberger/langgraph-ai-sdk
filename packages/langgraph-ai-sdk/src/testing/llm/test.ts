@@ -1,13 +1,13 @@
 import { FakeListChatModel } from "@langchain/core/utils/testing";
 import { type BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { getNodeContext } from "../node/withContext.js";
+import { getNodeContext } from "../node/withContext";
 import {
   type LLMAppConfig,
   type LocalConfig,
   type MockResponses,
   type ILLMManager,
   LLMNames,
-} from "./types.js";
+} from "./types";
 
 // Fake Config for testing
 export const FakeConfig: LocalConfig = {

@@ -5,8 +5,18 @@
   "main": "index.js",
   "type": "module",
   "exports": {
-    "types": "./src/index.d.ts",
-    "import": "./src/index.js"
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./testing": {
+      "types": "./src/testing/index.ts",
+      "default": "./src/testing/index.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch"
   },
   "keywords": [
     "langgraph",

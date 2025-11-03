@@ -1,8 +1,8 @@
 import { type BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { type LLMSkill, type LLMSpeed, type LLMCost } from "./types.js";
-import { getTestLLM, configureResponses as configureTestResponses, resetLLMConfig as resetTestConfig, hasConfiguredResponses } from "./test.js";
-import { getCoreLLM } from "./core.js";
-import { getNodeContext } from "../node/withContext.js";
+import { type LLMSkill, type LLMSpeed, type LLMCost } from "./types";
+import { getTestLLM, configureResponses as configureTestResponses, resetLLMConfig as resetTestConfig, hasConfiguredResponses } from "./test";
+import { getCoreLLM } from "./core";
+import { getNodeContext } from "../node/withContext";
 
 // Environment detection
 const isTestEnvironment = process.env.NODE_ENV === "test";
@@ -12,6 +12,8 @@ const LLM_SPEED_DEFAULT: LLMSpeed = (process.env.LLM_SPEED === 'fast') ? "fast" 
 
 // Default cost tier from environment or fallback
 const LLM_COST_DEFAULT: LLMCost = (process.env.LLM_COST === 'paid') ? "paid" : "free";
+
+const LLM_SKILL_DEFAULT: LLMSkill = 'writing';
 
 /**
  * Get an LLM instance based on the current environment
@@ -32,7 +34,7 @@ const LLM_COST_DEFAULT: LLMCost = (process.env.LLM_COST === 'paid') ? "paid" : "
  * @returns BaseChatModel instance
  */
 export function getLLM(
-  llmSkill: LLMSkill,
+  llmSkill: LLMSkill = LLM_SKILL_DEFAULT,
   llmSpeed: LLMSpeed = LLM_SPEED_DEFAULT,
   llmCost: LLMCost = LLM_COST_DEFAULT
 ): BaseChatModel {

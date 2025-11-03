@@ -58,7 +58,7 @@
  */
 
 // Main exports
-export { getLLM, configureResponses, resetLLMConfig } from "./llm.js";
+export { getLLM, configureResponses, resetLLMConfig } from "./llm";
 
 // Type exports
 export type {
@@ -69,13 +69,7 @@ export type {
   LLMConfig,
   LLMAppConfig,
   MockResponses,
-  AnthropicConfig,
-  OpenAIConfig,
-  GroqConfig,
-  GoogleConfig,
-  OllamaConfig,
-  FakeConfig,
-} from "./types.js";
+} from "./types";
 
 // Environment-specific exports (for advanced usage)
 export {
@@ -83,5 +77,5 @@ export {
   configureResponses as configureTestResponses,
   resetLLMConfig as resetTestConfig,
   hasConfiguredResponses
-} from "./test.js";
-export { getCoreLLM, coreLLMConfig } from "./core.js";
+} from "./test";
+export { getCoreLLM, coreLLMConfig } from "./core";
