@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { Wrapper, ChatInput, Message } from './components.tsx';
 import { type LanggraphChatData } from '../types.ts';
 import { useLanggraph } from '@langgraph-ai-sdk/react';
+import { messageSchema } from '../types.ts';
 
 export function LangGraphChat() {
   const { messages, sendMessage, status, state, threadId, error, isLoadingHistory } = useLanggraph<LanggraphChatData>({
@@ -11,6 +12,7 @@ export function LangGraphChat() {
       'Content-Type': 'application/json',
       'Authorization': `Bearer 12345`,
     },
+    messageSchema: messageSchema,
     getInitialThreadId: () => {
       if (typeof window !== 'undefined') {
         const urlParams = new URLSearchParams(window.location.search);

@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { useRef, useEffectEvent } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { useState, useEffect, useMemo } from 'react';
@@ -18,10 +19,12 @@ export function useLanggraph<
   api = '/api/chat',
   headers = {},
   getInitialThreadId,
+  messageSchema,
 }: {
   api?: string;
   headers?: Record<string, string>;
   getInitialThreadId?: () => string | undefined;
+  messageSchema?: z.ZodSchema;
 }) {
   type TState = InferState<TLanggraphData>
   type TMessage = InferMessage<TLanggraphData>
@@ -118,17 +121,18 @@ export function useLanggraph<
         } satisfies LanggraphMessage<TLanggraphData>;
       }
 
-      const textParts = msg.parts.filter(p => p.type === 'data-message-text');
-      if (textParts.length > 0) {
-        return {
-          id: msg.id,
-          role: msg.role,
-          type: 'simple',
-          text: textParts.at(0)?.text!,
-        } as LanggraphMessage<TLanggraphData>; // TODO: Why can't we infer type: simple when data-message-text is present?
+      if (!messageSchema) {
+        const textParts = msg.parts.filter(p => p.type === 'data-message-text');
+        if (textParts.length > 0) {
+          return {
+            id: msg.id,
+            role: 'assistant',
+            type: 'simple',
+            text: textParts.at(0)?.text!,
+          } satisfies LanggraphMessage<TLanggraphData>; // TODO: Why can't we infer type: simple when data-message-text is present?
+        }
       }
 
-      // These are the keys of InferMessageSchema<TLanggraphData>
       const structuredMessage: Partial<TMessage> = msg.parts
         .filter(p => p.type.startsWith('data-message-'))
         .reduce((builtObject, currentPart) => {
@@ -141,8 +145,7 @@ export function useLanggraph<
 
       return {
         id: msg.id,
-        role: msg.role,
-        type: 'structured',
+        role: 'assistant',
         ...structuredMessage
       } satisfies LanggraphMessage<TLanggraphData>;
     });
