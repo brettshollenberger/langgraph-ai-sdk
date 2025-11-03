@@ -37,9 +37,9 @@ export const testLLMConfig: LLMAppConfig = {
   },
 };
 
-// Mock response manager
+// Mock response manager - stores normalized (string) responses
 class TestLLMManager implements ILLMManager {
-    responses: MockResponses = {};
+    responses: { [graphName: string]: { [nodeName: string]: string[] } } = {};
 
     get(...args: Parameters<ILLMManager['get']>): FakeListChatModel {
       const nodeContext = getNodeContext();
@@ -103,7 +103,7 @@ function normalizeResponse(response: string | object): string {
  */
 export function configureResponses(responses: MockResponses) {
     // Normalize all responses to string format
-    const normalizedResponses: MockResponses = {};
+    const normalizedResponses: { [graphName: string]: { [nodeName: string]: string[] } } = {};
 
     for (const [graphName, graphResponses] of Object.entries(responses)) {
       normalizedResponses[graphName] = {};
