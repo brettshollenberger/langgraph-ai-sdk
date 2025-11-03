@@ -112,14 +112,18 @@ return {
 };
 ```
 
-6. Tell langgraph-ai-sdk about your graph and structured message type:
+6. Tell langgraph-ai-sdk about your state and structured message schemas:
 
 ```typescript
-import { LanggraphData, registerGraph } from "@langgraph-ai-sdk/server";
+import {
+  LanggraphData,
+  registerGraph,
+  ExtractGraphState,
+} from "@langgraph-ai-sdk/server";
 
-type GraphData = LanggraphData<
-  typeof graph, // Tell it about the graph
-  StructuredMessageType // Tell it about the structured message type
+export type GraphData = LanggraphData<
+  ExtractGraphState<typeof graph>,
+  typeof structuredMessageSchema
 >;
 
 // Register the graph with the server
@@ -139,8 +143,20 @@ const app = new Hono();
 
 app.use("*", myAuthMiddleware);
 
-app.post("/api/chat", streamLanggraph("answerQuestion")); // Use the registered graph name
-app.get("/api/chat", fetchLanggraphHistory("answerQuestion")); // Add a get route to fetch graph history
+app.post(
+  "/api/chat",
+  streamLanggraph<GraphData>({
+    graphName: "answerQuestion",
+    messageSchema: structuredMessageSchema,
+  })
+); // Use the registered graph name
+
+app.get(
+  "/api/chat",
+  fetchLanggraphHistory<GraphData>({
+    graphName: "answerQuestion",
+  })
+); // Add a get route to fetch graph history
 ```
 
 8. On your client, the provided hooks will expose the graph state and messages to your UI:
@@ -152,13 +168,43 @@ import { type LanggraphData } from "./your-shared-types";
 function App() {
   // Provide type safety to the hook, you'll automatically get autocompletion for messages and state,
   // including your structured message type
-  const { messages, state, status, threadId, error } =
-    useLanggraph<LanggraphData>("answerQuestion");
+  const { messages, state, sendMessage, status, threadId, error } =
+    useLanggraph<GraphData>({
+      api: "/api/chat", // What endpoint has the graph?
+      headers: {
+        "Content-Type": "application/json", // Any auth headers you may need
+        Authorization: `Bearer 12345`,
+      },
+      getInitialThreadId: () => {
+        // If the URL or other source has an initial threadId, use it to load the graph history
+        if (typeof window !== "undefined") {
+          const urlParams = new URLSearchParams(window.location.search);
+          return urlParams.get("threadId") || undefined;
+        }
+        return undefined;
+      },
+    });
 
   return (
-    <div>
-      <Chat messages={messages} />
-    </div>
+    <Wrapper>
+      <div className="mb-4 p-4 bg-gray-800 rounded">
+        <div className="text-sm text-gray-400 mb-2">State:</div>
+        <pre className="text-xs text-green-400">
+          {JSON.stringify(state, null, 2)}
+        </pre>
+      </div>
+      {messages.map((message) => (
+        <Message key={message.id} message={message} />
+      ))}
+      <ChatInput
+        input={input}
+        onChange={(e) => setInput(e.target.value)}
+        onSubmit={(e) => {
+          e.preventDefault();
+          sendMessage({ text: input });
+        }}
+      />
+    </Wrapper>
   );
 }
 ```

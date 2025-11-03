@@ -5,7 +5,6 @@ import {
   sampleMessageSchema,
   configureResponses,
   type SampleLanggraphData,
-  type SampleStateType,
 } from '../testing';
 import { HumanMessage } from '@langchain/core/messages';
 
@@ -19,7 +18,7 @@ describe('Streaming Infrastructure', () => {
       // Note: nameProjectNode uses withStructuredOutput which expects raw JSON
       configureResponses({
         [graphName]: {
-          nameProjectNode: ['{"projectName": "Project Alpha"}'],
+          nameProjectNode: [{ projectName: "Project Alpha" }],
           responseNode: [
             {
               intro: 'Welcome to the project',
@@ -67,7 +66,7 @@ describe('Streaming Infrastructure', () => {
 
       configureResponses({
         [graphName]: {
-          nameProjectNode: ['{"projectName": "Project Beta"}'],
+          nameProjectNode: [{ projectName: "Project Beta" }],
           responseNode: [
             {
               intro: 'Introduction text',
@@ -125,7 +124,7 @@ describe('Streaming Infrastructure', () => {
 
       configureResponses({
         [graphName]: {
-          nameProjectNode: ['{"projectName": "Project Gamma"}'],
+          nameProjectNode: [{ projectName: "Project Gamma" }],
           responseNode: ['Simple text response'],
         },
       });
@@ -158,7 +157,7 @@ describe('Streaming Infrastructure', () => {
       // Mock response that simulates progressive JSON streaming
       configureResponses({
         [graphName]: {
-          nameProjectNode: ['{"projectName": "Progressive Project"}'],
+          nameProjectNode: [{ projectName: "Progressive Project" }],
           responseNode: [
             {
               intro: 'First part',
@@ -212,7 +211,7 @@ describe('Streaming Infrastructure', () => {
 
       configureResponses({
         [graphName]: {
-          nameProjectNode: ['{"projectName": "Stable Project"}'],
+          nameProjectNode: [{ projectName: "Stable Project" }],
           responseNode: [
             {
               intro: 'Test intro',
