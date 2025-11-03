@@ -1,40 +1,15 @@
-import { z } from 'zod';
-import { type BaseMessage } from '@langchain/core/messages';
-import { type LanggraphData } from 'langgraph-ai-sdk';
-import { Annotation, messagesStateReducer } from '@langchain/langgraph';
-
-export const structuredMessageSchema = z.object({
-  intro: z.string().describe('Introduction to the response'),
-  examples: z.array(z.string()).describe('List of examples'),
-  conclusion: z.string().describe('Conclusion of the response'),
-});
-
-export type StructuredMessage = z.infer<typeof structuredMessageSchema>;
-
-export const simpleMessageSchema = z.object({
-  content: z.string().describe('Content of the message'),
-});
-
-export type SimpleMessage = z.infer<typeof simpleMessageSchema>;
-
-export const messageSchema = z.union([
-  simpleMessageSchema,
+/**
+ * Re-export types from the shared sample graph
+ * This allows the hono example to use the same graph as tests
+ */
+export {
   structuredMessageSchema,
-]);
-
-export type MessageType = z.infer<typeof messageSchema>;
-
-export const GraphAnnotation = Annotation.Root({
-  messages: Annotation<BaseMessage[]>({
-    default: () => [],
-    reducer: messagesStateReducer,
-  }),
-  projectName: Annotation<string | undefined>({
-    default: () => undefined,
-    reducer: (curr, next) => next ?? curr,
-  }),
-});
-
-export type StateType = typeof GraphAnnotation.State;
-
-export type MyLanggraphData = LanggraphData<StateType, typeof messageSchema>;
+  simpleMessageSchema,
+  sampleMessageSchema as messageSchema,
+  SampleGraphAnnotation as GraphAnnotation,
+  type StructuredMessage,
+  type SimpleMessage,
+  type SampleMessageType as MessageType,
+  type SampleStateType as StateType,
+  type SampleLanggraphData as MyLanggraphData,
+} from 'langgraph-ai-sdk/testing';

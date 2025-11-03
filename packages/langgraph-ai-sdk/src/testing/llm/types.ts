@@ -72,9 +72,10 @@ export interface LLMAppConfig {
 
 // Test Configuration Types
 // graphName is extracted from config.configurable.thread_id or config.configurable.checkpoint_ns
+// Supports both string responses and object responses (objects are auto-converted to JSON format)
 export interface MockResponses {
   [graphName: string]: {
-    [nodeName: string]: string[];
+    [nodeName: string]: (string | object)[];
   };
 }
 

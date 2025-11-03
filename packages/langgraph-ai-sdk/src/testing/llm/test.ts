@@ -65,23 +65,54 @@ class TestLLMManager implements ILLMManager {
 const manager = new TestLLMManager();
 
 /**
+ * Convert a response value to a string format suitable for FakeListChatModel
+ * - Objects are converted to ```json ... ``` format
+ * - Strings are returned as-is
+ */
+function normalizeResponse(response: string | object): string {
+  if (typeof response === 'string') {
+    return response;
+  }
+
+  // Convert object to JSON and wrap in markdown code block
+  const jsonString = JSON.stringify(response, null, 2);
+  return `\`\`\`json\n${jsonString}\n\`\`\``;
+}
+
+/**
  * Configure mock responses for specific nodes in test environment
  * Organized by graph identifier (thread_id or checkpoint_ns) to avoid collisions
+ *
+ * Supports both string responses and object responses:
+ * - Strings are used as-is
+ * - Objects are automatically converted to ```json ... ``` format
  *
  * @example
  * configureResponses({
  *   "thread-123": {
  *     nameProjectNode: ["project-paris"],
- *     responseNode: ["```json { intro: 'It just works' }```"]
+ *     // Both formats work:
+ *     responseNode: [{ intro: 'It just works', examples: ['ex1'], conclusion: 'Done' }]
+ *     // Or: responseNode: ["```json { \"intro\": \"It just works\" }```"]
  *   },
  *   "thread-456": {
  *     nameProjectNode: ["project-london"],
- *     responseNode: ["```json { intro: 'Also works' }```"]
+ *     responseNode: [{ intro: 'Also works' }]
  *   }
  * })
  */
 export function configureResponses(responses: MockResponses) {
-    manager.responses = responses;
+    // Normalize all responses to string format
+    const normalizedResponses: MockResponses = {};
+
+    for (const [graphName, graphResponses] of Object.entries(responses)) {
+      normalizedResponses[graphName] = {};
+      for (const [nodeName, nodeResponses] of Object.entries(graphResponses)) {
+        normalizedResponses[graphName][nodeName] = nodeResponses.map(normalizeResponse);
+      }
+    }
+
+    manager.responses = normalizedResponses;
 }
 
 /**
