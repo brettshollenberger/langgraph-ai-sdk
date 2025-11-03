@@ -11,6 +11,19 @@ export const structuredMessageSchema = z.object({
 
 export type StructuredMessage = z.infer<typeof structuredMessageSchema>;
 
+export const simpleMessageSchema = z.object({
+  content: z.string().describe('Content of the message'),
+});
+
+export type SimpleMessage = z.infer<typeof simpleMessageSchema>;
+
+export const messageSchema = z.union([
+  simpleMessageSchema,
+  structuredMessageSchema,
+]);
+
+export type MessageType = z.infer<typeof messageSchema>;
+
 export const GraphAnnotation = Annotation.Root({
   messages: Annotation<BaseMessage[]>({
     default: () => [],
@@ -24,4 +37,4 @@ export const GraphAnnotation = Annotation.Root({
 
 export type StateType = typeof GraphAnnotation.State;
 
-export type MyLanggraphData = LanggraphData<StateType, typeof structuredMessageSchema>;
+export type MyLanggraphData = LanggraphData<StateType, typeof messageSchema>;

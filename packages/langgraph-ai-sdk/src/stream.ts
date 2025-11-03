@@ -65,13 +65,14 @@ export function createLanggraphUIStream<
       );
       
       const stateDataPartIds: Record<string, string> = {};
-      const messagePartId = !messageSchema ? { text: crypto.randomUUID() } : Object.fromEntries(getSchemaKeys(messageSchema).map((key) => [key, crypto.randomUUID()]));
+      const messagePartIds: Record<string, string> = messageSchema ? {} : { text: crypto.randomUUID() };
       let messageBuffer = '';
       
       for await (const chunk of stream) {
         const chunkArray = chunk as StreamChunk;
         let kind: string;
         let data: any;
+        console.log('chunk', chunk)
         
         if (chunkArray.length === 2) {
           [kind, data] = chunkArray;
@@ -107,9 +108,12 @@ export function createLanggraphUIStream<
               if (parsed) {
                 Object.entries(parsed).forEach(([key, value]) => {
                   if (value !== undefined) {
+                    const partId = messagePartIds[key] || crypto.randomUUID();
+                    messagePartIds[key] = partId;
+                    
                     const structuredMessagePart = {
                       type: `data-message-${key}`,
-                      id: messagePartId[key],
+                      id: partId,
                       data: value,
                     };
                     writer.write(structuredMessagePart as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
@@ -119,7 +123,7 @@ export function createLanggraphUIStream<
             } else {
               writer.write({
                 type: 'data-message-text',
-                id: messagePartId.text,
+                id: messagePartIds.text,
                 data: messageBuffer,
               } as unknown as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
             }
