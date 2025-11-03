@@ -3,6 +3,7 @@ import type { LangGraphRunnableConfig } from "@langchain/langgraph";
 
 export interface NodeContext {
     name: string;
+    graphName?: string;
 }
 
 const nodeContext = new AsyncLocalStorage<NodeContext>();
@@ -13,11 +14,19 @@ export function getNodeContext(): NodeContext | undefined {
 
 type NodeFunction<TState extends Record<string, unknown>> = (state: TState, config: LangGraphRunnableConfig) => Promise<TState>;
 
-export const withContext = <TState extends Record<string, unknown>>(nodeFunction: NodeFunction<TState>): NodeFunction<TState> => {
+/**
+ * Wraps a node function with context that includes node name and graph name
+ * The graph name is automatically extracted from config.configurable (thread_id or checkpoint_ns)
+ */
+export const withContext = <TState extends Record<string, unknown>>(
+    nodeFunction: NodeFunction<TState>
+): NodeFunction<TState> => {
     return (state: TState, config: LangGraphRunnableConfig) => {
         const nodeName = config?.metadata?.langgraph_node as string;
+        // Extract graph identifier from configurable (prefer thread_id, fallback to checkpoint_ns)
+        const graphName = (config?.configurable?.thread_id || config?.configurable?.checkpoint_ns) as string | undefined;
 
-        return nodeContext.run({ name: nodeName }, () => {
+        return nodeContext.run({ name: nodeName, graphName }, () => {
             return nodeFunction(state, config);
         });
     }

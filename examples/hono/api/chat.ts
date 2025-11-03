@@ -119,7 +119,7 @@ export const graph = new StateGraph(GraphAnnotation)
   .addEdge(START, 'nameProjectNode')
   .addEdge('nameProjectNode', 'responseNode')
   .addEdge('responseNode', END)
-  .compile({ checkpointer });
+  .compile({ checkpointer, name: 'default' });
 
 registerGraph<MyLanggraphData>('default', graph);
 
