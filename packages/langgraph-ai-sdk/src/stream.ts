@@ -4,22 +4,16 @@ import {
   createUIMessageStream,
   createUIMessageStreamResponse,
   type InferUIMessageChunk,
-  type UIMessage,
-  type DataUIPart,
 } from 'ai';
 import type { CompiledStateGraph } from '@langchain/langgraph';
-import { BaseMessage, AIMessage, HumanMessage } from '@langchain/core/messages';
-import { mapStoredMessageToChatMessage } from '@langchain/core/messages';
+import { BaseMessage } from '@langchain/core/messages';
 import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
-import type { LanggraphData } from './types.ts'
 import type { 
   LanggraphDataBase,
   LanggraphUIMessage,
   InferState, 
   InferMessage,
   InferMessageSchema,
-  StructuredMessage, 
-  LanggraphDataParts
 } from '@langgraph-ai-sdk/types'
 
 type StreamChunk = [
@@ -43,7 +37,6 @@ export interface LanggraphBridgeConfig<
   messages: BaseMessage[];
   threadId: string;
   messageSchema?: InferMessageSchema<TGraphData>;
-  checkpointer?: PostgresSaver;
   state?: Partial<InferState<TGraphData>>;
 }
 
