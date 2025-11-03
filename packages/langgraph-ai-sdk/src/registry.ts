@@ -5,13 +5,13 @@ const graphRegistry = new Map<string, CompiledStateGraph<any, any>>();
 
 export function registerGraph<TData extends LanggraphDataBase<any, any>>(
   name: string,
-  graph: CompiledStateGraph<InferState<TData>, any>
+  graph: CompiledStateGraph<InferState<TData>, any, any, any, any, any, any, any, any>
 ) {
   graphRegistry.set(name, graph);
 }
 
 export function getGraph<TData extends LanggraphDataBase<any, any>>(
   name: string
-): CompiledStateGraph<InferState<TData>, any> | undefined {
+): CompiledStateGraph<InferState<TData>, any, any, any, any, any, any, any, any> | undefined {
   return graphRegistry.get(name);
 }

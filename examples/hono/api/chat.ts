@@ -1,9 +1,7 @@
 import { z } from 'zod';
-import { StateGraph, Annotation, START, END, messagesStateReducer } from '@langchain/langgraph';
-import { type BaseMessage } from '@langchain/core/messages';
+import { StateGraph, START, END } from '@langchain/langgraph';
 import { ChatAnthropic } from '@langchain/anthropic';
-import { ChatOllama } from '@langchain/ollama';
-import { structuredMessageSchema, type StructuredMessage, type StateType, type MyLanggraphData } from '../types.ts';
+import { structuredMessageSchema, type StructuredMessage, type StateType, type MyLanggraphData, GraphAnnotation } from '../types.ts';
 import { StructuredOutputParser } from '@langchain/core/output_parsers';
 import { AIMessage } from '@langchain/core/messages';
 import { registerGraph, streamLanggraph, fetchLanggraphHistory } from 'langgraph-ai-sdk';
@@ -16,17 +14,6 @@ const pool = new Pool({
   connectionString
 });
 const checkpointer = new PostgresSaver(pool);
-
-const GraphAnnotation = Annotation.Root({
-  messages: Annotation<BaseMessage[]>({
-    default: () => [],
-    reducer: messagesStateReducer,
-  }),
-  projectName: Annotation<string | undefined>({
-    default: () => undefined,
-    reducer: (curr, next) => next ?? curr,
-  }),
-});
 
 // const llm = new ChatOllama({
 //   model: 'gpt-oss:20b',
