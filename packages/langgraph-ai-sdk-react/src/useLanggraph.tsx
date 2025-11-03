@@ -65,10 +65,13 @@ export function useLanggraph<
       });
       if (response.ok) {
         const data = await response.json();
+        console.log('[useLanggraph] Received history:', data);
         if (data.messages && data.messages.length > 0) {
+          console.log('[useLanggraph] Setting', data.messages.length, 'messages');
           chat.setMessages(data.messages);
         }
         if (data.state) {
+          console.log('[useLanggraph] Setting state:', data.state);
           setServerState(data.state);
         }
       }

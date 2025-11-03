@@ -94,6 +94,7 @@ export function fetchLanggraphHistory<TGraphData extends LanggraphDataBase<any, 
     const { messages, state } = await loadThreadHistory<TGraphData>(
       graph,
       threadId,
+      messageSchema
     );
     
     return new Response(

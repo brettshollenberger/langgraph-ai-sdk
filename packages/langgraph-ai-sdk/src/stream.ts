@@ -8,7 +8,8 @@ import {
   type DataUIPart,
 } from 'ai';
 import type { CompiledStateGraph } from '@langchain/langgraph';
-import { BaseMessage, AIMessage } from '@langchain/core/messages';
+import { BaseMessage, AIMessage, HumanMessage } from '@langchain/core/messages';
+import { mapStoredMessageToChatMessage } from '@langchain/core/messages';
 import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
 import type { LanggraphData } from './types.ts'
 import type { 
@@ -185,7 +186,6 @@ export async function loadThreadHistory<
   
   const messages = (stateSnapshot.values.messages as BaseMessage[]) || [];
   const fullState = stateSnapshot.values;
-  
   const globalState: Partial<TState> = {};
   
   for (const key in fullState) {
@@ -202,13 +202,25 @@ export async function loadThreadHistory<
     const content = typeof msg.content === 'string' ? msg.content : '';
     const parts = [];
     
-    if (msg instanceof AIMessage && msg.response_metadata && messageSchema) {
+    if (isUser) {
+      parts.push({
+        type: 'text',
+        id: crypto.randomUUID(),
+        text: content
+      });
+    } else if (messageSchema) {
       Object.entries(msg.response_metadata).forEach(([key, value]) => {
         parts.push({
           type: `data-message-${key}`,
           id: crypto.randomUUID(),
           data: value
         });
+      });
+    } else {
+      parts.push({
+        type: 'data-message-text',
+        id: crypto.randomUUID(),
+        data: content
       });
     }
     
@@ -218,6 +230,6 @@ export async function loadThreadHistory<
       parts
     } as LanggraphUIMessage<TGraphData>;
   });
-
+  
   return { messages: uiMessages, state: globalState };
 }
