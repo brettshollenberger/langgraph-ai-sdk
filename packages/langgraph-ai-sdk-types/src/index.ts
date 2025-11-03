@@ -44,7 +44,7 @@ export type LanggraphUIMessage<T extends LanggraphDataBase<any, any>> = UIMessag
 
 export type MessagePart<T extends LanggraphDataBase<any, any>> = 
   InferMessageSchema<T> extends z.ZodSchema
-    ? { [K in keyof InferMessage<T>]: { type: K; data: InferMessage<T>[K]; id: string } }[keyof InferMessage<T>]
+    ? { [K in keyof InferMessage<T>]: { type: K; data: InferMessage<T>[K]; id: string } }[keyof InferMessage<T>] | { type: 'text'; text: string; id: string }
     : { type: 'text'; text: string; id: string };
 
 export type StatePart<T extends LanggraphDataBase<any, any>> = 

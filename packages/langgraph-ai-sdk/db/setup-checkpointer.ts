@@ -1,7 +1,17 @@
-import { checkpointer } from '../src/api.ts';
+import { Pool } from 'pg';
+import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
 
 async function setup() {
   try {
+    const connectionString = process.env.DATABASE_URL;
+
+    if (!connectionString) {
+      throw new Error(`DATABASE_URL environment variable is not set, don't know where to migrate!`);
+    }
+
+    const pool = new Pool({ connectionString });
+    const checkpointer = new PostgresSaver(pool);
+
     await checkpointer.setup();
     console.log('PostgresSaver checkpointer tables created successfully');
   } catch (error) {

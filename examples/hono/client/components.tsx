@@ -1,4 +1,5 @@
-import type { LanggraphUIMessage } from '@langgraph-ai-sdk/react';
+import type { LanggraphMessage } from '@langgraph-ai-sdk/react';
+import type { MyLanggraphData } from '../types.ts';
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 
@@ -15,14 +16,14 @@ export const Wrapper = (props: {
 export const Message = ({
   message,
 }: {
-  message: LanggraphUIMessage;
+  message: LanggraphMessage<MyLanggraphData>;
 }) => {
   const prefix = message.role === 'user' ? 'User: ' : 'AI: ';
   const isText = message.parts.every((part) => part.type === 'text');
 
   if (isText) {
     const text = message.parts
-      .filter((part) => part.type === 'text')
+      .filter((part): part is Extract<typeof part, { type: 'text' }> => part.type === 'text')
       .map((part) => part.text);
     return (
       <div className="prose prose-invert my-6">
@@ -37,7 +38,7 @@ export const Message = ({
         <div className="font-bold">{prefix}</div>
         {structuredParts.map((part, idx) => {
           const key = String(part.type);
-          const value = part.data;
+          const value = 'data' in part ? part.data : '';
           
           return (
             <div key={idx} className="my-2">
