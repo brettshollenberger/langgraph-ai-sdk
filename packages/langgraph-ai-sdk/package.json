@@ -52,7 +52,7 @@
     "zod": "^3.24.1"
   },
   "dependencies": {
-    "@langgraph-ai-sdk/types": "workspace:*",
+    "langgraph-ai-sdk-types": "workspace:*",
     "@types/pg": "^8.15.6",
     "drizzle-orm": "^0.44.7",
     "uuid": "^13.0.0"

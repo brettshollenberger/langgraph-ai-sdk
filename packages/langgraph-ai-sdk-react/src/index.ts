@@ -4,4 +4,4 @@ export {
   type LanggraphMessage,
   type MessagePart,
   type StatePart 
-} from '@langgraph-ai-sdk/types';
+} from 'langgraph-ai-sdk-types';

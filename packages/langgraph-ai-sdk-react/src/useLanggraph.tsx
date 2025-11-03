@@ -8,7 +8,7 @@ import type {
   InferMessageSchema, 
   LanggraphUIMessage,
   LanggraphMessage 
-} from '@langgraph-ai-sdk/types';
+} from 'langgraph-ai-sdk-types';
 import { DefaultChatTransport } from 'ai';
 import { v7 as uuidv7 } from 'uuid';
 

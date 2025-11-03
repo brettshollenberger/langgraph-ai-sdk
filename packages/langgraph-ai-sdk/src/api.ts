@@ -5,7 +5,7 @@ import { createLanggraphStreamResponse, loadThreadHistory } from './stream';
 import { getGraph } from './registry';
 import { ensureThread } from './ops';
 import type { UIMessage } from 'ai';
-import type { LanggraphDataBase, InferMessageSchema } from '@langgraph-ai-sdk/types';
+import type { LanggraphDataBase, InferMessageSchema } from 'langgraph-ai-sdk-types';
 
 function convertUIMessagesToLanggraph(messages: UIMessage[]): BaseMessage[] {
   return messages.map((msg) => {

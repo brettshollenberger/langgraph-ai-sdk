@@ -1,5 +1,5 @@
 import * as ai0 from "ai";
-import { InferState, LanggraphDataBase, LanggraphMessage, LanggraphMessage as LanggraphMessage$1, LanggraphUIMessage, LanggraphUIMessage as LanggraphUIMessage$1, MessagePart, StatePart } from "@langgraph-ai-sdk/types";
+import { InferState, LanggraphDataBase, LanggraphMessage, LanggraphMessage as LanggraphMessage$1, LanggraphUIMessage, LanggraphUIMessage as LanggraphUIMessage$1, MessagePart, StatePart } from "langgraph-ai-sdk-types";
 
 //#region src/useLanggraph.d.ts
 declare function useLanggraph<TLanggraphData extends LanggraphDataBase<any, any>>({

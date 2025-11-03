@@ -14,7 +14,7 @@ import type {
   InferState, 
   InferMessage,
   InferMessageSchema,
-} from '@langgraph-ai-sdk/types'
+} from 'langgraph-ai-sdk-types'
 
 type StreamChunk = [
   'messages' | 'updates',

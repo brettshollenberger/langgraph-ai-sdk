@@ -3,7 +3,7 @@ import { BaseMessage } from "@langchain/core/messages";
 import { InferUIMessageChunk } from "ai";
 import { z } from "zod";
 import { CompiledStateGraph } from "@langchain/langgraph";
-import { InferMessageSchema as InferMessageSchema$1, InferState, LanggraphDataBase, LanggraphUIMessage as LanggraphUIMessage$1 } from "@langgraph-ai-sdk/types";
+import { InferMessageSchema as InferMessageSchema$1, InferState, LanggraphDataBase, LanggraphUIMessage as LanggraphUIMessage$1 } from "langgraph-ai-sdk-types";
 
 //#region src/api.d.ts
 declare function streamLanggraph<TGraphData extends LanggraphDataBase<any, any>>({

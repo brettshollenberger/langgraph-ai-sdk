@@ -4,7 +4,7 @@ import type {
     ValidGraphState, 
     LanggraphDataBase,
     InvalidStateError
-} from '@langgraph-ai-sdk/types';
+} from 'langgraph-ai-sdk-types';
 
 export type ExtractGraphState<T> = T extends CompiledStateGraph<infer S, any, any, any, any, any, any, any, any> ? S : never
 
@@ -15,4 +15,4 @@ export type LanggraphData<
         ? LanggraphDataBase<TState, TMessageSchema>
         : InvalidStateError
 
-export { type LanggraphUIMessage, type InferMessageSchema } from '@langgraph-ai-sdk/types';
+export { type LanggraphUIMessage, type InferMessageSchema } from 'langgraph-ai-sdk-types';

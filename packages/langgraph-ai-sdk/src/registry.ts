@@ -1,5 +1,5 @@
 import { CompiledStateGraph } from "@langchain/langgraph";
-import type { LanggraphDataBase, InferState } from "@langgraph-ai-sdk/types";
+import type { LanggraphDataBase, InferState } from "langgraph-ai-sdk-types";
 
 const graphRegistry = new Map<string, CompiledStateGraph<any, any>>();
 

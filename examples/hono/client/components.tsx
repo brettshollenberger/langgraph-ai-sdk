@@ -1,4 +1,4 @@
-import type { LanggraphMessage } from '@langgraph-ai-sdk/react';
+import type { LanggraphMessage } from 'langgraph-ai-sdk-react';
 import type { MyLanggraphData } from '../types.ts';
 import React from 'react';
 import ReactMarkdown from 'react-markdown';

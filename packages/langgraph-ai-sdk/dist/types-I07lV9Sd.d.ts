@@ -1,5 +1,5 @@
 import { CompiledStateGraph } from "@langchain/langgraph";
-import { InferMessageSchema as InferMessageSchema$1, InvalidStateError, LanggraphDataBase, LanggraphUIMessage as LanggraphUIMessage$1, ValidGraphState } from "@langgraph-ai-sdk/types";
+import { InferMessageSchema as InferMessageSchema$1, InvalidStateError, LanggraphDataBase, LanggraphUIMessage as LanggraphUIMessage$1, ValidGraphState } from "langgraph-ai-sdk-types";
 
 //#region src/types.d.ts
 type ExtractGraphState<T> = T extends CompiledStateGraph<infer S, any, any, any, any, any, any, any, any> ? S : never;

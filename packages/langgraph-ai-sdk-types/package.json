@@ -1,5 +1,5 @@
 {
-  "name": "@langgraph-ai-sdk/types",
+  "name": "langgraph-ai-sdk-types",
   "version": "1.0.0",
   "description": "Shared types for LangGraph AI SDK",
   "main": "index.js",
@@ -10,7 +10,12 @@
       "import": "./src/index.ts"
     }
   },
-  "keywords": ["langgraph", "ai", "types", "typescript"],
+  "keywords": [
+    "langgraph",
+    "ai",
+    "types",
+    "typescript"
+  ],
   "author": "",
   "license": "ISC",
   "peerDependencies": {

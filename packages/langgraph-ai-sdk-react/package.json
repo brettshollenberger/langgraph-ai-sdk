@@ -1,5 +1,5 @@
 {
-  "name": "@langgraph-ai-sdk/react",
+  "name": "langgraph-ai-sdk-react",
   "version": "1.0.0",
   "description": "React hooks for LangGraph AI SDK",
   "main": "index.js",
@@ -24,7 +24,7 @@
     "react": "^18.0.0 || ^19.0.0"
   },
   "dependencies": {
-    "@langgraph-ai-sdk/types": "workspace:*",
+    "langgraph-ai-sdk-types": "workspace:*",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
