@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { type BaseMessage } from '@langchain/core/messages';
 import { type LanggraphData } from 'langgraph-ai-sdk';
+import { Annotation, messagesStateReducer } from '@langchain/langgraph';
 
 export const structuredMessageSchema = z.object({
   intro: z.string().describe('Introduction to the response'),
@@ -10,9 +11,30 @@ export const structuredMessageSchema = z.object({
 
 export type StructuredMessage = z.infer<typeof structuredMessageSchema>;
 
-export type StateType = {
-  messages: BaseMessage[];
-  projectName?: string;
-};
+export const simpleMessageSchema = z.object({
+  content: z.string().describe('Content of the message'),
+});
 
-export type MyLanggraphData = LanggraphData<StateType, typeof structuredMessageSchema>;
+export type SimpleMessage = z.infer<typeof simpleMessageSchema>;
+
+export const messageSchema = z.union([
+  simpleMessageSchema,
+  structuredMessageSchema,
+]);
+
+export type MessageType = z.infer<typeof messageSchema>;
+
+export const GraphAnnotation = Annotation.Root({
+  messages: Annotation<BaseMessage[]>({
+    default: () => [],
+    reducer: messagesStateReducer,
+  }),
+  projectName: Annotation<string | undefined>({
+    default: () => undefined,
+    reducer: (curr, next) => next ?? curr,
+  }),
+});
+
+export type StateType = typeof GraphAnnotation.State;
+
+export type MyLanggraphData = LanggraphData<StateType, typeof messageSchema>;

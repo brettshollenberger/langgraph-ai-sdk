@@ -1,13 +1,12 @@
 import { z } from 'zod';
-import { StateGraph, Annotation, START, END, messagesStateReducer } from '@langchain/langgraph';
-import { type BaseMessage } from '@langchain/core/messages';
-import { ChatAnthropic } from '@langchain/anthropic';
-import { ChatOllama } from '@langchain/ollama';
-import { structuredMessageSchema, type StructuredMessage, type StateType, type MyLanggraphData } from '../types.ts';
+import { StateGraph, START, END } from '@langchain/langgraph';
+import { LangGraphRunnableConfig } from '@langchain/langgraph';
+import { structuredMessageSchema, messageSchema, type MessageType, type StateType, type MyLanggraphData, GraphAnnotation } from '../types.ts';
 import { StructuredOutputParser } from '@langchain/core/output_parsers';
 import { AIMessage } from '@langchain/core/messages';
 import { registerGraph, streamLanggraph, fetchLanggraphHistory } from 'langgraph-ai-sdk';
 import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
+import { getLLM, withContext } from 'langgraph-ai-sdk/testing';
 import pkg from 'pg';
 
 const { Pool } = pkg;
@@ -17,29 +16,12 @@ const pool = new Pool({
 });
 const checkpointer = new PostgresSaver(pool);
 
-const GraphAnnotation = Annotation.Root({
-  messages: Annotation<BaseMessage[]>({
-    default: () => [],
-    reducer: messagesStateReducer,
-  }),
-  projectName: Annotation<string | undefined>({
-    default: () => undefined,
-    reducer: (curr, next) => next ?? curr,
-  }),
-});
-
 // const llm = new ChatOllama({
 //   model: 'gpt-oss:20b',
 //   temperature: 0,
 // });
 
-const llm = new ChatAnthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-  model: 'claude-haiku-4-5',
-  temperature: 0,
-});
-
-const nameProjectNode = async (state: StateType) => {
+const nameProjectNode = async (state: StateType, config: LangGraphRunnableConfig) => {
   if (state.projectName) {
     return {};
   }
@@ -58,6 +40,7 @@ Return ONLY the project name, nothing else.`;
   });
 
   let projectName;
+  const llm = getLLM();
   try {
     projectName = (await llm.withStructuredOutput(schema).invoke(prompt)).projectName;
   } catch (e) {
@@ -68,7 +51,7 @@ Return ONLY the project name, nothing else.`;
   return { projectName };
 };
 
-const responseNode = async (state: StateType) => {
+const responseNode = async (state: StateType, config: LangGraphRunnableConfig) => {
   const userPrompt = state.messages[state.messages.length - 1];
   if (!userPrompt) throw new Error('Need user prompt');
 
@@ -76,26 +59,32 @@ const responseNode = async (state: StateType) => {
     ? `Project: "${state.projectName}"\n\n` 
     : '';
 
-  const parser = StructuredOutputParser.fromZodSchema(structuredMessageSchema);
+  const parser = StructuredOutputParser.fromZodSchema(messageSchema);
   const prompt = `${projectContext}
-    Answer the user's question using this structure:
-      1. An introduction (2-3 sentences)
-      2. Three specific examples
-      3. A conclusion (1-2 sentences)
+    <task>
+      Answer the user's question
+    </task>
 
     <message-history>
       ${state.messages.map((m) => {
         return `<role>${m.getType()}</role><content>${m.content}</content>`
       }).join('\n')}
     </message-history>
-    
-    Question: ${userPrompt.content}
-    
+
+    <question>
+      ${userPrompt.content}
+    </question>
+
+    <choose>
+      Choose whichever output format you think is most appropriate.
+    </choose>
+
     <output>
       ${parser.getFormatInstructions()}
     </output>
   `;
 
+  const llm = getLLM();
   const rawMessage = await llm.withConfig({ tags: ['notify'] }).invoke(prompt);
   
   let content = typeof rawMessage.content === 'string' 
@@ -104,14 +93,12 @@ const responseNode = async (state: StateType) => {
   
   content = content.replace(/```json/g, '').replace(/```/g, '').trim();
   
-  let structured: StructuredMessage;
+  let structured: MessageType;
   try {
-    structured = structuredMessageSchema.parse(JSON.parse(content));
+    structured = messageSchema.parse(JSON.parse(content));
   } catch (e) {
     structured = {
-      intro: 'I apologize, I had trouble formatting my response properly.',
-      examples: ['Example 1', 'Example 2', 'Example 3'],
-      conclusion: 'Please try asking your question again.',
+      content: 'I apologize, I had trouble formatting my response properly.',
     };
   }
 
@@ -127,12 +114,12 @@ const responseNode = async (state: StateType) => {
 
 
 export const graph = new StateGraph(GraphAnnotation)
-  .addNode('nameProjectNode', nameProjectNode)
-  .addNode('responseNode', responseNode)
+  .addNode('nameProjectNode', withContext(nameProjectNode))
+  .addNode('responseNode', withContext(responseNode))
   .addEdge(START, 'nameProjectNode')
   .addEdge('nameProjectNode', 'responseNode')
   .addEdge('responseNode', END)
-  .compile({ checkpointer });
+  .compile({ checkpointer, name: 'default' });
 
 registerGraph<MyLanggraphData>('default', graph);
 
@@ -140,7 +127,6 @@ function authMiddleware(handler: (req: Request) => Promise<Response>) {
   return async (req: Request): Promise<Response> => {
     const authHeader = req.headers.get('Authorization');
     
-    console.log(`Auth header: ${authHeader}`)
     if (authHeader !== 'Bearer 12345') {
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
@@ -155,13 +141,13 @@ function authMiddleware(handler: (req: Request) => Promise<Response>) {
 export const POST = authMiddleware(async (req: Request): Promise<Response> => {
   return streamLanggraph<MyLanggraphData>({ 
     graphName: 'default', 
-    messageSchema: structuredMessageSchema 
+    messageSchema
   })(req);
 });
 
 export const GET = authMiddleware((req: Request): Promise<Response> => {
   return fetchLanggraphHistory<MyLanggraphData>({ 
     graphName: 'default', 
-    messageSchema: structuredMessageSchema 
+    messageSchema
   })(req);
 });

@@ -1,9 +1,9 @@
 import { v7 as uuidv7 } from 'uuid';
 import type { BaseMessage } from '@langchain/core/messages';
 import { HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
-import { createLanggraphStreamResponse, loadThreadHistory } from './stream.ts';
-import { getGraph } from './registry.ts';
-import { ensureThread } from './ops.js';
+import { createLanggraphStreamResponse, loadThreadHistory } from './stream';
+import { getGraph } from './registry';
+import { ensureThread } from './ops';
 import type { UIMessage } from 'ai';
 import type { LanggraphDataBase, InferMessageSchema } from '@langgraph-ai-sdk/types';
 
