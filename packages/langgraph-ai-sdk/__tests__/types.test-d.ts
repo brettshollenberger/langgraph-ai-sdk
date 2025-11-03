@@ -6,7 +6,7 @@ import type { UIMessage } from 'ai'
 import type {
   ExtractGraphState,
   LanggraphData,
-  LanggraphUIMessage
+  LanggraphAISDKUIMessage
 } from '../src/types.ts'
 
 import type {
@@ -57,7 +57,7 @@ test('UIMessage should infer custom message part type', () => {
 })
 
 // User defines: Custom Message format, State format
-// Maps through UIMessage -> LanggraphMessage (BaseMessage, AIMessage, HumanMessage)
+// Maps through UIMessage -> LanggraphPartsMessage (BaseMessage, AIMessage, HumanMessage)
 // On client, extract back out the user's custom message format + state format to return from the hook. Easy.
 
 const GraphAnnotation = Annotation.Root({

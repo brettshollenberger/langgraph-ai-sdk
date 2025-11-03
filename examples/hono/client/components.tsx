@@ -1,5 +1,5 @@
-import type { LanggraphMessage } from '@langgraph-ai-sdk/react';
-import type { MyLanggraphData } from '../types.ts';
+import type { LanggraphPartsMessage } from '@langgraph-ai-sdk/react';
+import type { LanggraphChatData } from '../types.ts';
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 
@@ -16,7 +16,7 @@ export const Wrapper = (props: {
 export const Message = ({
   message,
 }: {
-  message: LanggraphMessage<MyLanggraphData>;
+  message: LanggraphPartsMessage<LanggraphChatData>;
 }) => {
   const prefix = message.role === 'user' ? 'User: ' : 'AI: ';
   const isText = message.parts.every((part) => part.type === 'text');

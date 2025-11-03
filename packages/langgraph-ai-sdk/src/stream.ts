@@ -10,7 +10,7 @@ import { BaseMessage } from '@langchain/core/messages';
 import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
 import type { 
   LanggraphDataBase,
-  LanggraphUIMessage,
+  LanggraphAISDKUIMessage,
   InferState, 
   InferMessage,
   InferMessageSchema,
@@ -53,7 +53,7 @@ export function createLanggraphUIStream<
   type TMessage = InferMessage<TGraphData>
   type StateDataParts = Omit<TState, 'messages'>;
     
-  return createUIMessageStream<LanggraphUIMessage<TGraphData>>({
+  return createUIMessageStream<LanggraphAISDKUIMessage<TGraphData>>({
     execute: async ({ writer }) => {
       const stream = await graph.stream(
         { messages, ...state },
@@ -112,7 +112,7 @@ export function createLanggraphUIStream<
                       id: messagePartId[key],
                       data: value,
                     };
-                    writer.write(structuredMessagePart as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+                    writer.write(structuredMessagePart as InferUIMessageChunk<LanggraphAISDKUIMessage<TGraphData>>);
                   }
                 });
               }
@@ -121,7 +121,7 @@ export function createLanggraphUIStream<
                 type: 'data-message-text',
                 id: messagePartId.text,
                 data: messageBuffer,
-              } as unknown as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+              } as unknown as InferUIMessageChunk<LanggraphAISDKUIMessage<TGraphData>>);
             }
           }
         } else if (kind === 'updates') {
@@ -143,7 +143,7 @@ export function createLanggraphUIStream<
                 type: `data-state-${keyStr}`,
                 id: dataPartId,
                 data: value
-              } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+              } as InferUIMessageChunk<LanggraphAISDKUIMessage<TGraphData>>);
             });
           }
         }
@@ -168,7 +168,7 @@ export async function loadThreadHistory<
   threadId: string,
   messageSchema?: InferMessageSchema<TGraphData>
 ): Promise<{
-  messages: LanggraphUIMessage<TGraphData>[];
+  messages: LanggraphAISDKUIMessage<TGraphData>[];
   state: Partial<InferState<TGraphData>>;
 }> {
   type TState = InferState<TGraphData>
@@ -222,7 +222,7 @@ export async function loadThreadHistory<
       id: `msg-${idx}`,
       role: isUser ? 'user' : 'assistant',
       parts
-    } as LanggraphUIMessage<TGraphData>;
+    } as LanggraphAISDKUIMessage<TGraphData>;
   });
   
   return { messages: uiMessages, state: globalState };

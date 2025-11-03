@@ -1,7 +1,7 @@
 export * from './useLanggraph.tsx'
 export { 
-  type LanggraphUIMessage,
-  type LanggraphMessage,
+  type LanggraphAISDKUIMessage,
+  type LanggraphPartsMessage,
   type MessagePart,
   type StatePart 
 } from '@langgraph-ai-sdk/types';

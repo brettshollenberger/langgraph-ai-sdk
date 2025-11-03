@@ -1,5 +1,6 @@
-import type { UIMessage } from 'ai';
+import type { UIMessage as AISDKUIMessage } from 'ai';
 import { type BaseMessage } from '@langchain/core/messages'
+import { Merge } from 'type-fest';
 import { z } from 'zod';
 
 export type InvalidStateError = {
@@ -37,7 +38,7 @@ export type LanggraphDataParts<T extends LanggraphDataBase<any, any>> =
     ? { [K in keyof InferMessage<T> as `message-${K & string}`]: InferMessage<T>[K] }
     : { 'message-text': string });
 
-export type LanggraphUIMessage<T extends LanggraphDataBase<any, any>> = UIMessage<
+export type LanggraphAISDKUIMessage<T extends LanggraphDataBase<any, any>> = AISDKUIMessage<
     unknown,
     LanggraphDataParts<T>
 >
@@ -50,8 +51,28 @@ export type MessagePart<T extends LanggraphDataBase<any, any>> =
 export type StatePart<T extends LanggraphDataBase<any, any>> = 
   { [K in keyof Omit<InferState<T>, 'messages'>]: { type: K; data: InferState<T>[K]; id: string } }[keyof Omit<InferState<T>, 'messages'>];
 
-export type LanggraphMessage<T extends LanggraphDataBase<any, any>> = {
+export type LanggraphPartsMessage<T extends LanggraphDataBase<any, any>> = {
   id: string;
   role: 'system' | 'user' | 'assistant';
   parts: MessagePart<T>[];
 };
+
+export type LanggraphMessage<T extends LanggraphDataBase<any, any>> = 
+  | (
+      // Conditionally define the shape of the assistant message
+      InferMessageSchema<T> extends z.ZodSchema
+        // Case 1: The message is a structured object from a Zod schema.
+        // Merge its properties with the base assistant message.
+        // Usually, InferMessage<T> will define its own type that will override 'structured', but just in case it doesn't, we'll define it here.
+        ? Merge<{ id: string; role: 'assistant', type: 'structured' }, InferMessage<T>>
+        // Case 2: The message is a simple string.
+        // Add a 'content' property to the base assistant message.
+        : { id: string; role: 'assistant'; text: string, type: 'simple' }
+    )
+  | {
+      // The shape for user and system messages is always simple.
+      id: string;
+      role: 'user' | 'system';
+      text: string;
+      type: 'simple'
+    };

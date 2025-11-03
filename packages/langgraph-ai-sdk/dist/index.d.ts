@@ -2,7 +2,7 @@ import { BaseMessage } from "@langchain/core/messages";
 import { z } from "zod";
 import { InferUIMessageChunk } from "ai";
 import { CompiledStateGraph } from "@langchain/langgraph";
-import { InferMessageSchema, InferMessageSchema as InferMessageSchema$1, InferState, InvalidStateError, LanggraphDataBase, LanggraphUIMessage, LanggraphUIMessage as LanggraphUIMessage$1, ValidGraphState } from "@langgraph-ai-sdk/types";
+import { InferMessageSchema, InferMessageSchema as InferMessageSchema$1, InferState, InvalidStateError, LanggraphDataBase, LanggraphAISDKUIMessage, LanggraphAISDKUIMessage as LanggraphAISDKUIMessage$1, ValidGraphState } from "@langgraph-ai-sdk/types";
 
 //#region src/api.d.ts
 declare function streamLanggraph<TGraphData extends LanggraphDataBase<any, any>>({
@@ -35,10 +35,10 @@ declare function createLanggraphUIStream<TGraphData extends LanggraphDataBase<an
   threadId,
   messageSchema,
   state
-}: LanggraphBridgeConfig<TGraphData>): ReadableStream<InferUIMessageChunk<LanggraphUIMessage$1<TGraphData>>>;
+}: LanggraphBridgeConfig<TGraphData>): ReadableStream<InferUIMessageChunk<LanggraphAISDKUIMessage$1<TGraphData>>>;
 declare function createLanggraphStreamResponse<TGraphData extends LanggraphDataBase<any, any>>(options: LanggraphBridgeConfig<TGraphData>): Response;
 declare function loadThreadHistory<TGraphData extends LanggraphDataBase<any, any>>(graph: CompiledStateGraph<InferState<TGraphData>, any>, threadId: string, messageSchema?: InferMessageSchema$1<TGraphData>): Promise<{
-  messages: LanggraphUIMessage$1<TGraphData>[];
+  messages: LanggraphAISDKUIMessage$1<TGraphData>[];
   state: Partial<InferState<TGraphData>>;
 }>;
 //#endregion
@@ -50,4 +50,4 @@ declare function getGraph<TData extends LanggraphDataBase<any, any>>(name: strin
 type ExtractGraphState<T> = T extends CompiledStateGraph<infer S, any, any, any, any, any, any, any, any> ? S : never;
 type LanggraphData<TState, TMessageSchema = undefined> = TState extends ValidGraphState ? LanggraphDataBase<TState, TMessageSchema> : InvalidStateError;
 //#endregion
-export { ExtractGraphState, type InferMessageSchema, LanggraphBridgeConfig, LanggraphData, type LanggraphUIMessage, createLanggraphStreamResponse, createLanggraphUIStream, fetchLanggraphHistory, getGraph, getSchemaKeys, loadThreadHistory, registerGraph, streamLanggraph };
+export { ExtractGraphState, type InferMessageSchema, LanggraphBridgeConfig, LanggraphData, type LanggraphAISDKUIMessage, createLanggraphStreamResponse, createLanggraphUIStream, fetchLanggraphHistory, getGraph, getSchemaKeys, loadThreadHistory, registerGraph, streamLanggraph };

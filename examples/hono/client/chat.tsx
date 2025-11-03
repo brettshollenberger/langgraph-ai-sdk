@@ -1,11 +1,11 @@
 import React from 'react';
 import { useState, useEffect } from 'react';
 import { Wrapper, ChatInput, Message } from './components.tsx';
-import { type MyLanggraphData } from '../types.ts';
+import { type LanggraphChatData } from '../types.ts';
 import { useLanggraph } from '@langgraph-ai-sdk/react';
 
 export function LangGraphChat() {
-  const { messages, sendMessage, status, state, threadId, error, isLoadingHistory } = useLanggraph<MyLanggraphData>({
+  const { messages, sendMessage, status, state, threadId, error, isLoadingHistory } = useLanggraph<LanggraphChatData>({
     api: '/api/chat',
     headers: {
       'Content-Type': 'application/json',

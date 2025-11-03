@@ -6,7 +6,7 @@ import type {
   InferState, 
   InferMessage, 
   InferMessageSchema, 
-  LanggraphUIMessage,
+  LanggraphAISDKUIMessage,
   LanggraphMessage 
 } from '@langgraph-ai-sdk/types';
 import { DefaultChatTransport } from 'ai';
@@ -34,7 +34,7 @@ export function useLanggraph<
   const headersRef = useRef(headers);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
-  const chat = useChat<LanggraphUIMessage<TLanggraphData>>({
+  const chat = useChat<LanggraphAISDKUIMessage<TLanggraphData>>({
     transport: new DefaultChatTransport({
       api,
       headers,
@@ -113,14 +113,9 @@ export function useLanggraph<
         return {
           id: msg.id,
           role: msg.role,
-          parts: msg.parts
-            .filter(p => p.type === 'text')
-            .map(p => ({
-              type: 'text' as const,
-              text: (p as any).text,
-              id: (p as any).id || crypto.randomUUID()
-            }))
-        } as LanggraphMessage<TLanggraphData>;
+          type: 'simple',
+          text: msg.parts.at(0)?.text!,
+        } satisfies LanggraphMessage<TLanggraphData>;
       }
 
       const textParts = msg.parts.filter(p => p.type === 'data-message-text');
@@ -128,27 +123,28 @@ export function useLanggraph<
         return {
           id: msg.id,
           role: msg.role,
-          parts: textParts.map(p => ({
-            type: 'text' as const,
-            text: (p as any).data,
-            id: (p as any).id
-          }))
-        } as LanggraphMessage<TLanggraphData>;
+          type: 'simple',
+          text: textParts.at(0)?.text!,
+        } as LanggraphMessage<TLanggraphData>; // TODO: Why can't we infer type: simple when data-message-text is present?
       }
 
-      const messageParts = msg.parts
+      // These are the keys of InferMessageSchema<TLanggraphData>
+      const structuredMessage: Partial<TMessage> = msg.parts
         .filter(p => p.type.startsWith('data-message-'))
-        .map(p => ({
-          type: p.type.replace('data-message-', '') as keyof TMessage,
-          data: (p as any).data,
-          id: (p as any).id
-        }));
+        .reduce((builtObject, currentPart) => {
+          const key = currentPart.type.replace('data-message-', '') as keyof TMessage;
+          
+          builtObject[key] = (currentPart as any).data;
+          
+          return builtObject;
+        }, {} as Partial<TMessage>);
 
       return {
         id: msg.id,
         role: msg.role,
-        parts: messageParts
-      } as LanggraphMessage<TLanggraphData>;
+        type: 'structured',
+        ...structuredMessage
+      } satisfies LanggraphMessage<TLanggraphData>;
     });
   }, [chat.messages]);
 

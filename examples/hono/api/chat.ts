@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { StateGraph, START, END } from '@langchain/langgraph';
 import { LangGraphRunnableConfig } from '@langchain/langgraph';
-import { structuredMessageSchema, type StructuredMessage, type StateType, type MyLanggraphData, GraphAnnotation } from '../types.ts';
+import { messageSchema, type Message, type StateType, type LanggraphChatData, GraphAnnotation } from '../types.ts';
 import { StructuredOutputParser } from '@langchain/core/output_parsers';
 import { AIMessage } from '@langchain/core/messages';
 import { registerGraph, streamLanggraph, fetchLanggraphHistory } from 'langgraph-ai-sdk';
@@ -15,11 +15,6 @@ const pool = new Pool({
   connectionString
 });
 const checkpointer = new PostgresSaver(pool);
-
-// const llm = new ChatOllama({
-//   model: 'gpt-oss:20b',
-//   temperature: 0,
-// });
 
 const nameProjectNode = async (state: StateType, config: LangGraphRunnableConfig) => {
   if (state.projectName) {
@@ -59,12 +54,11 @@ const responseNode = async (state: StateType, config: LangGraphRunnableConfig) =
     ? `Project: "${state.projectName}"\n\n` 
     : '';
 
-  const parser = StructuredOutputParser.fromZodSchema(structuredMessageSchema);
+  const parser = StructuredOutputParser.fromZodSchema(messageSchema);
   const prompt = `${projectContext}
-    Answer the user's question using this structure:
-      1. An introduction (2-3 sentences)
-      2. Three specific examples
-      3. A conclusion (1-2 sentences)
+    <task>
+      Answer the user's question
+    </task>
 
     <message-history>
       ${state.messages.map((m) => {
@@ -72,7 +66,13 @@ const responseNode = async (state: StateType, config: LangGraphRunnableConfig) =
       }).join('\n')}
     </message-history>
 
-    Question: ${userPrompt.content}
+    <question>
+      ${userPrompt.content}
+    </question>
+
+    <choose>
+      Based on the provided question, you may choose which output format to use, based on the options below:
+    <choose>
 
     <output>
       ${parser.getFormatInstructions()}
@@ -82,25 +82,23 @@ const responseNode = async (state: StateType, config: LangGraphRunnableConfig) =
   const llm = getLLM();
   const rawMessage = await llm.withConfig({ tags: ['notify'] }).invoke(prompt);
   
-  let content = typeof rawMessage.content === 'string' 
+  let plainContent = typeof rawMessage.content === 'string' 
     ? rawMessage.content 
     : '';
   
-  content = content.replace(/```json/g, '').replace(/```/g, '').trim();
+  plainContent = plainContent.replace(/```json/g, '').replace(/```/g, '').trim();
   
-  let structured: StructuredMessage;
+  let structured: Message;
   try {
-    structured = structuredMessageSchema.parse(JSON.parse(content));
+    structured = messageSchema.parse(JSON.parse(plainContent));
   } catch (e) {
     structured = {
-      intro: 'I apologize, I had trouble formatting my response properly.',
-      examples: ['Example 1', 'Example 2', 'Example 3'],
-      conclusion: 'Please try asking your question again.',
+      content: 'I apologize, I had trouble formatting my response properly.',
     };
   }
 
   const aiMessage = new AIMessage({
-    content: content,
+    content: plainContent,
     response_metadata: structured,
   });
 
@@ -118,7 +116,7 @@ export const graph = new StateGraph(GraphAnnotation)
   .addEdge('responseNode', END)
   .compile({ checkpointer, name: 'default' });
 
-registerGraph<MyLanggraphData>('default', graph);
+registerGraph<LanggraphChatData>('default', graph);
 
 function authMiddleware(handler: (req: Request) => Promise<Response>) {
   return async (req: Request): Promise<Response> => {
@@ -136,15 +134,15 @@ function authMiddleware(handler: (req: Request) => Promise<Response>) {
 }
 
 export const POST = authMiddleware(async (req: Request): Promise<Response> => {
-  return streamLanggraph<MyLanggraphData>({ 
+  return streamLanggraph<LanggraphChatData>({ 
     graphName: 'default', 
-    messageSchema: structuredMessageSchema 
+    messageSchema: messageSchema 
   })(req);
 });
 
 export const GET = authMiddleware((req: Request): Promise<Response> => {
-  return fetchLanggraphHistory<MyLanggraphData>({ 
+  return fetchLanggraphHistory<LanggraphChatData>({ 
     graphName: 'default', 
-    messageSchema: structuredMessageSchema 
+    messageSchema: messageSchema 
   })(req);
 });
