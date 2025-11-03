@@ -90,10 +90,6 @@ export const coreLLMConfig: LLMAppConfig = {
 function hasApiKey(config: LLMConfig): config is APIConfig {
   return 'apiKey' in config;
 }
-
-// LLM instance cache
-const llmInstances: Partial<Record<string, BaseChatModel>> = {};
-
 class LLMManager implements ILLMManager {
   private llmInstances: Partial<Record<string, BaseChatModel>> = {};
 

@@ -59,6 +59,7 @@ export function createLanggraphUIStream<
         { messages, ...state },
         { 
           streamMode: ['messages', 'updates'],
+          context: { graphName: graph.name },
           configurable: { thread_id: threadId }
         }
       );

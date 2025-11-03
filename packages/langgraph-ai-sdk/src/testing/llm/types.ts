@@ -16,8 +16,8 @@ export type LLMCost = typeof LLMCosts[number];
 
 // LLM Model Names
 export const LLMNames = {
-    Haiku: "claude-4-5-haiku-latest" as const,
-    Sonnet: "claude-4-5-sonnet-latest" as const,
+    Haiku: "claude-haiku-4-5" as const,
+    Sonnet: "claude-sonnet-4-5" as const,
     GptOss: "gpt-oss:20b" as const,
     GeminiFlash: "gemini-1.5-flash-latest" as const,
     LlamaInstant: "llama-3.1-8b-instant" as const,

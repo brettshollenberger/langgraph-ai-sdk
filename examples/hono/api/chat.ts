@@ -1,12 +1,12 @@
 import { z } from 'zod';
 import { StateGraph, START, END } from '@langchain/langgraph';
-import { ChatAnthropic } from '@langchain/anthropic';
+import { LangGraphRunnableConfig } from '@langchain/langgraph';
 import { structuredMessageSchema, type StructuredMessage, type StateType, type MyLanggraphData, GraphAnnotation } from '../types.ts';
 import { StructuredOutputParser } from '@langchain/core/output_parsers';
 import { AIMessage } from '@langchain/core/messages';
 import { registerGraph, streamLanggraph, fetchLanggraphHistory } from 'langgraph-ai-sdk';
 import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
-import { getLLM } from 'langgraph-ai-sdk/testing';
+import { getLLM, withContext } from 'langgraph-ai-sdk/testing';
 import pkg from 'pg';
 
 const { Pool } = pkg;
@@ -21,7 +21,7 @@ const checkpointer = new PostgresSaver(pool);
 //   temperature: 0,
 // });
 
-const nameProjectNode = async (state: StateType) => {
+const nameProjectNode = async (state: StateType, config: LangGraphRunnableConfig) => {
   if (state.projectName) {
     return {};
   }
@@ -51,7 +51,7 @@ Return ONLY the project name, nothing else.`;
   return { projectName };
 };
 
-const responseNode = async (state: StateType) => {
+const responseNode = async (state: StateType, config: LangGraphRunnableConfig) => {
   const userPrompt = state.messages[state.messages.length - 1];
   if (!userPrompt) throw new Error('Need user prompt');
 
@@ -111,8 +111,8 @@ const responseNode = async (state: StateType) => {
 
 
 export const graph = new StateGraph(GraphAnnotation)
-  .addNode('nameProjectNode', nameProjectNode)
-  .addNode('responseNode', responseNode)
+  .addNode('nameProjectNode', withContext(nameProjectNode))
+  .addNode('responseNode', withContext(responseNode))
   .addEdge(START, 'nameProjectNode')
   .addEdge('nameProjectNode', 'responseNode')
   .addEdge('responseNode', END)
@@ -124,7 +124,6 @@ function authMiddleware(handler: (req: Request) => Promise<Response>) {
   return async (req: Request): Promise<Response> => {
     const authHeader = req.headers.get('Authorization');
     
-    console.log(`Auth header: ${authHeader}`)
     if (authHeader !== 'Bearer 12345') {
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),

@@ -13,5 +13,5 @@ export function registerGraph<TData extends LanggraphDataBase<any, any>>(
 export function getGraph<TData extends LanggraphDataBase<any, any>>(
   name: string
 ): CompiledStateGraph<InferState<TData>, any, any, any, any, any, any, any, any> | undefined {
-  return graphRegistry.get(name);
+  return graphRegistry.get(name)
 }

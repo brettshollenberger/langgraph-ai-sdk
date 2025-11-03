@@ -12,7 +12,7 @@ export function getNodeContext(): NodeContext | undefined {
     return nodeContext.getStore();
 }
 
-type NodeFunction<TState extends Record<string, unknown>> = (state: TState, config: LangGraphRunnableConfig) => Promise<TState>;
+type NodeFunction<TState extends Record<string, unknown>> = (state: TState, config: LangGraphRunnableConfig) => Promise<Partial<TState>>;
 
 /**
  * Wraps a node function with context that includes node name and graph name
@@ -23,8 +23,7 @@ export const withContext = <TState extends Record<string, unknown>>(
 ): NodeFunction<TState> => {
     return (state: TState, config: LangGraphRunnableConfig) => {
         const nodeName = config?.metadata?.langgraph_node as string;
-        // Extract graph identifier from configurable (prefer thread_id, fallback to checkpoint_ns)
-        const graphName = (config?.configurable?.thread_id || config?.configurable?.checkpoint_ns) as string | undefined;
+        const graphName = (config?.context?.graphName) as string | undefined;
 
         return nodeContext.run({ name: nodeName, graphName }, () => {
             return nodeFunction(state, config);
