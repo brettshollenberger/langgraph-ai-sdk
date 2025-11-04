@@ -3,6 +3,8 @@ import { getNodeContext, withContext, withErrorHandling, ErrorReporters, NodeMid
 import { LangGraphRunnableConfig } from "@langchain/langgraph";
 import { StateGraph } from "@langchain/langgraph";
 import { Annotation } from "@langchain/langgraph";
+import { getLLM } from "../testing/llm/llm";
+import { configureResponses } from "../testing/llm/test";
 
 const getNodeName = () => {
     const context = getNodeContext();
@@ -12,11 +14,11 @@ const getNodeName = () => {
 
 describe('Node Core', () => {
   describe('Middlewares', () => {
-    it('should decorate context', async () => {
+    it('decorates context', async () => {
       let nodeName: string | undefined;
 
       const node = NodeMiddleware.use(
-        { notifications: { taskName: 'Test Task' } },
+        {},
         async  (state: any, config: LangGraphRunnableConfig) => {
             nodeName = getNodeName();
             return {};
@@ -34,35 +36,83 @@ describe('Node Core', () => {
       expect(nodeName).toBe('fancyPantsNode');
     });
 
-    it.only('should decorate notifications', async () => {
-      const node = NodeMiddleware.wrap(
+    it('decorates notifications', async () => {
+      let graphName = 'test-graph';
+      let nodeName = 'notificationNode';      
+
+      configureResponses({
+        [graphName]: {
+          [nodeName]: [{ projectName: "Project Alpha" }],
+          responseNode: [
+            {
+              intro: 'Welcome to the project',
+              examples: ['example1', 'example2'],
+              conclusion: 'Get started today',
+            },
+          ],
+        },
+      });
+
+      const node = NodeMiddleware.use(
+        { notifications: { taskName: 'Any Task Name I Want' } },
         async (state: any, config: LangGraphRunnableConfig) => {
-            nodeName = getNodeName();
-            throw new Error('Test error');
+          await getLLM().invoke("Hello")
+          return {}
         }
       )
 
       const graph = new StateGraph(Annotation.Root({ }))
-        .addNode('errorNode', node)
-        .addEdge("__start__", "errorNode")
-        .addEdge("errorNode", "__end__")
-        .compile();
+        .addNode('notificationNode', node)
+        .addEdge("__start__", "notificationNode")
+        .addEdge("notificationNode", "__end__")
+        .compile({ name: graphName });
 
-      await expect(graph.invoke({})).rejects.toThrow('Test error');
+      const stream = await graph.stream({}, { 
+        context: {
+          graphName: graphName,
+        },
+        streamMode: ['custom'] 
+      });
 
-      expect(spy).toHaveBeenCalled();
-      expect(spy).toHaveBeenCalledWith(expect.objectContaining({ message: 'Test error' }));
+      let collectedEvents = []
+      for await (const chunk of stream) {
+        const chunkArray = chunk as [string, any];
+        let kind: string;
+        let data: any;
+        [kind, data] = chunkArray;
+        if (kind === "custom") {
+          collectedEvents.push(data);
+        }
+      }
 
-      expect(nodeName).toBe('errorNode');
+      expect(collectedEvents).toEqual([
+        {
+          id: expect.any(String),
+          event: "NOTIFY_TASK_START",
+          task: {
+            id: expect.any(String),
+            title: "Any Task Name I Want",
+          },
+        },
+        {
+          id: expect.any(String),
+          event: "NOTIFY_TASK_COMPLETE",
+          task: {
+            id: expect.any(String),
+            title: "Any Task Name I Want",
+          },
+        },
+      ]);
     });
 
-    it('should report errors', async () => {
+    it('reports errors', async () => {
       let nodeName: string | undefined;
       const spy = vi.spyOn(console, 'error');
         
       ErrorReporters.addReporter('console');
 
-      const node = NodeMiddleware.wrap(
+      const node = NodeMiddleware.use(
+        { },
         async (state: any, config: LangGraphRunnableConfig) => {
             nodeName = getNodeName();
             throw new Error('Test error');

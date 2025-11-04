@@ -3,10 +3,9 @@ import { withErrorHandling } from "./withErrorHandling";
 import { withNotifications } from "./withNotifications";
 import { NodeMiddlewareFactory } from "./nodeMiddlewareFactory";
 
-const NodeMiddleware = (new NodeMiddlewareFactory());
+const _nodeMiddleware = new NodeMiddlewareFactory()
+  .addMiddleware("context", withContext)
+  .addMiddleware("notifications", withNotifications)
+  .addMiddleware("errorHandling", withErrorHandling);
 
-NodeMiddleware.addMiddleware("context", withContext)
-              .addMiddleware("notifications", withNotifications)
-              .addMiddleware("errorHandling", withErrorHandling);
-
-export { NodeMiddleware };
+export const NodeMiddleware = _nodeMiddleware;

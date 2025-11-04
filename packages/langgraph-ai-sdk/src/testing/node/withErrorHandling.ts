@@ -34,8 +34,9 @@ type WithErrorHandlingConfig = {}
 /**
  * Wraps a node function with error handling
  */
-export const withErrorHandling: NodeMiddlewareType<WithErrorHandlingConfig> = <TState extends Record<string, unknown>>(
-    nodeFunction: NodeFunction<TState>
+export const withErrorHandling = <TState extends Record<string, unknown>>(
+    nodeFunction: NodeFunction<TState>,
+    options: WithErrorHandlingConfig
 ): NodeFunction<TState> => {
     return async (state: TState, config: LangGraphRunnableConfig) => {
         try {

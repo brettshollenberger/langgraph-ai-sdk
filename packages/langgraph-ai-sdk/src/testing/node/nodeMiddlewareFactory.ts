@@ -1,19 +1,23 @@
 import { NodeFunction, type NodeMiddlewareType, type MiddlewareConfigType } from "./types";
 
-type InferMiddlewareConfig<T> = T extends NodeMiddlewareType<infer Config> ? Config : never;
+type InferMiddlewareConfig<T> = T extends (...args: any[]) => any
+  ? Parameters<T>[1]
+  : never;
 
-type MiddlewareConfig<TRegistered extends string, TMiddlewares> = {
+type MiddlewareConfigMap<TRegistered extends string, TMiddlewares> = {
   [K in TRegistered]?: K extends keyof TMiddlewares 
     ? InferMiddlewareConfig<TMiddlewares[K]>
     : never;
-} & {
+};
+
+type MiddlewareConfig<TRegistered extends string, TMiddlewares> = MiddlewareConfigMap<TRegistered, TMiddlewares> & {
   only?: TRegistered[];
   except?: TRegistered[];
 };
 
 export class NodeMiddlewareFactory<
-  TRegistered extends string,
-  TMiddlewares extends Record<string, NodeMiddlewareType<any>> = {}
+  TRegistered extends string = never,
+  TMiddlewares extends Record<string, (...args: any[]) => any> = {}
 > {
   private middlewares: TMiddlewares;
 
@@ -21,9 +25,12 @@ export class NodeMiddlewareFactory<
     this.middlewares = {} as TMiddlewares;
   }
 
-  addMiddleware<TName extends string>(name: string, middleware: NodeMiddlewareType) {
+  addMiddleware<
+    TName extends string, 
+    TMiddleware extends (...args: any[]) => any
+  >(name: TName, middleware: TMiddleware) {
     (this.middlewares as any)[name] = middleware;
-    return this as NodeMiddlewareFactory<TRegistered | TName, TMiddlewares & Record<TName, typeof middleware>>
+    return this as unknown as NodeMiddlewareFactory<TRegistered | TName, TMiddlewares & Record<TName, TMiddleware>>
   }
 
   use<TState extends Record<string, unknown>>(
@@ -59,3 +66,4 @@ export class NodeMiddlewareFactory<
     return selectedNames.map(name => [name, this.middlewares[name]!]);
   }
 }
+ 

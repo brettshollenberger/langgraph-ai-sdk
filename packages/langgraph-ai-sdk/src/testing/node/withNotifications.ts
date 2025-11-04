@@ -3,10 +3,6 @@ import { NodeFunction, NodeMiddlewareType } from "./types";
 import { v7 as uuidv7 } from "uuid";
 import { getNodeContext } from "./withContext";
 
-type NotificationConfig = {
-    taskName: string | ((...args: any) => Promise<string> | string);
-}
-
 const NotificationTypes = [
     "NOTIFY_TASK_START",
     "NOTIFY_TASK_COMPLETE",
@@ -28,12 +24,16 @@ function notify(taskName: NotificationType, config?: LangGraphRunnableConfig, ta
     });
 }
 
+type NotificationConfig = {
+    taskName: string | ((...args: any) => Promise<string> | string);
+}
+
 /**
  * Wraps a node function with error handling
  */
-export const withNotifications: NodeMiddlewareType<NotificationConfig> = <TState extends Record<string, unknown>>(
+export const withNotifications = <TState extends Record<string, unknown>>(
     nodeFunction: NodeFunction<TState>,
-    options?: NotificationConfig
+    options: NotificationConfig
 ): NodeFunction<TState> => {
     return async (state: TState, config: LangGraphRunnableConfig) => {
         const defaultName = getNodeContext()?.name;
