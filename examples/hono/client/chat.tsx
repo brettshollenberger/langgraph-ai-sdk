@@ -5,7 +5,7 @@ import { type MyLanggraphData } from '../types.ts';
 import { useLanggraph } from 'langgraph-ai-sdk-react';
 
 export function LangGraphChat() {
-  const { messages, sendMessage, status, state, threadId, error, isLoadingHistory } = useLanggraph<MyLanggraphData>({
+  const { messages, sendMessage, status, state, threadId, error, events, isLoadingHistory } = useLanggraph<MyLanggraphData>({
     api: '/api/chat',
     headers: {
       'Content-Type': 'application/json',
@@ -43,6 +43,8 @@ export function LangGraphChat() {
       <div className="mb-4 p-4 bg-gray-800 rounded">
         <div className="text-sm text-gray-400 mb-2">State:</div>
         <pre className="text-xs text-green-400">{JSON.stringify(state, null, 2)}</pre>
+        <div className="text-sm text-gray-400 mb-2">Events:</div>
+        <pre className="text-xs text-green-400">{JSON.stringify(events, null, 2)}</pre>
       </div>
       {messages.map((message) => (
         <Message

@@ -5,13 +5,17 @@ import { sampleMessageSchema, type SampleMessageType, type SampleStateType, Samp
 import { StructuredOutputParser } from '@langchain/core/output_parsers';
 import { AIMessage } from '@langchain/core/messages';
 import { getLLM } from '../llm/llm';
-import { withContext } from '../node/withContext';
+import { NodeMiddleware } from '../node';
 
 /**
  * Node that generates a project name based on the user's message
  * Only runs if projectName is not already set in state
  */
-export const nameProjectNode = async (state: SampleStateType, config: LangGraphRunnableConfig) => {
+export const nameProjectNode = NodeMiddleware.use({
+    notifications: {
+        taskName: 'Name Project',
+    }
+}, async (state: SampleStateType, config: LangGraphRunnableConfig) => {
   if (state.projectName) {
     return {};
   }
@@ -39,14 +43,18 @@ Return ONLY the project name, nothing else.`;
   }
 
   return { projectName };
-};
+});
 
 /**
  * Node that generates a response to the user's message
  * Uses the messageSchema to return either simple or structured messages
  * Tagged with 'notify' for streaming support
  */
-export const responseNode = async (state: SampleStateType, config: LangGraphRunnableConfig) => {
+export const responseNode = NodeMiddleware.use({
+    notifications: {
+        taskName: 'Generate Response',
+    }
+}, async (state: SampleStateType, config: LangGraphRunnableConfig) => {
   const userPrompt = state.messages[state.messages.length - 1];
   if (!userPrompt) throw new Error('Need user prompt');
 
@@ -106,7 +114,7 @@ export const responseNode = async (state: SampleStateType, config: LangGraphRunn
   return {
     messages: [aiMessage],
   };
-};
+});
 
 /**
  * Creates a compiled sample graph with the given checkpointer
@@ -119,8 +127,8 @@ export const responseNode = async (state: SampleStateType, config: LangGraphRunn
  */
 export function createSampleGraph(checkpointer?: any, graphName: string = 'sample') {
   return new StateGraph(SampleGraphAnnotation)
-    .addNode('nameProjectNode', withContext(nameProjectNode))
-    .addNode('responseNode', withContext(responseNode))
+    .addNode('nameProjectNode', nameProjectNode)
+    .addNode('responseNode', responseNode)
     .addEdge(START, 'nameProjectNode')
     .addEdge('nameProjectNode', 'responseNode')
     .addEdge('responseNode', END)

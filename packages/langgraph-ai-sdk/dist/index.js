@@ -1,6 +1,7 @@
 import { v7 } from "uuid";
 import { AIMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { createUIMessageStream, createUIMessageStreamResponse, parsePartialJson } from "ai";
+import { kebabCase } from "change-case";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pkg from "pg";
@@ -28,7 +29,11 @@ function createLanggraphUIStream({ graph, messages, threadId, messageSchema, sta
 			messages,
 			...state
 		}, {
-			streamMode: ["messages", "updates"],
+			streamMode: [
+				"messages",
+				"updates",
+				"custom"
+			],
 			context: { graphName: graph.name },
 			configurable: { thread_id: threadId }
 		});
@@ -89,6 +94,20 @@ function createLanggraphUIStream({ graph, messages, threadId, messageSchema, sta
 						});
 					});
 				}
+			} else if (kind === "custom") {
+				const customData = data;
+				const defaultKeys = ["id", "event"];
+				const eventName = customData.event;
+				if (!eventName || !customData.id) continue;
+				const dataKeys = Object.entries(customData).reduce((acc, [key, value]) => {
+					if (typeof key === "string" && !defaultKeys.includes(key)) acc[key] = value;
+					return acc;
+				}, {});
+				writer.write({
+					type: kebabCase(`data-custom-${eventName}`),
+					id: customData.id,
+					data: dataKeys
+				});
 			}
 		}
 	} });

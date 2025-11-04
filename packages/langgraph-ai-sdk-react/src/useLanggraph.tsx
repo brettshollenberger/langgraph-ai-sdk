@@ -12,6 +12,12 @@ import type {
 import { DefaultChatTransport } from 'ai';
 import { v7 as uuidv7 } from 'uuid';
 
+interface CustomEvent {
+  id: string;
+  type: string;
+  data: any;
+}
+
 export function useLanggraph<
   TLanggraphData extends LanggraphDataBase<any, any>
 >({
@@ -104,6 +110,30 @@ export function useLanggraph<
     return serverState;
   }, [chat.messages, serverState]);
 
+  const customEvents = useMemo(() => {
+    const latestAI = chat.messages.filter(m => m.role === 'assistant').at(-1);
+    
+    if (latestAI) {
+      const newEvents: CustomEvent[] = [];
+      
+      for (const part of latestAI.parts) {
+        if (part.type.startsWith('data-custom-')) {
+          const key = part.type.replace('data-custom-', '') as keyof TState;
+          if ('data' in part && 'id' in part && 'type' in part && typeof part.id === 'string' && typeof key === 'string' && typeof part.data === 'object') {
+            newEvents.push({
+              id: part.id,
+              type: key,
+              data: part.data as TState[keyof TState]
+            });
+          }
+        }
+      }
+      
+      return newEvents;
+    }
+    return [];
+  }, [chat.messages]);
+
   const messages: LanggraphMessage<TLanggraphData>[] = useMemo(() => {
     return chat.messages.map(msg => {
       if (msg.role !== 'assistant') {
@@ -154,6 +184,7 @@ export function useLanggraph<
     sendMessage,
     messages,
     state,
+    events: customEvents,
     threadId: hasSubmitted ? threadId : undefined,
     error,
     isLoadingHistory,

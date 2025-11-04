@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { parsePartialJson } from 'ai';
+import { kebabCase } from 'change-case';
 import {
   createUIMessageStream,
   createUIMessageStreamResponse,
@@ -58,7 +59,7 @@ export function createLanggraphUIStream<
       const stream = await graph.stream(
         { messages, ...state },
         { 
-          streamMode: ['messages', 'updates'],
+          streamMode: ['messages', 'updates', 'custom'],
           context: { graphName: graph.name },
           configurable: { thread_id: threadId }
         }
@@ -149,6 +150,25 @@ export function createLanggraphUIStream<
               } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
             });
           }
+        } else if (kind === 'custom') {
+          const customData = data as Record<string, any>;
+          const defaultKeys = ['id', 'event'];
+          const eventName = customData.event;
+          if (!eventName || !customData.id) {
+            continue;
+          }
+          const dataKeys = Object.entries(customData).reduce((acc, [key, value]) => {
+            if (typeof key === 'string' && !defaultKeys.includes(key)) {
+              acc[key] = value;
+            }
+            return acc;
+          }, {} as Record<string, any>);
+
+          writer.write({
+            type: kebabCase(`data-custom-${eventName}`),
+            id: customData.id,
+            data: dataKeys,
+          } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
         }
       }
     }

@@ -1,3 +1,4 @@
+import { v7 } from "uuid";
 import { AIMessage } from "@langchain/core/messages";
 import { FakeListChatModel } from "@langchain/core/utils/testing";
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -15,7 +16,7 @@ function getNodeContext() {
 * Wraps a node function with context that includes node name and graph name
 * The graph name is automatically extracted from config.configurable (thread_id or checkpoint_ns)
 */
-const withContext = (nodeFunction) => {
+const withContext = (nodeFunction, options) => {
 	return (state, config) => {
 		const nodeName = config?.metadata?.langgraph_node;
 		const graphName = config?.context?.graphName;
@@ -298,6 +299,103 @@ const configureResponses = configureResponses$1;
 const resetLLMConfig = resetLLMConfig$1;
 
 //#endregion
+//#region src/testing/node/withErrorHandling.ts
+const preconfiguredReporters = { console: (error) => console.error(error) };
+var Reporters = class {
+	reporters = [];
+	addReporter(reporter) {
+		if (typeof reporter === "string") {
+			if (!preconfiguredReporters[reporter]) throw new Error(`Reporter ${reporter} not found`);
+			this.reporters.push(preconfiguredReporters[reporter]);
+		} else this.reporters.push(reporter);
+		return this;
+	}
+	list() {
+		return this.reporters;
+	}
+	report(error) {
+		this.reporters.forEach((reporter) => reporter(error));
+	}
+};
+const ErrorReporters = new Reporters();
+/**
+* Wraps a node function with error handling
+*/
+const withErrorHandling = (nodeFunction, options) => {
+	return async (state, config) => {
+		try {
+			return await nodeFunction(state, config);
+		} catch (error) {
+			console.log(`caught error`);
+			ErrorReporters.report(error);
+			throw error;
+		}
+	};
+};
+
+//#endregion
+//#region src/testing/node/withNotifications.ts
+function notify(taskName, config, task) {
+	if (!task || !config?.writer) return;
+	if (!task.id) task.id = v7();
+	config.writer({
+		id: task.id,
+		event: taskName,
+		task
+	});
+}
+/**
+* Wraps a node function with error handling
+*/
+const withNotifications = (nodeFunction, options) => {
+	return async (state, config) => {
+		console.log("notify");
+		const defaultName = getNodeContext()?.name;
+		const task = { title: typeof options?.taskName === "function" ? await options.taskName(state, config) : typeof options?.taskName === "string" ? options.taskName : defaultName };
+		try {
+			notify("NOTIFY_TASK_START", config, task);
+			const result = await nodeFunction(state, config);
+			notify("NOTIFY_TASK_COMPLETE", config, task);
+			return result;
+		} catch (error) {
+			notify("NOTIFY_TASK_ERROR", config, task);
+			throw error;
+		}
+	};
+};
+
+//#endregion
+//#region src/testing/node/nodeMiddlewareFactory.ts
+var NodeMiddlewareFactory = class {
+	middlewares;
+	constructor() {
+		this.middlewares = {};
+	}
+	addMiddleware(name, middleware) {
+		this.middlewares[name] = middleware;
+		return this;
+	}
+	use(config = {}, node) {
+		return this.getMiddlewaresToApply(config).reduceRight((wrappedNode, [name, middleware]) => {
+			const middlewareConfig = config[name];
+			return middleware(wrappedNode, middlewareConfig);
+		}, node);
+	}
+	getMiddlewaresToApply(config) {
+		const allNames = Object.keys(this.middlewares);
+		let selectedNames = allNames;
+		if (config.only) selectedNames = allNames.filter((name) => config.only.includes(name));
+		if (config.except) selectedNames = selectedNames.filter((name) => !config.except.includes(name));
+		return selectedNames.map((name) => [name, this.middlewares[name]]);
+	}
+};
+
+//#endregion
+//#region src/testing/node/nodeMiddleware.ts
+const _nodeMiddleware = new NodeMiddlewareFactory().addMiddleware("context", withContext).addMiddleware("notifications", withNotifications).addMiddleware("errorHandling", withErrorHandling);
+const NodeMiddleware = _nodeMiddleware;
+
+//#endregion
 //#region src/testing/graphs/types.ts
 /**
 * Schema for structured messages with intro, examples, and conclusion
@@ -335,7 +433,7 @@ const SampleGraphAnnotation = Annotation.Root({
 * Node that generates a project name based on the user's message
 * Only runs if projectName is not already set in state
 */
-const nameProjectNode = async (state, config) => {
+const nameProjectNode = NodeMiddleware.use({ notifications: { taskName: "Name Project" } }, async (state, config) => {
 	if (state.projectName) return {};
 	const userMessage = state.messages.find((m) => m._getType() === "human");
 	if (!userMessage) return {};
@@ -354,13 +452,13 @@ Return ONLY the project name, nothing else.`;
 		return {};
 	}
 	return { projectName };
-};
+});
 /**
 * Node that generates a response to the user's message
 * Uses the messageSchema to return either simple or structured messages
 * Tagged with 'notify' for streaming support
 */
-const responseNode = async (state, config) => {
+const responseNode = NodeMiddleware.use({ notifications: { taskName: "Generate Response" } }, async (state, config) => {
 	const userPrompt = state.messages[state.messages.length - 1];
 	if (!userPrompt) throw new Error("Need user prompt");
 	const projectContext = state.projectName ? `Project: "${state.projectName}"\n\n` : "";
@@ -402,7 +500,7 @@ const responseNode = async (state, config) => {
 		content,
 		response_metadata: structured
 	})] };
-};
+});
 /**
 * Creates a compiled sample graph with the given checkpointer
 *
@@ -413,11 +511,11 @@ const responseNode = async (state, config) => {
 * @returns Compiled LangGraph
 */
 function createSampleGraph(checkpointer, graphName = "sample") {
-	return new StateGraph(SampleGraphAnnotation).addNode("nameProjectNode", withContext(nameProjectNode)).addNode("responseNode", withContext(responseNode)).addEdge(START, "nameProjectNode").addEdge("nameProjectNode", "responseNode").addEdge("responseNode", END).compile({
+	return new StateGraph(SampleGraphAnnotation).addNode("nameProjectNode", nameProjectNode).addNode("responseNode", responseNode).addEdge(START, "nameProjectNode").addEdge("nameProjectNode", "responseNode").addEdge("responseNode", END).compile({
 		checkpointer,
 		name: graphName
 	});
 }
 
 //#endregion
-export { SampleGraphAnnotation, configureResponses, configureResponses$1 as configureTestResponses, coreLLMConfig, createSampleGraph, getCoreLLM, getLLM, getNodeContext, getTestLLM, hasConfiguredResponses, nameProjectNode, resetLLMConfig, resetLLMConfig$1 as resetTestConfig, responseNode, sampleMessageSchema, simpleMessageSchema, structuredMessageSchema, withContext };
+export { ErrorReporters, NodeMiddleware, NodeMiddlewareFactory, SampleGraphAnnotation, configureResponses, configureResponses$1 as configureTestResponses, coreLLMConfig, createSampleGraph, getCoreLLM, getLLM, getNodeContext, getTestLLM, hasConfiguredResponses, nameProjectNode, resetLLMConfig, resetLLMConfig$1 as resetTestConfig, responseNode, sampleMessageSchema, simpleMessageSchema, structuredMessageSchema, withContext, withErrorHandling, withNotifications };

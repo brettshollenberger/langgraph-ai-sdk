@@ -209,6 +209,41 @@ function App() {
 }
 ```
 
+9. (Optional): Expose any custom data you want via the Langgraph writer:
+
+For example, in your node, you can emit custom events:
+
+```typescript
+const myNode = (state: StateType, config: LangGraphRunnableConfig) => {
+  let task = { name: "Answering the user's question" };
+
+  config.writer({
+    id: task.id,
+    event: "NOTIFY_TASK_START",
+    task, // Any extra data properties you sent will be emitted as event.data
+  });
+
+  llm.invoke(
+    "<task>Answer the user's question</task> <question>${state.messages.at(-1).content}</question>"
+  );
+
+  config.writer({
+    id: task.id,
+    event: "NOTIFY_TASK_COMPLETE",
+    task,
+  });
+  return {};
+};
+```
+
+10. (Optional): Expose custom events via the frontend hooks:
+
+```typescript
+const { events } = useLanggraph<GraphData>(...);
+
+// Show the user what tasks the AI is currently working on
+```
+
 ## Contributing
 
 We'd love to hear from you! Please open an issue or submit a PR if you'd like to contribute to this project.

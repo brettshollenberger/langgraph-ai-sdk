@@ -1,18 +1,18 @@
 {
   "name": "langgraph-ai-sdk",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "description": "Server utilities for LangGraph AI SDK",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "type": "module",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
     },
     "./testing": {
-      "types": "./dist/testing/index.d.ts",
-      "default": "./dist/testing/index.js"
+      "types": "./src/testing/index.ts",
+      "import": "./src/testing/index.ts"
     }
   },
   "scripts": {
@@ -52,9 +52,10 @@
     "zod": "^3.24.1"
   },
   "dependencies": {
-    "langgraph-ai-sdk-types": "workspace:*",
     "@types/pg": "^8.15.6",
+    "change-case": "^5.4.4",
     "drizzle-orm": "^0.44.7",
+    "langgraph-ai-sdk-types": "workspace:*",
     "uuid": "^13.0.0"
   }
 }
