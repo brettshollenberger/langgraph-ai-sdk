@@ -336,10 +336,8 @@ const withErrorHandling = (nodeFunction, options) => {
 //#endregion
 //#region src/testing/node/withNotifications.ts
 function notify(taskName, config, task) {
-	console.log(`do we have a writer???`);
 	if (!task || !config?.writer) return;
 	if (!task.id) task.id = v7();
-	console.log("notify", taskName, task);
 	config.writer({
 		id: task.id,
 		event: taskName,
