@@ -5,8 +5,8 @@ import { sampleMessageSchema, type SampleMessageType, type SampleStateType, Samp
 import { StructuredOutputParser } from '@langchain/core/output_parsers';
 import { AIMessage } from '@langchain/core/messages';
 import { getLLM } from '../llm/llm';
-import { withContext } from '../node/withContext';
 import { NodeMiddleware } from '../node';
+
 /**
  * Node that generates a project name based on the user's message
  * Only runs if projectName is not already set in state

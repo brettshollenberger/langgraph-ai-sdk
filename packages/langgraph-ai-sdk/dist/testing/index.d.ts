@@ -1,9 +1,9 @@
-import { r as LanggraphData } from "../types-I07lV9Sd.js";
-import * as _langchain_core_messages30 from "@langchain/core/messages";
-import { AIMessage, BaseMessage } from "@langchain/core/messages";
+import { r as LanggraphData } from "../types-CvBj0tDP.js";
+import * as _langchain_core_messages41 from "@langchain/core/messages";
+import { BaseMessage } from "@langchain/core/messages";
 import { FakeListChatModel } from "@langchain/core/utils/testing";
 import { z } from "zod";
-import * as _langchain_langgraph11 from "@langchain/langgraph";
+import * as _langchain_langgraph17 from "@langchain/langgraph";
 import { LangGraphRunnableConfig } from "@langchain/langgraph";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ValueOf } from "type-fest";
@@ -169,18 +169,70 @@ declare const coreLLMConfig: LLMAppConfig;
  */
 declare function getCoreLLM(llmSkill: LLMSkill, llmSpeed: LLMSpeed, llmCost?: LLMCost): BaseChatModel;
 //#endregion
+//#region src/testing/node/types.d.ts
+type NodeFunction<TState extends Record<string, unknown>> = (state: TState, config: LangGraphRunnableConfig) => Promise<Partial<TState>> | Partial<TState>;
+type MiddlewareConfigType = Record<string, unknown>;
+interface NodeMiddlewareType<TConfig extends MiddlewareConfigType> {
+  <TState extends Record<string, unknown>>(node: NodeFunction<TState>, options: TConfig): NodeFunction<TState>;
+  _config?: TConfig;
+}
+//#endregion
 //#region src/testing/node/withContext.d.ts
 interface NodeContext {
   name: string;
   graphName?: string;
 }
 declare function getNodeContext(): NodeContext | undefined;
-type NodeFunction<TState extends Record<string, unknown>> = (state: TState, config: LangGraphRunnableConfig) => Promise<Partial<TState>>;
+type WithContextConfig = {};
 /**
  * Wraps a node function with context that includes node name and graph name
  * The graph name is automatically extracted from config.configurable (thread_id or checkpoint_ns)
  */
-declare const withContext: <TState extends Record<string, unknown>>(nodeFunction: NodeFunction<TState>) => NodeFunction<TState>;
+declare const withContext: <TState extends Record<string, unknown>>(nodeFunction: NodeFunction<TState>, options: WithContextConfig) => NodeFunction<TState>;
+//#endregion
+//#region src/testing/node/withErrorHandling.d.ts
+type ReportingFn = (error: Error) => void;
+declare class Reporters {
+  reporters: ReportingFn[];
+  addReporter(reporter: ReportingFn | string): this;
+  list(): ReportingFn[];
+  report(error: Error): void;
+}
+declare const ErrorReporters: Reporters;
+type WithErrorHandlingConfig = {};
+/**
+ * Wraps a node function with error handling
+ */
+declare const withErrorHandling: <TState extends Record<string, unknown>>(nodeFunction: NodeFunction<TState>, options: WithErrorHandlingConfig) => NodeFunction<TState>;
+//#endregion
+//#region src/testing/node/withNotifications.d.ts
+type NotificationConfig = {
+  taskName: string | ((...args: any) => Promise<string> | string);
+};
+/**
+ * Wraps a node function with error handling
+ */
+declare const withNotifications: <TState extends Record<string, unknown>>(nodeFunction: NodeFunction<TState>, options: NotificationConfig) => NodeFunction<TState>;
+//#endregion
+//#region src/testing/node/nodeMiddlewareFactory.d.ts
+type InferMiddlewareConfig<T> = T extends ((...args: any[]) => any) ? Parameters<T>[1] : never;
+type MiddlewareConfigMap<TRegistered extends string, TMiddlewares> = { [K in TRegistered]?: K extends keyof TMiddlewares ? InferMiddlewareConfig<TMiddlewares[K]> : never };
+type MiddlewareConfig<TRegistered extends string, TMiddlewares> = MiddlewareConfigMap<TRegistered, TMiddlewares> & {
+  only?: TRegistered[];
+  except?: TRegistered[];
+};
+declare class NodeMiddlewareFactory<TRegistered extends string = never, TMiddlewares extends Record<string, (...args: any[]) => any> = {}> {
+  private middlewares;
+  constructor();
+  addMiddleware<TName extends string, TMiddleware extends (...args: any[]) => any>(name: TName, middleware: TMiddleware): NodeMiddlewareFactory<TRegistered | TName, TMiddlewares & Record<TName, TMiddleware>>;
+  use<TState extends Record<string, unknown>>(config: MiddlewareConfig<TRegistered, TMiddlewares> | undefined, node: NodeFunction<TState>): NodeFunction<TState>;
+  private getMiddlewaresToApply;
+}
+//#endregion
+//#region src/testing/node/nodeMiddleware.d.ts
+declare const NodeMiddleware: NodeMiddlewareFactory<"context" | "notifications" | "errorHandling", Record<"context", <TState extends Record<string, unknown>>(nodeFunction: NodeFunction<TState>, options: {}) => NodeFunction<TState>> & Record<"notifications", <TState extends Record<string, unknown>>(nodeFunction: NodeFunction<TState>, options: {
+  taskName: string | ((...args: any) => Promise<string> | string);
+}) => NodeFunction<TState>> & Record<"errorHandling", <TState extends Record<string, unknown>>(nodeFunction: NodeFunction<TState>, options: {}) => NodeFunction<TState>>>;
 //#endregion
 //#region src/testing/graphs/types.d.ts
 /**
@@ -237,9 +289,9 @@ type SampleMessageType = z.infer<typeof sampleMessageSchema>;
 /**
  * Graph state annotation for the sample graph
  */
-declare const SampleGraphAnnotation: _langchain_langgraph11.AnnotationRoot<{
-  messages: _langchain_langgraph11.BinaryOperatorAggregate<BaseMessage<_langchain_core_messages30.MessageStructure, _langchain_core_messages30.MessageType>[], BaseMessage<_langchain_core_messages30.MessageStructure, _langchain_core_messages30.MessageType>[]>;
-  projectName: _langchain_langgraph11.BinaryOperatorAggregate<string | undefined, string | undefined>;
+declare const SampleGraphAnnotation: _langchain_langgraph17.AnnotationRoot<{
+  messages: _langchain_langgraph17.BinaryOperatorAggregate<BaseMessage<_langchain_core_messages41.MessageStructure, _langchain_core_messages41.MessageType>[], BaseMessage<_langchain_core_messages41.MessageStructure, _langchain_core_messages41.MessageType>[]>;
+  projectName: _langchain_langgraph17.BinaryOperatorAggregate<string | undefined, string | undefined>;
 }>;
 type SampleStateType = typeof SampleGraphAnnotation.State;
 /**
@@ -252,19 +304,19 @@ type SampleLanggraphData = LanggraphData<SampleStateType, typeof sampleMessageSc
  * Node that generates a project name based on the user's message
  * Only runs if projectName is not already set in state
  */
-declare const nameProjectNode: (state: SampleStateType, config: LangGraphRunnableConfig) => Promise<{
-  projectName?: undefined;
-} | {
-  projectName: any;
-}>;
+declare const nameProjectNode: NodeFunction<_langchain_langgraph17.StateType<{
+  messages: _langchain_langgraph17.BinaryOperatorAggregate<_langchain_core_messages41.BaseMessage<_langchain_core_messages41.MessageStructure, _langchain_core_messages41.MessageType>[], _langchain_core_messages41.BaseMessage<_langchain_core_messages41.MessageStructure, _langchain_core_messages41.MessageType>[]>;
+  projectName: _langchain_langgraph17.BinaryOperatorAggregate<string | undefined, string | undefined>;
+}>>;
 /**
  * Node that generates a response to the user's message
  * Uses the messageSchema to return either simple or structured messages
  * Tagged with 'notify' for streaming support
  */
-declare const responseNode: (state: SampleStateType, config: LangGraphRunnableConfig) => Promise<{
-  messages: AIMessage<_langchain_core_messages30.MessageStructure>[];
-}>;
+declare const responseNode: NodeFunction<_langchain_langgraph17.StateType<{
+  messages: _langchain_langgraph17.BinaryOperatorAggregate<_langchain_core_messages41.BaseMessage<_langchain_core_messages41.MessageStructure, _langchain_core_messages41.MessageType>[], _langchain_core_messages41.BaseMessage<_langchain_core_messages41.MessageStructure, _langchain_core_messages41.MessageType>[]>;
+  projectName: _langchain_langgraph17.BinaryOperatorAggregate<string | undefined, string | undefined>;
+}>>;
 /**
  * Creates a compiled sample graph with the given checkpointer
  *
@@ -274,27 +326,27 @@ declare const responseNode: (state: SampleStateType, config: LangGraphRunnableCo
  * @param graphName - Name to identify the graph (default: 'sample')
  * @returns Compiled LangGraph
  */
-declare function createSampleGraph(checkpointer?: any, graphName?: string): _langchain_langgraph11.CompiledStateGraph<{
-  messages: _langchain_core_messages30.BaseMessage<_langchain_core_messages30.MessageStructure, _langchain_core_messages30.MessageType>[];
+declare function createSampleGraph(checkpointer?: any, graphName?: string): _langchain_langgraph17.CompiledStateGraph<{
+  messages: _langchain_core_messages41.BaseMessage<_langchain_core_messages41.MessageStructure, _langchain_core_messages41.MessageType>[];
   projectName: string | undefined;
 }, {
-  messages?: _langchain_core_messages30.BaseMessage<_langchain_core_messages30.MessageStructure, _langchain_core_messages30.MessageType>[] | undefined;
+  messages?: _langchain_core_messages41.BaseMessage<_langchain_core_messages41.MessageStructure, _langchain_core_messages41.MessageType>[] | undefined;
   projectName?: string | undefined;
 }, "__start__" | "nameProjectNode" | "responseNode", {
-  messages: _langchain_langgraph11.BinaryOperatorAggregate<_langchain_core_messages30.BaseMessage<_langchain_core_messages30.MessageStructure, _langchain_core_messages30.MessageType>[], _langchain_core_messages30.BaseMessage<_langchain_core_messages30.MessageStructure, _langchain_core_messages30.MessageType>[]>;
-  projectName: _langchain_langgraph11.BinaryOperatorAggregate<string | undefined, string | undefined>;
+  messages: _langchain_langgraph17.BinaryOperatorAggregate<_langchain_core_messages41.BaseMessage<_langchain_core_messages41.MessageStructure, _langchain_core_messages41.MessageType>[], _langchain_core_messages41.BaseMessage<_langchain_core_messages41.MessageStructure, _langchain_core_messages41.MessageType>[]>;
+  projectName: _langchain_langgraph17.BinaryOperatorAggregate<string | undefined, string | undefined>;
 }, {
-  messages: _langchain_langgraph11.BinaryOperatorAggregate<_langchain_core_messages30.BaseMessage<_langchain_core_messages30.MessageStructure, _langchain_core_messages30.MessageType>[], _langchain_core_messages30.BaseMessage<_langchain_core_messages30.MessageStructure, _langchain_core_messages30.MessageType>[]>;
-  projectName: _langchain_langgraph11.BinaryOperatorAggregate<string | undefined, string | undefined>;
-}, _langchain_langgraph11.StateDefinition, {
-  nameProjectNode: Partial<_langchain_langgraph11.StateType<{
-    messages: _langchain_langgraph11.BinaryOperatorAggregate<_langchain_core_messages30.BaseMessage<_langchain_core_messages30.MessageStructure, _langchain_core_messages30.MessageType>[], _langchain_core_messages30.BaseMessage<_langchain_core_messages30.MessageStructure, _langchain_core_messages30.MessageType>[]>;
-    projectName: _langchain_langgraph11.BinaryOperatorAggregate<string | undefined, string | undefined>;
+  messages: _langchain_langgraph17.BinaryOperatorAggregate<_langchain_core_messages41.BaseMessage<_langchain_core_messages41.MessageStructure, _langchain_core_messages41.MessageType>[], _langchain_core_messages41.BaseMessage<_langchain_core_messages41.MessageStructure, _langchain_core_messages41.MessageType>[]>;
+  projectName: _langchain_langgraph17.BinaryOperatorAggregate<string | undefined, string | undefined>;
+}, _langchain_langgraph17.StateDefinition, {
+  nameProjectNode: Partial<_langchain_langgraph17.StateType<{
+    messages: _langchain_langgraph17.BinaryOperatorAggregate<_langchain_core_messages41.BaseMessage<_langchain_core_messages41.MessageStructure, _langchain_core_messages41.MessageType>[], _langchain_core_messages41.BaseMessage<_langchain_core_messages41.MessageStructure, _langchain_core_messages41.MessageType>[]>;
+    projectName: _langchain_langgraph17.BinaryOperatorAggregate<string | undefined, string | undefined>;
   }>>;
-  responseNode: Partial<_langchain_langgraph11.StateType<{
-    messages: _langchain_langgraph11.BinaryOperatorAggregate<_langchain_core_messages30.BaseMessage<_langchain_core_messages30.MessageStructure, _langchain_core_messages30.MessageType>[], _langchain_core_messages30.BaseMessage<_langchain_core_messages30.MessageStructure, _langchain_core_messages30.MessageType>[]>;
-    projectName: _langchain_langgraph11.BinaryOperatorAggregate<string | undefined, string | undefined>;
+  responseNode: Partial<_langchain_langgraph17.StateType<{
+    messages: _langchain_langgraph17.BinaryOperatorAggregate<_langchain_core_messages41.BaseMessage<_langchain_core_messages41.MessageStructure, _langchain_core_messages41.MessageType>[], _langchain_core_messages41.BaseMessage<_langchain_core_messages41.MessageStructure, _langchain_core_messages41.MessageType>[]>;
+    projectName: _langchain_langgraph17.BinaryOperatorAggregate<string | undefined, string | undefined>;
   }>>;
 }, unknown, unknown>;
 //#endregion
-export { type LLMAppConfig, type LLMConfig, type LLMCost, type LLMProvider, type LLMSkill, type LLMSpeed, type MockResponses, NodeContext, SampleGraphAnnotation, SampleLanggraphData, SampleMessageType, SampleStateType, SimpleMessage, StructuredMessage, configureResponses, configureResponses$1 as configureTestResponses, coreLLMConfig, createSampleGraph, getCoreLLM, getLLM, getNodeContext, getTestLLM, hasConfiguredResponses, nameProjectNode, resetLLMConfig, resetLLMConfig$1 as resetTestConfig, responseNode, sampleMessageSchema, simpleMessageSchema, structuredMessageSchema, withContext };
+export { ErrorReporters, type LLMAppConfig, type LLMConfig, type LLMCost, type LLMProvider, type LLMSkill, type LLMSpeed, MiddlewareConfigType, type MockResponses, NodeContext, NodeFunction, NodeMiddleware, NodeMiddlewareFactory, NodeMiddlewareType, SampleGraphAnnotation, SampleLanggraphData, SampleMessageType, SampleStateType, SimpleMessage, StructuredMessage, configureResponses, configureResponses$1 as configureTestResponses, coreLLMConfig, createSampleGraph, getCoreLLM, getLLM, getNodeContext, getTestLLM, hasConfiguredResponses, nameProjectNode, resetLLMConfig, resetLLMConfig$1 as resetTestConfig, responseNode, sampleMessageSchema, simpleMessageSchema, structuredMessageSchema, withContext, withErrorHandling, withNotifications };

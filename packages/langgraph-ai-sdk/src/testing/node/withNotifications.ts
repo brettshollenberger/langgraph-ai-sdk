@@ -36,6 +36,7 @@ export const withNotifications = <TState extends Record<string, unknown>>(
     options: NotificationConfig
 ): NodeFunction<TState> => {
     return async (state: TState, config: LangGraphRunnableConfig) => {
+        console.log('notify');
         const defaultName = getNodeContext()?.name;
 
         const taskName = typeof options?.taskName === 'function' 
