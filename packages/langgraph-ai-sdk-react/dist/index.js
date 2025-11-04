@@ -58,6 +58,22 @@ function useLanggraph({ api = "/api/chat", headers = {}, getInitialThreadId }) {
 		}
 		return serverState;
 	}, [chat.messages, serverState]);
+	const customEvents = useMemo(() => {
+		const latestAI = chat.messages.filter((m) => m.role === "assistant").at(-1);
+		if (latestAI) {
+			const newEvents = [];
+			for (const part of latestAI.parts) if (part.type.startsWith("data-custom-")) {
+				const key = part.type.replace("data-custom-", "");
+				if ("data" in part && "id" in part && "type" in part && typeof part.id === "string" && typeof key === "string" && typeof part.data === "object") newEvents.push({
+					id: part.id,
+					type: key,
+					data: part.data
+				});
+			}
+			return newEvents;
+		}
+		return [];
+	}, [chat.messages]);
 	const messages = useMemo(() => {
 		return chat.messages.map((msg) => {
 			if (msg.role !== "assistant") return {
@@ -96,6 +112,7 @@ function useLanggraph({ api = "/api/chat", headers = {}, getInitialThreadId }) {
 		sendMessage,
 		messages,
 		state,
+		events: customEvents,
 		threadId: hasSubmitted ? threadId : void 0,
 		error,
 		isLoadingHistory

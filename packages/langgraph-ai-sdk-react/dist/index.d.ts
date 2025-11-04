@@ -2,6 +2,11 @@ import * as ai0 from "ai";
 import { InferState, LanggraphDataBase, LanggraphMessage, LanggraphMessage as LanggraphMessage$1, LanggraphUIMessage, LanggraphUIMessage as LanggraphUIMessage$1, MessagePart, StatePart } from "langgraph-ai-sdk-types";
 
 //#region src/useLanggraph.d.ts
+interface CustomEvent {
+  id: string;
+  type: string;
+  data: any;
+}
 declare function useLanggraph<TLanggraphData extends LanggraphDataBase<any, any>>({
   api,
   headers,
@@ -32,6 +37,7 @@ declare function useLanggraph<TLanggraphData extends LanggraphDataBase<any, any>
   } | undefined, options?: ai0.ChatRequestOptions | undefined) => void;
   messages: LanggraphMessage$1<TLanggraphData>[];
   state: Partial<InferState<TLanggraphData>>;
+  events: CustomEvent[];
   threadId: string | undefined;
   error: string | null;
   isLoadingHistory: boolean;
