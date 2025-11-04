@@ -12,7 +12,7 @@ import {
 class StructuredOutputAwareFakeModel extends FakeListChatModel {
   private useStructuredOutput = false;
 
-  withStructuredOutput(schema: any, config?: any): this {
+  withStructuredOutput(schema: any, config?: any): any {
     const clone = Object.create(Object.getPrototypeOf(this));
     Object.assign(clone, this);
     clone.useStructuredOutput = true;
@@ -25,9 +25,10 @@ class StructuredOutputAwareFakeModel extends FakeListChatModel {
     if (this.useStructuredOutput && typeof response.content === 'string') {
       const stripped = response.content.replace(/```json\n?/g, '').replace(/```/g, '').trim();
       try {
-        return JSON.parse(stripped);
+        const parsed = JSON.parse(stripped);
+        return { raw: response, parsed };
       } catch (e) {
-        return response.content;
+        return { raw: response, parsed: response.content };
       }
     }
     
