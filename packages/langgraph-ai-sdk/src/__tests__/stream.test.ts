@@ -247,6 +247,86 @@ describe('Streaming Infrastructure', () => {
         });
       }
     });
+
+    it('should stream custom data parts sent from langgraph stream writer', async () => {
+      const graphName = 'test-graph-progressive';
+      const threadId = 'thread-progressive';
+
+      // Mock response that simulates progressive JSON streaming
+      configureResponses({
+        [graphName]: {
+          nameProjectNode: [{ projectName: "Progressive Project" }],
+          responseNode: [
+            {
+              intro: 'First part',
+              examples: ['item1', 'item2'],
+              conclusion: 'Final part',
+            },
+          ],
+        },
+      });
+
+      const graph = createSampleGraph(undefined, graphName);
+
+      const stream = createLanggraphUIStream<SampleLanggraphData>({
+        graph,
+        messages: [new HumanMessage('Test progressive')],
+        threadId,
+        messageSchema: sampleMessageSchema,
+      });
+
+      const chunks: any[] = [];
+      for await (const chunk of stream) {
+        chunks.push(chunk);
+      }
+
+      // Should receive all parts
+      const customChunks = chunks.filter((c) => c.type.startsWith(`data-custom-`));
+
+      expect(customChunks).toEqual([
+        {
+          id: expect.any(String),
+          type: "data-custom-notify-task-start",
+          data: {
+            task: {
+              id: expect.any(String),
+              title: "Name Project",
+            },
+          },
+        },
+        {
+          id: expect.any(String),
+          type: "data-custom-notify-task-complete",
+          data: {
+            task: {
+              id: expect.any(String),
+              title: "Name Project",
+            },
+          },
+        },
+        {
+          id: expect.any(String),
+          type: "data-custom-notify-task-start",
+          data: {
+            task: {
+              id: expect.any(String),
+              title: "Generate Response",
+            },
+          },
+        },
+        {
+          id: expect.any(String),
+          type: "data-custom-notify-task-complete",
+          data: {
+            task: {
+              id: expect.any(String),
+              title: "Generate Response",
+            },
+          },
+        },
+      ]);
+    })
+
   });
 
   describe('loadThreadHistory', () => {
