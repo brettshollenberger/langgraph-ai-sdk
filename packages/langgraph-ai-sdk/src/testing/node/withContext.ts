@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { NodeFunction, NodeMiddlewareType } from "./types";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
 
 export interface NodeContext {
@@ -12,13 +13,13 @@ export function getNodeContext(): NodeContext | undefined {
     return nodeContext.getStore();
 }
 
-type NodeFunction<TState extends Record<string, unknown>> = (state: TState, config: LangGraphRunnableConfig) => Promise<Partial<TState>>;
+type WithContextConfig = {}
 
 /**
  * Wraps a node function with context that includes node name and graph name
  * The graph name is automatically extracted from config.configurable (thread_id or checkpoint_ns)
  */
-export const withContext = <TState extends Record<string, unknown>>(
+export const withContext: NodeMiddlewareType<WithContextConfig> = <TState extends Record<string, unknown>>(
     nodeFunction: NodeFunction<TState>
 ): NodeFunction<TState> => {
     return (state: TState, config: LangGraphRunnableConfig) => {
