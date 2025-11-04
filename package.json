@@ -7,7 +7,8 @@
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "test:watch": "pnpm -r test:watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "langgraph:db:migrate": "pnpm --filter langgraph-ai-sdk db:migrate"
   },
   "workspaces": [
     "packages/*",

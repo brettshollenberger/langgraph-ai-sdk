@@ -20,7 +20,8 @@
     "dev": "tsdown --watch",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "db:migrate": "tsx db/migrate.ts && tsx db/setup-checkpointer.ts"
   },
   "keywords": [
     "langgraph",
@@ -46,6 +47,7 @@
     "langchain": "^1.0.0",
     "pg": "^8.0.0",
     "tsdown": "^0.15.12",
+    "tsx": "^4.20.6",
     "type-fest": "^5.1.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.0",

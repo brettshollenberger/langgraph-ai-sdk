@@ -22,11 +22,13 @@ Instead, the Langgraph AI SDK gives you two sets of tools:
 
 ## Getting Started
 
-1. Run migrations:
+1. Run Migrations:
 
 ```bash
-pnpm langgraph-ai-sdk db:migrate # This will create the threads table
+DATABASE_URL="postgresql://user:password@localhost:5432/your_database" pnpm langgraph:db:migrate
 ```
+
+This will create both the threads table and LangGraph's checkpoint tables.
 
 2. Setup a PostgresSaver to preserve Langgraph state:
 
