@@ -33,9 +33,11 @@ async function writeAnswersToJSON<T extends Record<string, any>>(
         // Read existing data if file exists
         let existingData: T = {} as T;
         try {
+            console.log(`attempting to read file: ${filePath}`)
             const fileContent = await readFile(filePath, 'utf-8');
             existingData = JSON.parse(fileContent);
         } catch (err) {
+            console.log(`file not exist!`)
             // File doesn't exist or is invalid, start with empty object
         }
 
@@ -127,6 +129,12 @@ const getPrompt = async (state: BrainstormGraphState, config?: LangGraphRunnable
                 2. Decide next action based on user's last message
             </workflow>
 
+            <ensure_understanding>
+                Ensure you actually understand the answer to the question in the user's
+                own words. If you don't for example, have them explaining what their solution
+                is in their own words, then ask for clarification.
+            </ensure_understanding>
+
             ${outputInstructions}
         `
     );
@@ -185,41 +193,54 @@ const SaveAnswersTool = (state: BrainstormGraphState, config?: LangGraphRunnable
  * Node that asks a question to the user during brainstorming mode
  */
 export const brainstormAgent = async (
-    state: BrainstormGraphState, 
+    state: BrainstormGraphState,
     config?: LangGraphRunnableConfig
   ): Promise<Partial<BrainstormGraphState>> => {
-    const prompt = await getPrompt(state, config)
-    const tools = await Promise.all([
-        SaveAnswersTool
-    ].map(tool => tool(state, config)));
+    try {
+      const prompt = await getPrompt(state, config)
+      const tools = await Promise.all([
+          SaveAnswersTool
+      ].map(tool => tool(state, config)));
 
-    const llm = getLLM().withConfig({ tags: ['notify'] });
-    const agent = await createAgent({
-        model: llm,
-        tools,
-        systemPrompt: prompt,
-    });
-    const updatedState = await agent.invoke(state as any, config);
-    let aiResponse = updatedState.messages.at(-1);
-    let content = aiResponse?.content[0];
+      const llm = getLLM().withConfig({ tags: ['notify'] });
+      const agent = await createAgent({
+          model: llm,
+          tools,
+          systemPrompt: prompt,
+      });
+      const updatedState = await agent.invoke(state as any, config);
+      let aiResponse = updatedState.messages.at(-1);
+      let content = aiResponse?.content[0];
 
-    const parser = StructuredOutputParser.fromZodSchema(agentOutputSchema);
-    
-    let textContent = content?.text as string;
-    const jsonMatch = textContent.match(/```json\n([\s\S]*?)\n```/);
-    if (jsonMatch) {
-        textContent = jsonMatch[1];
+      const parser = StructuredOutputParser.fromZodSchema(agentOutputSchema);
+
+      let textContent = content?.text as string;
+      const jsonMatch = textContent.match(/```json\n([\s\S]*?)\n```/);
+      if (jsonMatch) {
+          textContent = jsonMatch[1];
+      }
+
+      const structuredResult = await parser.parse(textContent);
+      console.log('Parsed structured result:', structuredResult)
+
+      const aiMessage = new AIMessage({
+          content: textContent,
+          response_metadata: structuredResult,
+      });
+
+      return {
+          messages: [...(state.messages || []), aiMessage]
+      };
+    } catch (error) {
+      console.error('==========================================');
+      console.error('BRAINSTORM AGENT ERROR - FAILING LOUDLY:');
+      console.error('==========================================');
+      console.error('Error details:', error);
+      console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+      console.error('State:', JSON.stringify(state, null, 2));
+      console.error('==========================================');
+      throw error; // Re-throw to ensure it propagates
     }
-    
-    const structuredResult = await parser.parse(textContent);
-    const aiMessage = new AIMessage({
-        content: textContent,
-        response_metadata: structuredResult,
-    });
-
-    return {
-        messages: [...(state.messages || []), aiMessage]
-    };
 }
 
 

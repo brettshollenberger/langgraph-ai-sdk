@@ -56,22 +56,22 @@ export function createLanggraphUIStream<
     
   return createUIMessageStream<LanggraphUIMessage<TGraphData>>({
     execute: async ({ writer }) => {
-      console.log(graph.name)
-      const stream = await graph.stream(
-        { messages, ...state },
-        { 
-          streamMode: ['messages', 'updates', 'custom'],
-          context: { graphName: graph.name },
-          configurable: { thread_id: threadId }
-        }
-      );
-      
-      const stateDataPartIds: Record<string, string> = {};
-      const messagePartIds: Record<string, string> = messageSchema ? {} : { text: crypto.randomUUID() };
-      let messageBuffer = '';
-      let isCapturingJson = false; // Track if we're inside a JSON code block
+      try {
+        const stream = await graph.stream(
+          { messages, ...state },
+          {
+            streamMode: ['messages', 'updates', 'custom'],
+            context: { graphName: graph.name },
+            configurable: { thread_id: threadId }
+          }
+        );
 
-      for await (const chunk of stream) {
+        const stateDataPartIds: Record<string, string> = {};
+        const messagePartIds: Record<string, string> = messageSchema ? {} : { text: crypto.randomUUID() };
+        let messageBuffer = '';
+        let isCapturingJson = false; // Track if we're inside a JSON code block
+
+        for await (const chunk of stream) {
         const chunkArray = chunk as StreamChunk;
         let kind: string;
         let data: any;
@@ -109,16 +109,20 @@ export function createLanggraphUIStream<
                 messageBuffer = messageBuffer.substring(jsonStartIndex);
               }
 
+              let shouldParse = isCapturingJson;
+
               // Check if this chunk contains the closing marker
               if (isCapturingJson && messageBuffer.includes('```')) {
-                isCapturingJson = false;
                 // Only keep content before the closing marker
-                const jsonEndIndex = content.indexOf('```');
+                const jsonEndIndex = messageBuffer.indexOf('```');
                 messageBuffer = messageBuffer.substring(0, jsonEndIndex);
+                // Parse one final time with the complete JSON before stopping
+                shouldParse = true;
+                isCapturingJson = false;
               }
 
-              // Only accumulate content if we're inside the JSON block
-              if (isCapturingJson) {
+              // Parse and stream if we're capturing or just finished capturing
+              if (shouldParse) {
                 // Try to parse the accumulated JSON
                 const parseResult = await parsePartialJson(messageBuffer.trim());
                 const parsed = parseResult.value as Partial<TMessage>;
@@ -190,6 +194,17 @@ export function createLanggraphUIStream<
             data: dataKeys,
           } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
         }
+      }
+      } catch (error) {
+        console.error('==========================================');
+        console.error('STREAM ERROR - FAILING LOUDLY:');
+        console.error('==========================================');
+        console.error('Error details:', error);
+        console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+        console.error('Graph name:', graph.name);
+        console.error('Thread ID:', threadId);
+        console.error('==========================================');
+        throw error; // Re-throw to ensure it propagates
       }
     }
   });

@@ -50,7 +50,6 @@ export function useLanggraph<
       setError(error.message);
     },
   });
-  console.log(chat.messages)
 
   const sendMessage = (...args: Parameters<typeof chat.sendMessage>) => {
     if (!hasSubmitted) {
