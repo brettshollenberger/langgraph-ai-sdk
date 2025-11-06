@@ -85,15 +85,12 @@ const getPrompt = async (state: BrainstormGraphState, config?: LangGraphRunnable
         throw new Error("No human message found");
     }
 
-    const [chatHistory, outputInstructions] = await Promise.all([
-        chatHistoryPrompt({ messages: state.messages }),
-        structuredOutputPrompt({ schema: agentOutputSchema })
-    ])
+    const chatHistory = await chatHistoryPrompt({ messages: state.messages });
 
     return renderPrompt(
         `
             <role>
-                You are an expert marketer and strategist who specializes in helping businesses develop 
+                You are an expert marketer and strategist who specializes in helping businesses develop
                 HIGHLY PERSUASIVE marketing copy for their landing pages to differentiate their business ideas.
             </role>
 
@@ -112,47 +109,55 @@ const getPrompt = async (state: BrainstormGraphState, config?: LangGraphRunnable
                 ${remainingTopics(state.remainingTopics)}
             </remaining_topics>
 
-            <decide_next_action>
-                - If user's last message answered any of the remaining topics → call save_answers
-                - If answer is off-topic/confused → provide clarification
-                - If user asks for help → provide clarification
-                - If no remaining topics → output finish_brainstorming
-                - Otherwise → ask the user the next question, using the output format specified below
-            </decide_next_action>
-
             <users_last_message>
                 ${lastHumanMessage.content}
             </users_last_message>
 
             <workflow>
-                1. Save any unsaved answers
-                2. Decide next action based on user's last message
+                1. If the user has answered any topics, call the save_answers tool
+                2. Then output your response in one of these formats:
+                   - structuredQuestion: For complex questions with intro, examples, and conclusion
+                   - simpleQuestion: For clarifications or follow-ups (just content field)
+                   - finishBrainstorming: When all information is collected
             </workflow>
 
             <ensure_understanding>
-                Ensure you actually understand the answer to the question in the user's
-                own words. If you don't for example, have them explaining what their solution
-                is in their own words, then ask for clarification.
+                Ensure you actually understand the answer in the user's own words.
+                If unclear, use simpleQuestion to ask for clarification.
             </ensure_understanding>
 
-            <always_use_structured_output>
-                Always use the structured output format specified below, even when answering basic
-                question.
-            </always_use_structured_output>
+            <output_format_rules>
+                IMPORTANT: Your response MUST be in one of these exact formats:
 
-            ${outputInstructions}
+                For a structured question:
+                {
+                  "type": "structuredQuestion",
+                  "intro": "Brief intro to the question",
+                  "examples": ["Example 1", "Example 2", "Example 3"],
+                  "conclusion": "Restate what you're asking for"
+                }
+
+                For a simple question:
+                {
+                  "type": "simpleQuestion",
+                  "content": "Your question here"
+                }
+
+                For finishing:
+                {
+                  "type": "finishBrainstorming",
+                  "finishBrainstorming": true
+                }
+
+                You MUST output valid JSON in one of these formats. NO other text.
+            </output_format_rules>
         `
     );
 }
 
-const SaveAnswersTool = (state: BrainstormGraphState, config?: LangGraphRunnableConfig): Promise<Tool> => {
-    const description = `
-        Tool for saving answers to the brainstorming session.
+// ===== TOOLS =====
 
-        CAPABILITIES:
-        • Save multiple answers at once
-    `;
-
+const SaveAnswersTool = (state: BrainstormGraphState, config?: LangGraphRunnableConfig): Tool => {
     const saveAnswersInputSchema = z.object({
         answers: z.array(z.object({
             topic: z.enum(brainstormTopics),
@@ -162,13 +167,7 @@ const SaveAnswersTool = (state: BrainstormGraphState, config?: LangGraphRunnable
 
     type SaveAnswersInput = z.infer<typeof saveAnswersInputSchema>;
 
-    const SaveAnswersOutputSchema = z.object({
-        success: z.boolean(),
-    });
-
-    type SaveAnswersOutput = z.infer<typeof SaveAnswersOutputSchema>;
-
-    async function saveAnswers(args?: SaveAnswersInput): Promise<SaveAnswersOutput> {
+    async function saveAnswers(args?: SaveAnswersInput): Promise<{ success: boolean }> {
         const updates: Partial<Brainstorm> = args?.answers?.reduce((acc, { topic, answer }) => {
             if (!topic || !answer) {
                 return acc;
@@ -177,19 +176,15 @@ const SaveAnswersTool = (state: BrainstormGraphState, config?: LangGraphRunnable
             return acc;
         }, {} as Record<BrainstormTopic, string>) || {}
 
-        // Write answers to JSON file
         await writeAnswersToJSON(updates);
-
         console.log('Saved answers:', updates);
 
-        return {
-            success: true
-        };
+        return { success: true };
     }
-    
+
     return tool(saveAnswers, {
-        name: "saveAnswers",
-        description,
+        name: "save_answers",
+        description: "Save answers to the brainstorming session. Call this when the user has answered one or more of the remaining topics.",
         schema: saveAnswersInputSchema,
     });
 }
@@ -203,37 +198,30 @@ export const brainstormAgent = async (
   ): Promise<Partial<BrainstormGraphState>> => {
     try {
       const prompt = await getPrompt(state, config)
-      const tools = await Promise.all([
-          SaveAnswersTool
-      ].map(tool => tool(state, config)));
 
-      const llm = getLLM().withConfig({ tags: ['notify'] });
+      // Only use real tools that do something (save_answers)
+      const tools = [SaveAnswersTool(state, config)];
+
+      // Use structured output for the response format
+      const llm = getLLM()
+        .withConfig({ tags: ['notify'] })
+
       const agent = await createAgent({
           model: llm,
           tools,
           systemPrompt: prompt,
       });
+
       const updatedState = await agent.invoke(state as any, config);
-      let aiResponse = updatedState.messages.at(-1);
-      let content = aiResponse?.content[0];
+      const aiResponse = updatedState.messages.at(-1);
 
-      const parser = StructuredOutputParser.fromZodSchema(agentOutputSchema);
+      // The response is already structured thanks to withStructuredOutput
+      const structuredResult = aiResponse?.content || aiResponse?.additional_kwargs?.tool_calls?.[0]?.function?.arguments;
 
-      let textContent = content?.text as string;
-      const jsonMatch = textContent.match(/```json\n([\s\S]*?)\n```/);
-      if (jsonMatch) {
-          textContent = jsonMatch[1];
-      }
-
-      console.log(`about to parse structured output!!!`)
-      console.log(`about to parse structured output!!!`)
-      console.log(`about to parse structured output!!!`)
-      console.log(`about to parse structured output!!!`)
-      console.log(`about to parse structured output!!!`)
-      const structuredResult = await parser.parse(textContent);
+      console.log('Structured result:', JSON.stringify(structuredResult, null, 2));
 
       const aiMessage = new AIMessage({
-          content: textContent,
+          content: JSON.stringify(structuredResult, null, 2),
           response_metadata: structuredResult,
       });
 
