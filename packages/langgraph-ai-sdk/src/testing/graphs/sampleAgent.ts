@@ -135,6 +135,11 @@ const getPrompt = async (state: BrainstormGraphState, config?: LangGraphRunnable
                 is in their own words, then ask for clarification.
             </ensure_understanding>
 
+            <always_use_structured_output>
+                Always use the structured output format specified below, even when answering basic
+                question.
+            </always_use_structured_output>
+
             ${outputInstructions}
         `
     );
@@ -220,8 +225,12 @@ export const brainstormAgent = async (
           textContent = jsonMatch[1];
       }
 
+      console.log(`about to parse structured output!!!`)
+      console.log(`about to parse structured output!!!`)
+      console.log(`about to parse structured output!!!`)
+      console.log(`about to parse structured output!!!`)
+      console.log(`about to parse structured output!!!`)
       const structuredResult = await parser.parse(textContent);
-      console.log('Parsed structured result:', structuredResult)
 
       const aiMessage = new AIMessage({
           content: textContent,
