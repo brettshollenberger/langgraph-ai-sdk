@@ -1,3 +1,4 @@
+import { n as __export } from "./chunk-DUEDWNxO.js";
 import { v7 } from "uuid";
 import { AIMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { createUIMessageStream, createUIMessageStreamResponse, parsePartialJson } from "ai";
@@ -7,18 +8,6 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import pkg from "pg";
 import { jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
-//#region rolldown:runtime
-var __defProp = Object.defineProperty;
-var __export = (all) => {
-	let target = {};
-	for (var name in all) __defProp(target, name, {
-		get: all[name],
-		enumerable: true
-	});
-	return target;
-};
-
-//#endregion
 //#region src/stream.ts
 function getSchemaKeys(schema) {
 	return Object.keys(schema.shape);

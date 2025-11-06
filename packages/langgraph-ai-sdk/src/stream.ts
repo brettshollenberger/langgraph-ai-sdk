@@ -56,6 +56,7 @@ export function createLanggraphUIStream<
     
   return createUIMessageStream<LanggraphUIMessage<TGraphData>>({
     execute: async ({ writer }) => {
+      console.log(graph.name)
       const stream = await graph.stream(
         { messages, ...state },
         { 

@@ -6,12 +6,9 @@ import type { LangGraphRunnableConfig } from "@langchain/langgraph";
 import { getLLM } from '../llm/llm';
 import { tool, Tool } from "@langchain/core/tools";
 import { StructuredOutputParser } from "@langchain/core/output_parsers";
-import { toJSON, renderPrompt, chatHistoryPrompt, structuredOutputPrompt } from '../prompts';
+import { toJSON, renderPrompt, chatHistoryPrompt, structuredOutputPrompt, isHumanMessage } from '../prompts';
 import { writeFile, readFile } from 'fs/promises';
-
-export function isHumanMessage(msg: unknown): msg is HumanMessage {
-    return msg instanceof HumanMessage;
-}
+import { withContext } from "../node";
 
 /**
  * Helper function to write answers to a JSON file by key
@@ -249,12 +246,16 @@ export const brainstormAgent = async (
         SaveAnswersTool
     ].map(tool => tool(state, config)));
 
+    const llm = getLLM()
+    console.log(`about to call createAgent`)
     const agent = await createAgent({
-        model: getLLM(),
+        model: llm,
         tools,
         systemPrompt: prompt,
     });
+    console.log(`about to call agent!!!`)
     const updatedState = await agent.invoke(state as any, config);
+    console.log(updatedState)
     let aiResponse = updatedState.messages.at(-1);
     let content = aiResponse?.content[0];
 
@@ -267,6 +268,7 @@ export const brainstormAgent = async (
     }
     
     const result = await parser.parse(textContent);
+    console.log(result)
 
     return {
         messages: [...(state.messages || []), result]
@@ -280,7 +282,7 @@ export const brainstormAgent = async (
  */
 export function createSampleAgent(checkpointer?: any, graphName: string = 'sample') {
   return new StateGraph(BrainstormStateAnnotation)
-      .addNode("agent", brainstormAgent)
+      .addNode("agent", withContext(brainstormAgent))
       .addEdge(START, "agent")
       .addEdge("agent", END)
       .compile({ checkpointer, name: graphName });

@@ -6,7 +6,7 @@ import { useLanggraph } from 'langgraph-ai-sdk-react';
 
 export function LangGraphChat() {
   const { messages, sendMessage, status, state, threadId, error, events, isLoadingHistory } = useLanggraph<MyLanggraphData>({
-    api: '/api/chat',
+    api: '/api/agent/chat',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer 12345`,
@@ -28,7 +28,7 @@ export function LangGraphChat() {
     }
   }, [threadId]);
 
-  const [input, setInput] = useState('What is the capital of France?');
+  const [input, setInput] = useState(`We make chatbots`);
 
   if (isLoadingHistory) {
     return (
