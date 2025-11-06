@@ -12,7 +12,7 @@ import {
 class StructuredOutputAwareFakeModel extends FakeListChatModel {
   private useStructuredOutput = false;
 
-  withStructuredOutput(schema: any, config?: any): any {
+  override withStructuredOutput(schema: any, config?: any): any {
     const clone = Object.create(Object.getPrototypeOf(this));
     Object.assign(clone, this);
     clone.useStructuredOutput = true;
