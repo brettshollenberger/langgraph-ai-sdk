@@ -150,21 +150,26 @@ export function useLanggraph<
         } as LanggraphMessage<TLanggraphData>;
       }
 
+      // Good: type: text, data: string, id: string
       const textParts = msg.parts.filter(p => p.type === 'data-message-text');
-      const otherParts = msg.parts.filter(p => p.type !== 'data-message-text');
+      const otherParts = msg.parts.filter(p => p.type !== 'data-message-text' && p.type.startsWith('data-message-'));
       if (textParts.length > 0 && otherParts.length === 0) {
-        console.log('Only text parts:', textParts)
         return {
           id: msg.id,
           role: msg.role,
           parts: textParts.map(p => ({
             type: 'text' as const,
-            text: (p as any).data,
+            data: (p as any).data,
             id: (p as any).id
-          }))
+          })).concat([{
+            type: 'type',
+            data: 'text',
+            id: crypto.randomUUID()
+          }])
         } as LanggraphMessage<TLanggraphData>;
       }
 
+      // Fail: array of parts of type text, data: string, id: string
       const messageParts = msg.parts
         .filter(p => p.type.startsWith('data-message-'))
         .map(p => ({
@@ -180,6 +185,8 @@ export function useLanggraph<
       } as LanggraphMessage<TLanggraphData>;
     });
   }, [chat.messages]);
+
+  console.log('messages', messages);
 
   return {
     ...chat,
