@@ -1081,6 +1081,70 @@ const structuredOutputPrompt = async ({ schema, tag = "structured-output" }) => 
 };
 
 //#endregion
+//#region src/testing/agentTypes.ts
+/**
+* Schema for structured questions with intro, examples, and conclusion
+*/
+const agentStructuredQuestionSchema = z.object({
+	type: z.literal("structuredQuestion"),
+	intro: z.string().describe("A simple intro to the question"),
+	examples: z.array(z.string()).describe(`List of examples to help the user understand what we're asking`),
+	conclusion: z.string().optional().describe(`Conclusion of the question, restating exactly the information we want to the user to answer`)
+});
+/**
+* Schema for simple text questions
+*/
+const agentSimpleQuestionSchema = z.object({
+	type: z.literal("simpleQuestion"),
+	content: z.string().describe("Simple question to ask the user")
+});
+/**
+* Schema for finishing brainstorming
+*/
+const agentFinishBrainstormingSchema = z.object({
+	type: z.literal("finishBrainstorming"),
+	finishBrainstorming: z.literal(true).describe("Call to signal that the user has finished brainstorming")
+});
+/**
+* Union schema for all agent output types
+*/
+const agentOutputSchema = z.discriminatedUnion("type", [
+	agentSimpleQuestionSchema,
+	agentStructuredQuestionSchema,
+	agentFinishBrainstormingSchema
+]);
+/**
+* Brainstorm topics
+*/
+const brainstormTopics = [
+	"idea",
+	"audience",
+	"solution",
+	"socialProof",
+	"lookAndFeel"
+];
+/**
+* State annotation for the brainstorm agent
+*/
+const BrainstormStateAnnotation = Annotation.Root({
+	messages: Annotation({
+		default: () => [],
+		reducer: messagesStateReducer
+	}),
+	brainstorm: Annotation({
+		default: () => ({}),
+		reducer: (current, next) => ({
+			...current,
+			...next
+		})
+	}),
+	remainingTopics: Annotation({
+		default: () => [...brainstormTopics],
+		reducer: (current, next) => next
+	})
+});
+
+//#endregion
 //#region src/testing/graphs/sampleAgent.ts
 /**
 * Helper function to write answers to a JSON file by key
@@ -1105,13 +1169,6 @@ async function writeAnswersToJSON(data, filePath = "./brainstorm-answers.json") 
 		throw error;
 	}
 }
-const brainstormTopics = [
-	"idea",
-	"audience",
-	"solution",
-	"socialProof",
-	"lookAndFeel"
-];
 const TopicDescriptions = {
 	idea: `The core business idea. What does the business do? What makes them different?`,
 	audience: `The target audience. What are their pain points? What are their goals?`,
@@ -1119,51 +1176,6 @@ const TopicDescriptions = {
 	socialProof: `Social proof or testimonials to include on the landing page. Remember, anything can be social proof: the user's background, experience, beliefs, founder story, etc.`,
 	lookAndFeel: `The look and feel of the landing page.`
 };
-const BrainstormStateAnnotation = Annotation.Root({
-	messages: Annotation({
-		default: () => [],
-		reducer: messagesStateReducer
-	}),
-	brainstorm: Annotation({
-		default: () => ({}),
-		reducer: (current, next) => ({
-			...current,
-			...next
-		})
-	}),
-	remainingTopics: Annotation({
-		default: () => [...brainstormTopics],
-		reducer: (current, next) => next
-	})
-});
-/**
-* Schema for structured messages with intro, examples, and conclusion
-*/
-const structuredQuestionSchema = z.object({
-	type: z.literal("structuredQuestion"),
-	intro: z.string().describe("A simple intro to the question"),
-	examples: z.array(z.string()).describe(`List of examples to help the user understand what we're asking`),
-	conclusion: z.string().optional().describe(`Conclusion of the question, restating exactly the information we want to the user to answer`)
-});
-/**
-* Schema for simple text messages
-*/
-const simpleQuestionSchema = z.object({
-	type: z.literal("simpleQuestion"),
-	content: z.string().describe("Simple question to ask the user")
-});
-const finishBrainstormingSchema = z.object({
-	type: z.literal("finishBrainstorming"),
-	finishBrainstorming: z.literal(true).describe("Call to signal that the user has finished brainstorming")
-});
-/**
-* Union schema allowing either simple or structured messages
-*/
-const outputSchema = z.discriminatedUnion("type", [
-	simpleQuestionSchema,
-	structuredQuestionSchema,
-	finishBrainstormingSchema
-]);
 const sortedTopics = (topics) => {
 	return topics.sort((a, b) => brainstormTopics.indexOf(a) - brainstormTopics.indexOf(b));
 };
@@ -1176,7 +1188,7 @@ const collectedData = (state) => {
 const getPrompt = async (state, config) => {
 	const lastHumanMessage = state.messages.filter(isHumanMessage).at(-1);
 	if (!lastHumanMessage) throw new Error("No human message found");
-	const [chatHistory, outputInstructions] = await Promise.all([chatHistoryPrompt({ messages: state.messages }), structuredOutputPrompt({ schema: outputSchema })]);
+	const [chatHistory, outputInstructions] = await Promise.all([chatHistoryPrompt({ messages: state.messages }), structuredOutputPrompt({ schema: agentOutputSchema })]);
 	return renderPrompt(`
             <role>
                 You are an expert marketer and strategist who specializes in helping businesses develop 
@@ -1253,27 +1265,31 @@ const brainstormAgent = async (state, config) => {
 	const prompt = await getPrompt(state, config);
 	const tools = await Promise.all([SaveAnswersTool].map((tool$1) => tool$1(state, config)));
 	let content = (await (await createAgent({
-		model: getLLM(),
+		model: getLLM().withConfig({ tags: ["notify"] }),
 		tools,
 		systemPrompt: prompt
 	})).invoke(state, config)).messages.at(-1)?.content[0];
-	const parser = StructuredOutputParser.fromZodSchema(outputSchema);
+	const parser = StructuredOutputParser.fromZodSchema(agentOutputSchema);
 	let textContent = content?.text;
 	const jsonMatch = textContent.match(/```json\n([\s\S]*?)\n```/);
 	if (jsonMatch) textContent = jsonMatch[1];
-	const result = await parser.parse(textContent);
-	return { messages: [...state.messages || [], result] };
+	const structuredResult = await parser.parse(textContent);
+	const aiMessage = new AIMessage({
+		content: textContent,
+		response_metadata: structuredResult
+	});
+	return { messages: [...state.messages || [], aiMessage] };
 };
 /**
 * Simple test graph for the new brainstorm agent
 * Usage: Load this in LangGraph Studio to test the agent
 */
 function createSampleAgent(checkpointer, graphName = "sample") {
-	return new StateGraph(BrainstormStateAnnotation).addNode("agent", brainstormAgent).addEdge(START, "agent").addEdge("agent", END).compile({
+	return new StateGraph(BrainstormStateAnnotation).addNode("agent", withContext(brainstormAgent, {})).addEdge(START, "agent").addEdge("agent", END).compile({
 		checkpointer,
 		name: graphName
 	});
 }
 
 //#endregion
-export { BrainstormStateAnnotation, ErrorReporters, NodeMiddleware, NodeMiddlewareFactory, SampleGraphAnnotation, brainstormAgent, configureResponses, configureResponses$1 as configureTestResponses, coreLLMConfig, createSampleAgent, createSampleGraph, finishBrainstormingSchema, getCoreLLM, getLLM, getNodeContext, getTestLLM, hasConfiguredResponses, nameProjectNode, outputSchema, resetLLMConfig, resetLLMConfig$1 as resetTestConfig, responseNode, sampleMessageSchema, simpleMessageSchema, simpleQuestionSchema, structuredMessageSchema, structuredQuestionSchema, withContext, withErrorHandling, withNotifications };
+export { BrainstormStateAnnotation, ErrorReporters, NodeMiddleware, NodeMiddlewareFactory, SampleGraphAnnotation, agentFinishBrainstormingSchema, agentOutputSchema, agentSimpleQuestionSchema, agentStructuredQuestionSchema, brainstormAgent, brainstormTopics, configureResponses, configureResponses$1 as configureTestResponses, coreLLMConfig, createSampleAgent, createSampleGraph, getCoreLLM, getLLM, getNodeContext, getTestLLM, hasConfiguredResponses, nameProjectNode, resetLLMConfig, resetLLMConfig$1 as resetTestConfig, responseNode, sampleMessageSchema, simpleMessageSchema, structuredMessageSchema, withContext, withErrorHandling, withNotifications };

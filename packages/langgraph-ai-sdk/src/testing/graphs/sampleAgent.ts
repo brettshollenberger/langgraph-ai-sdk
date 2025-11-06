@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { StateGraph, END, START, Annotation, messagesStateReducer } from "@langchain/langgraph";
-import { HumanMessage, type Message } from "@langchain/core/messages";
+import { AIMessage, HumanMessage, type BaseMessage } from "@langchain/core/messages";
 import { createAgent } from "langchain";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
 import { getLLM } from '../llm/llm';
@@ -9,6 +9,15 @@ import { StructuredOutputParser } from "@langchain/core/output_parsers";
 import { toJSON, renderPrompt, chatHistoryPrompt, structuredOutputPrompt, isHumanMessage } from '../prompts';
 import { writeFile, readFile } from 'fs/promises';
 import { withContext } from "../node";
+import { type LanggraphData } from '../../types';
+import {
+  brainstormTopics,
+  BrainstormStateAnnotation,
+  agentOutputSchema,
+  type BrainstormTopic,
+  type Brainstorm,
+  type AgentStateType,
+} from '../agentTypes';
 
 /**
  * Helper function to write answers to a JSON file by key
@@ -41,10 +50,7 @@ async function writeAnswersToJSON<T extends Record<string, any>>(
     }
 }
 
-// Simple annotation matching the agent's expected state
-const brainstormTopics = ["idea", "audience", "solution", "socialProof", "lookAndFeel"] as const;
-type BrainstormTopic = typeof brainstormTopics[number];
-type Brainstorm = Partial<Record<BrainstormTopic, string>>;
+// Topic descriptions for the brainstorm agent
 const TopicDescriptions: Record<BrainstormTopic, string> = {
     idea: `The core business idea. What does the business do? What makes them different?`,
     audience: `The target audience. What are their pain points? What are their goals?`,
@@ -53,67 +59,8 @@ const TopicDescriptions: Record<BrainstormTopic, string> = {
     lookAndFeel: `The look and feel of the landing page.`,
 }
 
-export const BrainstormStateAnnotation = Annotation.Root({
-    messages: Annotation<Message[]>({
-        default: () => [],
-        reducer: messagesStateReducer as any
-    }),
-
-    brainstorm: Annotation<Brainstorm>({
-        default: () => ({}),
-        reducer: (current, next) => ({ ...current, ...next })
-    }),
-
-    remainingTopics: Annotation<BrainstormTopic[]>({
-        default: () => [...brainstormTopics],
-        reducer: (current, next) => next
-    }),
-});
-
-type BrainstormState = typeof BrainstormStateAnnotation.State;
-
-/**
- * Schema for structured messages with intro, examples, and conclusion
- */
-export const structuredQuestionSchema = z.object({
-  type: z.literal("structuredQuestion"),
-  intro: z.string().describe('A simple intro to the question'),
-  examples: z.array(z.string()).describe(`List of examples to help the user understand what we're asking`),
-  conclusion: z.string().optional().describe(`Conclusion of the question, restating exactly the information we want to the user to answer`),
-});
-
-export type StructuredQuestion = z.infer<typeof structuredQuestionSchema>;
-
-/**
- * Schema for simple text messages
- */
-export const simpleQuestionSchema = z.object({
-  type: z.literal("simpleQuestion"),
-  content: z.string().describe('Simple question to ask the user'),
-});
-
-export type SimpleQuestion = z.infer<typeof simpleQuestionSchema>;
-
-export const finishBrainstormingSchema = z.object({
-  type: z.literal("finishBrainstorming"),
-  finishBrainstorming: z.literal(true).describe("Call to signal that the user has finished brainstorming"),
-});
-
-export type FinishBrainstorming = z.infer<typeof finishBrainstormingSchema>;
-
-/**
- * Union schema allowing either simple or structured messages
- */
-export const outputSchema = z.discriminatedUnion("type", [
-  simpleQuestionSchema,
-  structuredQuestionSchema,
-  finishBrainstormingSchema,
-]);
-
-export type OutputType = z.infer<typeof outputSchema>;
-
-interface BrainstormGraphState {
-    messages: Message[];
+type BrainstormGraphState = {
+    messages: BaseMessage[];
     brainstorm: Brainstorm;
     remainingTopics: BrainstormTopic[];
 }
@@ -138,7 +85,7 @@ const getPrompt = async (state: BrainstormGraphState, config?: LangGraphRunnable
 
     const [chatHistory, outputInstructions] = await Promise.all([
         chatHistoryPrompt({ messages: state.messages }),
-        structuredOutputPrompt({ schema: outputSchema })
+        structuredOutputPrompt({ schema: agentOutputSchema })
     ])
 
     return renderPrompt(
@@ -246,20 +193,17 @@ export const brainstormAgent = async (
         SaveAnswersTool
     ].map(tool => tool(state, config)));
 
-    const llm = getLLM()
-    console.log(`about to call createAgent`)
+    const llm = getLLM().withConfig({ tags: ['notify'] });
     const agent = await createAgent({
         model: llm,
         tools,
         systemPrompt: prompt,
     });
-    console.log(`about to call agent!!!`)
     const updatedState = await agent.invoke(state as any, config);
-    console.log(updatedState)
     let aiResponse = updatedState.messages.at(-1);
     let content = aiResponse?.content[0];
 
-    const parser = StructuredOutputParser.fromZodSchema(outputSchema);
+    const parser = StructuredOutputParser.fromZodSchema(agentOutputSchema);
     
     let textContent = content?.text as string;
     const jsonMatch = textContent.match(/```json\n([\s\S]*?)\n```/);
@@ -267,11 +211,14 @@ export const brainstormAgent = async (
         textContent = jsonMatch[1];
     }
     
-    const result = await parser.parse(textContent);
-    console.log(result)
+    const structuredResult = await parser.parse(textContent);
+    const aiMessage = new AIMessage({
+        content: textContent,
+        response_metadata: structuredResult,
+    });
 
     return {
-        messages: [...(state.messages || []), result]
+        messages: [...(state.messages || []), aiMessage]
     };
 }
 
@@ -282,9 +229,8 @@ export const brainstormAgent = async (
  */
 export function createSampleAgent(checkpointer?: any, graphName: string = 'sample') {
   return new StateGraph(BrainstormStateAnnotation)
-      .addNode("agent", withContext(brainstormAgent))
+      .addNode("agent", withContext(brainstormAgent, {}))
       .addEdge(START, "agent")
       .addEdge("agent", END)
       .compile({ checkpointer, name: graphName });
 }
-

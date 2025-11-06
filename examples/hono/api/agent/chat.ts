@@ -1,7 +1,6 @@
-import { messageSchema, type MyLanggraphData } from '../../types.ts';
 import { registerGraph, streamLanggraph, fetchLanggraphHistory } from 'langgraph-ai-sdk';
 import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
-import { createSampleAgent } from 'langgraph-ai-sdk/testing';
+import { createSampleAgent, agentOutputSchema, type AgentLanggraphData } from 'langgraph-ai-sdk/testing';
 import pkg from 'pg';
 
 const { Pool } = pkg;
@@ -13,7 +12,7 @@ const checkpointer = new PostgresSaver(pool);
 
 // Create and register the agent graph
 export const agentGraph = createSampleAgent(checkpointer, 'agent');
-registerGraph<MyLanggraphData>('agent', agentGraph);
+registerGraph<AgentLanggraphData>('agent', agentGraph);
 
 function authMiddleware(handler: (req: Request) => Promise<Response>) {
   return async (req: Request): Promise<Response> => {
@@ -31,15 +30,15 @@ function authMiddleware(handler: (req: Request) => Promise<Response>) {
 }
 
 export const POST = authMiddleware(async (req: Request): Promise<Response> => {
-  return streamLanggraph<MyLanggraphData>({
+  return streamLanggraph<AgentLanggraphData>({
     graphName: 'agent',
-    messageSchema
+    messageSchema: agentOutputSchema
   })(req);
 });
 
 export const GET = authMiddleware((req: Request): Promise<Response> => {
-  return fetchLanggraphHistory<MyLanggraphData>({
+  return fetchLanggraphHistory<AgentLanggraphData>({
     graphName: 'agent',
-    messageSchema
+    messageSchema: agentOutputSchema
   })(req);
 });

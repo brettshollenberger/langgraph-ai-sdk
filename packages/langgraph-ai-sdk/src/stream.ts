@@ -69,7 +69,8 @@ export function createLanggraphUIStream<
       const stateDataPartIds: Record<string, string> = {};
       const messagePartIds: Record<string, string> = messageSchema ? {} : { text: crypto.randomUUID() };
       let messageBuffer = '';
-      
+      let isCapturingJson = false; // Track if we're inside a JSON code block
+
       for await (const chunk of stream) {
         const chunkArray = chunk as StreamChunk;
         let kind: string;
@@ -87,41 +88,59 @@ export function createLanggraphUIStream<
           const [message, metadata] = data;
           
           if (message?.content && metadata?.tags?.includes('notify')) {
-            let content = typeof message.content === 'string' 
-              ? message.content 
-              : '';
-            
+            let content;
+            if (Array.isArray(message.content)) {
+              content = message.content.map((content) => {
+                return content.text;
+              }).join('');
+            } else if (typeof message.content === 'string') {
+              content = message.content;
+            }
+
             messageBuffer += content;
 
             if (messageSchema) {
-              let cleanedBuffer = messageBuffer;
-              if (cleanedBuffer.includes('```json')) {
-                cleanedBuffer = cleanedBuffer.replace(/```json/g, '').trim();
-              }
-              if (cleanedBuffer.includes('```')) {
-                cleanedBuffer = cleanedBuffer.split('```')[0] as string;
-              }
-              cleanedBuffer = cleanedBuffer.trim();
+              // For structured output: only capture content inside ```json blocks
 
-              const parseResult = await parsePartialJson(cleanedBuffer);
-              const parsed = parseResult.value as Partial<TMessage>;
+              if (!isCapturingJson && messageBuffer.includes('```json')) {
+                isCapturingJson = true;
+                // Discard everything before ```json and start fresh
+                const jsonStartIndex = messageBuffer.indexOf('```json') + 7; // length of '```json'
+                messageBuffer = messageBuffer.substring(jsonStartIndex);
+              }
 
-              if (parsed) {
-                Object.entries(parsed).forEach(([key, value]) => {
-                  if (value !== undefined) {
-                    const partId = messagePartIds[key] || crypto.randomUUID();
-                    messagePartIds[key] = partId;
-                    
-                    const structuredMessagePart = {
-                      type: `data-message-${key}`,
-                      id: partId,
-                      data: value,
-                    };
-                    writer.write(structuredMessagePart as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
-                  }
-                });
+              // Check if this chunk contains the closing marker
+              if (isCapturingJson && messageBuffer.includes('```')) {
+                isCapturingJson = false;
+                // Only keep content before the closing marker
+                const jsonEndIndex = content.indexOf('```');
+                messageBuffer = messageBuffer.substring(0, jsonEndIndex);
+              }
+
+              // Only accumulate content if we're inside the JSON block
+              if (isCapturingJson) {
+                // Try to parse the accumulated JSON
+                const parseResult = await parsePartialJson(messageBuffer.trim());
+                const parsed = parseResult.value as Partial<TMessage>;
+
+                if (parsed) {
+                  Object.entries(parsed).forEach(([key, value]) => {
+                    if (value !== undefined) {
+                      const partId = messagePartIds[key] || crypto.randomUUID();
+                      messagePartIds[key] = partId;
+
+                      const structuredMessagePart = {
+                        type: `data-message-${key}`,
+                        id: partId,
+                        data: value,
+                      };
+                      writer.write(structuredMessagePart as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+                    }
+                  });
+                }
               }
             } else {
+              // For unstructured output: stream all content as text
               writer.write({
                 type: 'data-message-text',
                 id: messagePartIds.text,

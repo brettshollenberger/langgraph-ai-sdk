@@ -14,6 +14,7 @@ function getSchemaKeys(schema) {
 }
 function createLanggraphUIStream({ graph, messages, threadId, messageSchema, state }) {
 	return createUIMessageStream({ execute: async ({ writer }) => {
+		console.log(graph.name);
 		const stream = await graph.stream({
 			messages,
 			...state
@@ -29,6 +30,7 @@ function createLanggraphUIStream({ graph, messages, threadId, messageSchema, sta
 		const stateDataPartIds = {};
 		const messagePartIds = messageSchema ? {} : { text: crypto.randomUUID() };
 		let messageBuffer = "";
+		let isCapturingJson = false;
 		for await (const chunk of stream) {
 			const chunkArray = chunk;
 			let kind;
@@ -39,31 +41,47 @@ function createLanggraphUIStream({ graph, messages, threadId, messageSchema, sta
 			if (kind === "messages") {
 				const [message, metadata] = data;
 				if (message?.content && metadata?.tags?.includes("notify")) {
-					let content = typeof message.content === "string" ? message.content : "";
-					messageBuffer += content;
+					let content;
+					if (Array.isArray(message.content)) content = message.content.map((content$1) => {
+						return content$1.text;
+					}).join("");
+					else if (typeof message.content === "string") content = message.content;
 					if (messageSchema) {
-						let cleanedBuffer = messageBuffer;
-						if (cleanedBuffer.includes("```json")) cleanedBuffer = cleanedBuffer.replace(/```json/g, "").trim();
-						if (cleanedBuffer.includes("```")) cleanedBuffer = cleanedBuffer.split("```")[0];
-						cleanedBuffer = cleanedBuffer.trim();
-						const parsed = (await parsePartialJson(cleanedBuffer)).value;
-						if (parsed) Object.entries(parsed).forEach(([key, value]) => {
-							if (value !== void 0) {
-								const partId = messagePartIds[key] || crypto.randomUUID();
-								messagePartIds[key] = partId;
-								const structuredMessagePart = {
-									type: `data-message-${key}`,
-									id: partId,
-									data: value
-								};
-								writer.write(structuredMessagePart);
-							}
+						if (!isCapturingJson && content.includes("```json")) {
+							isCapturingJson = true;
+							const jsonStartIndex = content.indexOf("```json") + 7;
+							content = content.substring(jsonStartIndex);
+							messageBuffer = "";
+						}
+						if (isCapturingJson && content.includes("```")) {
+							isCapturingJson = false;
+							const jsonEndIndex = content.indexOf("```");
+							content = content.substring(0, jsonEndIndex);
+						}
+						if (isCapturingJson || content.trim()) {
+							messageBuffer += content;
+							const parsed = (await parsePartialJson(messageBuffer.trim())).value;
+							if (parsed) Object.entries(parsed).forEach(([key, value]) => {
+								if (value !== void 0) {
+									const partId = messagePartIds[key] || crypto.randomUUID();
+									messagePartIds[key] = partId;
+									const structuredMessagePart = {
+										type: `data-message-${key}`,
+										id: partId,
+										data: value
+									};
+									writer.write(structuredMessagePart);
+								}
+							});
+						}
+					} else {
+						messageBuffer += content;
+						writer.write({
+							type: "data-message-text",
+							id: messagePartIds.text,
+							data: messageBuffer
 						});
-					} else writer.write({
-						type: "data-message-text",
-						id: messagePartIds.text,
-						data: messageBuffer
-					});
+					}
 				}
 			} else if (kind === "updates") {
 				const updates = data;
