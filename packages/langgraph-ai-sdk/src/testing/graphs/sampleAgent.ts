@@ -19,6 +19,19 @@ import {
   type AgentStateType,
 } from '../agentTypes';
 
+
+async function readAnswersFromJSON<T extends Record<string, any>>(
+    filePath: string = './brainstorm-answers.json'
+): Promise<T> {
+    try {
+        const fileContent = await readFile(filePath, 'utf-8');
+        return JSON.parse(fileContent);
+    } catch (err) {
+        console.log(`file not exist!`)
+        // File doesn't exist or is invalid, start with empty object
+        return {} as T;
+    }
+}
 /**
  * Helper function to write answers to a JSON file by key
  * Merges new data with existing data in the file
@@ -31,15 +44,7 @@ async function writeAnswersToJSON<T extends Record<string, any>>(
 ): Promise<void> {
     try {
         // Read existing data if file exists
-        let existingData: T = {} as T;
-        try {
-            console.log(`attempting to read file: ${filePath}`)
-            const fileContent = await readFile(filePath, 'utf-8');
-            existingData = JSON.parse(fileContent);
-        } catch (err) {
-            console.log(`file not exist!`)
-            // File doesn't exist or is invalid, start with empty object
-        }
+        let existingData: T = await readAnswersFromJSON(filePath);
 
         // Merge new data with existing data
         const mergedData = { ...existingData, ...data };
@@ -115,10 +120,9 @@ const getPrompt = async (state: BrainstormGraphState, config?: LangGraphRunnable
 
             <workflow>
                 1. If the user has answered any topics, call the save_answers tool
-                2. Then output your response in one of these formats:
-                   - structuredQuestion: For complex questions with intro, examples, and conclusion
-                   - simpleQuestion: For clarifications or follow-ups (just content field)
-                   - finishBrainstorming: When all information is collected
+                2. Then, if:
+                   - The user has answered all topics, output finishBrainstorming
+                   - OTHERWISE, ask a question, following the output_format_rules
             </workflow>
 
             <ensure_understanding>
@@ -129,21 +133,15 @@ const getPrompt = async (state: BrainstormGraphState, config?: LangGraphRunnable
             <output_format_rules>
                 IMPORTANT: Your response MUST be in one of these exact formats:
 
-                For a structured question:
+                To ask a question:
                 {
-                  "type": "structuredQuestion",
-                  "intro": "Brief intro to the question",
-                  "examples": ["Example 1", "Example 2", "Example 3"],
-                  "conclusion": "Restate what you're asking for"
+                  "type": "question",
+                  "text": "Brief intro to the question",
+                  "examples": ["Example 1", "Example 2", "Example 3"], // Optional
+                  "conclusion": "Restate what you're asking for" // Optional
                 }
 
-                For a simple question:
-                {
-                  "type": "simpleQuestion",
-                  "content": "Your question here"
-                }
-
-                For finishing:
+                When the user has finished brainstorming, output:
                 {
                   "type": "finishBrainstorming",
                   "finishBrainstorming": true
@@ -151,6 +149,8 @@ const getPrompt = async (state: BrainstormGraphState, config?: LangGraphRunnable
 
                 You MUST output valid JSON in one of these formats. NO other text.
             </output_format_rules>
+
+            ${await structuredOutputPrompt({ schema: agentOutputSchema })}
         `
     );
 }
@@ -215,18 +215,34 @@ export const brainstormAgent = async (
       const updatedState = await agent.invoke(state as any, config);
       const aiResponse = updatedState.messages.at(-1);
 
-      // The response is already structured thanks to withStructuredOutput
-      const structuredResult = aiResponse?.content || aiResponse?.additional_kwargs?.tool_calls?.[0]?.function?.arguments;
+      let content = aiResponse?.content[0];
 
-      console.log('Structured result:', JSON.stringify(structuredResult, null, 2));
+      const parser = StructuredOutputParser.fromZodSchema(agentOutputSchema);
+
+      let textContent = content?.text as string;
+      const jsonMatch = textContent.match(/```json\n([\s\S]*?)\n```/);
+      let structuredResult;
+      if (jsonMatch) {
+          textContent = jsonMatch[1];
+          structuredResult = await parser.parse(textContent);
+      } else {
+        structuredResult = {
+          type: 'text',
+          text: textContent
+        }
+      }
 
       const aiMessage = new AIMessage({
           content: JSON.stringify(structuredResult, null, 2),
           response_metadata: structuredResult,
       });
+      const answers = await readAnswersFromJSON<Brainstorm>();
+      const questionsAnswered = Object.keys(answers);
+      const remainingTopics = state.remainingTopics.filter(topic => !questionsAnswered.includes(topic));
 
       return {
-          messages: [...(state.messages || []), aiMessage]
+          messages: [...(state.messages || []), aiMessage],
+          remainingTopics,
       };
     } catch (error) {
       console.error('==========================================');

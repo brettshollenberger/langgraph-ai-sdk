@@ -151,7 +151,9 @@ export function useLanggraph<
       }
 
       const textParts = msg.parts.filter(p => p.type === 'data-message-text');
-      if (textParts.length > 0) {
+      const otherParts = msg.parts.filter(p => p.type !== 'data-message-text');
+      if (textParts.length > 0 && otherParts.length === 0) {
+        console.log('Only text parts:', textParts)
         return {
           id: msg.id,
           role: msg.role,

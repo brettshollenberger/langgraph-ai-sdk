@@ -6,42 +6,31 @@ import type { LanggraphDataBase } from 'langgraph-ai-sdk-types';
 /**
  * Schema for structured questions with intro, examples, and conclusion
  */
-export const agentStructuredQuestionSchema = z.object({
+export const questionSchema = z.object({
   type: z.literal("structuredQuestion"),
-  intro: z.string().describe('A simple intro to the question'),
-  examples: z.array(z.string()).describe(`List of examples to help the user understand what we're asking`),
-  conclusion: z.string().optional().describe(`Conclusion of the question, restating exactly the information we want to the user to answer`),
+  text: z.string().describe('A simple intro to the question'),
+  examples: z.array(z.string()).optional().describe(`List of examples to help the user understand what we're asking`),
+  conclusion: z.string().optional().describe(`Optional conclusion text to include after examples`),
 });
 
-export type AgentStructuredQuestion = z.infer<typeof agentStructuredQuestionSchema>;
-
-/**
- * Schema for simple text questions
- */
-export const agentSimpleQuestionSchema = z.object({
-  type: z.literal("simpleQuestion"),
-  content: z.string().describe('Simple question to ask the user'),
-});
-
-export type AgentSimpleQuestion = z.infer<typeof agentSimpleQuestionSchema>;
+export type Question = z.infer<typeof questionSchema>;
 
 /**
  * Schema for finishing brainstorming
  */
-export const agentFinishBrainstormingSchema = z.object({
+export const finishBrainstormingSchema = z.object({
   type: z.literal("finishBrainstorming"),
   finishBrainstorming: z.literal(true).describe("Call to signal that the user has finished brainstorming"),
 });
 
-export type AgentFinishBrainstorming = z.infer<typeof agentFinishBrainstormingSchema>;
+export type FinishBrainstorming = z.infer<typeof finishBrainstormingSchema>;
 
 /**
  * Union schema for all agent output types
  */
 export const agentOutputSchema = z.discriminatedUnion("type", [
-  agentSimpleQuestionSchema,
-  agentStructuredQuestionSchema,
-  agentFinishBrainstormingSchema,
+  questionSchema,
+  finishBrainstormingSchema,
 ]);
 
 export type AgentOutputType = z.infer<typeof agentOutputSchema>;

@@ -70,131 +70,159 @@ export function createLanggraphUIStream<
         const messagePartIds: Record<string, string> = messageSchema ? {} : { text: crypto.randomUUID() };
         let messageBuffer = '';
         let isCapturingJson = false; // Track if we're inside a JSON code block
+        let isFallbackMode = false; // Track if we've switched to fallback text streaming
 
         for await (const chunk of stream) {
-        const chunkArray = chunk as StreamChunk;
-        let kind: string;
-        let data: any;
-        
-        if (chunkArray.length === 2) {
-          [kind, data] = chunkArray;
-        } else if (chunkArray.length === 3) {
-          [, kind, data] = chunkArray;
-        } else {
-          continue;
-        }
-        
-        if (kind === 'messages') {
-          const [message, metadata] = data;
-          
-          if (message?.content && metadata?.tags?.includes('notify')) {
-            let content;
-            if (Array.isArray(message.content)) {
-              content = message.content.map((content) => {
-                return content.text;
-              }).join('');
-            } else if (typeof message.content === 'string') {
-              content = message.content;
-            }
+          const chunkArray = chunk as StreamChunk;
+          let kind: string;
+          let data: any;
 
-            messageBuffer += content;
-
-            if (messageSchema) {
-              // For structured output: only capture content inside ```json blocks
-
-              if (!isCapturingJson && messageBuffer.includes('```json')) {
-                isCapturingJson = true;
-                // Discard everything before ```json and start fresh
-                const jsonStartIndex = messageBuffer.indexOf('```json') + 7; // length of '```json'
-                messageBuffer = messageBuffer.substring(jsonStartIndex);
-              }
-
-              let shouldParse = isCapturingJson;
-
-              // Check if this chunk contains the closing marker
-              if (isCapturingJson && messageBuffer.includes('```')) {
-                // Only keep content before the closing marker
-                const jsonEndIndex = messageBuffer.indexOf('```');
-                messageBuffer = messageBuffer.substring(0, jsonEndIndex);
-                // Parse one final time with the complete JSON before stopping
-                shouldParse = true;
-                isCapturingJson = false;
-              }
-
-              // Parse and stream if we're capturing or just finished capturing
-              if (shouldParse) {
-                // Try to parse the accumulated JSON
-                const parseResult = await parsePartialJson(messageBuffer.trim());
-                const parsed = parseResult.value as Partial<TMessage>;
-
-                if (parsed) {
-                  Object.entries(parsed).forEach(([key, value]) => {
-                    if (value !== undefined) {
-                      const partId = messagePartIds[key] || crypto.randomUUID();
-                      messagePartIds[key] = partId;
-
-                      const structuredMessagePart = {
-                        type: `data-message-${key}`,
-                        id: partId,
-                        data: value,
-                      };
-                      writer.write(structuredMessagePart as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
-                    }
-                  });
-                }
-              }
-            } else {
-              // For unstructured output: stream all content as text
-              writer.write({
-                type: 'data-message-text',
-                id: messagePartIds.text,
-                data: messageBuffer,
-              } as unknown as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
-            }
-          }
-        } else if (kind === 'updates') {
-          const updates = data as Record<string, any>;
-          
-          for (const [nodeName, nodeUpdates] of Object.entries(updates)) {
-            if (!nodeUpdates || typeof nodeUpdates !== 'object') continue;
-            
-            (Object.keys(nodeUpdates) as Array<keyof StateDataParts>).forEach((key) => {
-              const value = nodeUpdates[key as string];
-              if (value === undefined || value === null) return;
-              if (key === 'messages') return;
-              
-              const keyStr = String(key) as Exclude<keyof TState, 'messages'> & string;
-              const dataPartId = stateDataPartIds[keyStr] || crypto.randomUUID();
-              stateDataPartIds[keyStr] = dataPartId;
-              
-              writer.write({
-                type: `data-state-${keyStr}`,
-                id: dataPartId,
-                data: value
-              } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
-            });
-          }
-        } else if (kind === 'custom') {
-          const customData = data as Record<string, any>;
-          const defaultKeys = ['id', 'event'];
-          const eventName = customData.event;
-          if (!eventName || !customData.id) {
+          if (chunkArray.length === 2) {
+            [kind, data] = chunkArray;
+          } else if (chunkArray.length === 3) {
+            [, kind, data] = chunkArray;
+          } else {
             continue;
           }
-          const dataKeys = Object.entries(customData).reduce((acc, [key, value]) => {
-            if (typeof key === 'string' && !defaultKeys.includes(key)) {
-              acc[key] = value;
-            }
-            return acc;
-          }, {} as Record<string, any>);
 
-          writer.write({
-            type: kebabCase(`data-custom-${eventName}`),
-            id: customData.id,
-            data: dataKeys,
-          } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+          if (kind === 'messages') {
+            const [message, metadata] = data;
+
+            if (message?.content && metadata?.tags?.includes('notify')) {
+              let content;
+              if (Array.isArray(message.content)) {
+                content = message.content.map((content) => {
+                  return content.text;
+                }).join('');
+              } else if (typeof message.content === 'string') {
+                content = message.content;
+              }
+
+              messageBuffer += content;
+
+              if (messageSchema) {
+                // For structured output: only capture content inside ```json blocks
+
+                // Check if we should enter fallback mode
+                if (!isCapturingJson && !isFallbackMode && messageBuffer.length > 200) {
+                  // Model has failed to emit a JSON block, switch to fallback mode
+                  isFallbackMode = true;
+                  // Create the text part ID and stream the accumulated buffer as text
+                  const partId = messagePartIds.text || crypto.randomUUID();
+                  messagePartIds.text = partId;
+
+                  writer.write({
+                    type: 'data-message-text',
+                    id: partId,
+                    data: messageBuffer,
+                  } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+                } else if (isFallbackMode) {
+                  // Continue streaming in fallback mode
+                  writer.write({
+                    type: 'data-message-text',
+                    id: messagePartIds.text,
+                    data: messageBuffer,
+                  } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+                } else if (!isCapturingJson && messageBuffer.includes('```json')) {
+                  isCapturingJson = true;
+                  // Discard everything before ```json and start fresh
+                  const jsonStartIndex = messageBuffer.indexOf('```json') + 7; // length of '```json'
+                  messageBuffer = messageBuffer.substring(jsonStartIndex);
+                }
+
+                if (!isFallbackMode) {
+                  let shouldParse = isCapturingJson;
+
+                  // Check if this chunk contains the closing marker
+                  if (isCapturingJson && messageBuffer.includes('```')) {
+                    // Only keep content before the closing marker
+                    const jsonEndIndex = messageBuffer.indexOf('```');
+                    messageBuffer = messageBuffer.substring(0, jsonEndIndex);
+                    // Parse one final time with the complete JSON before stopping
+                    shouldParse = true;
+                    isCapturingJson = false;
+                  }
+
+                  // Parse and stream if we're capturing or just finished capturing
+                  if (shouldParse) {
+                    // Try to parse the accumulated JSON
+                    const parseResult = await parsePartialJson(messageBuffer.trim());
+                    const parsed = parseResult.value as Partial<TMessage>;
+
+                    if (parsed) {
+                      Object.entries(parsed).forEach(([key, value]) => {
+                        if (value !== undefined) {
+                          const partId = messagePartIds[key] || crypto.randomUUID();
+                          messagePartIds[key] = partId;
+
+                          const structuredMessagePart = {
+                            type: `data-message-${key}`,
+                            id: partId,
+                            data: value,
+                          };
+                          writer.write(structuredMessagePart as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+                        }
+                      });
+                    }
+                  }
+                }
+              } else {
+                // For unstructured output: stream all content as text
+                writer.write({
+                  type: 'data-message-text',
+                  id: messagePartIds.text,
+                  data: messageBuffer,
+                } as unknown as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+              }
+            }
+          } else if (kind === 'updates') {
+            const updates = data as Record<string, any>;
+            
+            for (const [nodeName, nodeUpdates] of Object.entries(updates)) {
+              if (!nodeUpdates || typeof nodeUpdates !== 'object') continue;
+              
+              (Object.keys(nodeUpdates) as Array<keyof StateDataParts>).forEach((key) => {
+                const value = nodeUpdates[key as string];
+                if (value === undefined || value === null) return;
+                if (key === 'messages') return;
+                
+                const keyStr = String(key) as Exclude<keyof TState, 'messages'> & string;
+                const dataPartId = stateDataPartIds[keyStr] || crypto.randomUUID();
+                stateDataPartIds[keyStr] = dataPartId;
+                
+                console.log('Streaming state update:', {
+                  type: `data-state-${keyStr}`,
+                  id: dataPartId,
+                  data: value
+                });
+                writer.write({
+                  type: `data-state-${keyStr}`,
+                  id: dataPartId,
+                  data: value
+                } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+              });
+            }
+          } else if (kind === 'custom') {
+            const customData = data as Record<string, any>;
+            const defaultKeys = ['id', 'event'];
+            const eventName = customData.event;
+            if (!eventName || !customData.id) {
+              continue;
+            }
+            const dataKeys = Object.entries(customData).reduce((acc, [key, value]) => {
+              if (typeof key === 'string' && !defaultKeys.includes(key)) {
+                acc[key] = value;
+              }
+              return acc;
+            }, {} as Record<string, any>);
+
+            writer.write({
+              type: kebabCase(`data-custom-${eventName}`),
+              id: customData.id,
+              data: dataKeys,
+            } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+          }
         }
-      }
       } catch (error) {
         console.error('==========================================');
         console.error('STREAM ERROR - FAILING LOUDLY:');
