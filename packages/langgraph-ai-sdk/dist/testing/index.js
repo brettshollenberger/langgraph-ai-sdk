@@ -1214,6 +1214,11 @@ const getPrompt = async (state, config) => {
                    - OTHERWISE, ask a question, following the output_format_rules
             </workflow>
 
+            <important>
+                Do not miss anything important the user said! Any important
+                business context they give you should be saved to the answers.
+            </important>
+
             <ensure_understanding>
                 Ensure you actually understand the answer in the user's own words.
                 If unclear, use simpleQuestion to ask for clarification.
@@ -1270,8 +1275,10 @@ const brainstormAgent = async (state, config) => {
 	try {
 		const prompt = await getPrompt(state, config);
 		const tools = [SaveAnswersTool(state, config)];
+		const llm = getLLM().withConfig({ tags: ["notify"] });
+		console.log(prompt);
 		const structuredResponse = (await (await createAgent({
-			model: getLLM().withConfig({ tags: ["notify"] }),
+			model: llm,
 			tools,
 			systemPrompt: prompt,
 			responseFormat: questionSchema

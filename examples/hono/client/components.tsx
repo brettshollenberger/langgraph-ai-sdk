@@ -37,6 +37,42 @@ export const Message = ({
       <div className="prose prose-invert my-6">
         <div className="font-bold">{prefix}</div>
         {structuredParts.map((part, idx) => {
+          if (part.type.startsWith('tool-')) {
+            const toolName = part.type.replace('tool-', '');
+            const toolPart = part as any;
+            
+            switch (toolPart.state) {
+              case 'input-streaming':
+                return (
+                  <div key={idx} className="my-2 p-3 bg-yellow-900/30 rounded border border-yellow-600">
+                    <div className="text-yellow-400 font-semibold">🔧 {toolName} (streaming)</div>
+                    <pre className="text-xs mt-2 overflow-auto">{JSON.stringify(toolPart.input, null, 2)}</pre>
+                  </div>
+                );
+              case 'input-available':
+                return (
+                  <div key={idx} className="my-2 p-3 bg-blue-900/30 rounded border border-blue-600">
+                    <div className="text-blue-400 font-semibold">🔧 {toolName} (executing)</div>
+                    <pre className="text-xs mt-2 overflow-auto">{JSON.stringify(toolPart.input, null, 2)}</pre>
+                  </div>
+                );
+              case 'output-available':
+                return (
+                  <div key={idx} className="my-2 p-3 bg-green-900/30 rounded border border-green-600">
+                    <div className="text-green-400 font-semibold">✅ {toolName} (complete)</div>
+                    <pre className="text-xs mt-2 overflow-auto">{JSON.stringify(toolPart.output, null, 2)}</pre>
+                  </div>
+                );
+              case 'output-error':
+                return (
+                  <div key={idx} className="my-2 p-3 bg-red-900/30 rounded border border-red-600">
+                    <div className="text-red-400 font-semibold">❌ {toolName} (error)</div>
+                    <div className="text-sm mt-2">{toolPart.errorText}</div>
+                  </div>
+                );
+            }
+          }
+          
           const key = String(part.type);
           const value = 'data' in part ? part.data : '';
           

@@ -169,14 +169,18 @@ export function useLanggraph<
         } as LanggraphMessage<TLanggraphData>;
       }
 
-      // Fail: array of parts of type text, data: string, id: string
       const messageParts = msg.parts
-        .filter(p => p.type.startsWith('data-message-'))
-        .map(p => ({
-          type: p.type.replace('data-message-', '') as keyof TMessage,
-          data: (p as any).data,
-          id: (p as any).id
-        }));
+        .filter(p => p.type.startsWith('data-message-') || p.type.startsWith('tool-'))
+        .map(p => {
+          if (p.type.startsWith('tool-')) {
+            return p;
+          }
+          return {
+            type: p.type.replace('data-message-', '') as keyof TMessage,
+            data: (p as any).data,
+            id: (p as any).id
+          };
+        });
 
       return {
         id: msg.id,

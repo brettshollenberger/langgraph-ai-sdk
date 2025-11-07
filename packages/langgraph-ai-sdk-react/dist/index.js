@@ -86,20 +86,28 @@ function useLanggraph({ api = "/api/chat", headers = {}, getInitialThreadId }) {
 				}))
 			};
 			const textParts = msg.parts.filter((p) => p.type === "data-message-text");
-			if (textParts.length > 0) return {
+			const otherParts = msg.parts.filter((p) => p.type !== "data-message-text" && p.type.startsWith("data-message-"));
+			if (textParts.length > 0 && otherParts.length === 0) return {
 				id: msg.id,
 				role: msg.role,
 				parts: textParts.map((p) => ({
 					type: "text",
-					text: p.data,
+					data: p.data,
 					id: p.id
-				}))
+				})).concat([{
+					type: "type",
+					data: "text",
+					id: crypto.randomUUID()
+				}])
 			};
-			const messageParts = msg.parts.filter((p) => p.type.startsWith("data-message-")).map((p) => ({
-				type: p.type.replace("data-message-", ""),
-				data: p.data,
-				id: p.id
-			}));
+			const messageParts = msg.parts.filter((p) => p.type.startsWith("data-message-") || p.type.startsWith("tool-")).map((p) => {
+				if (p.type.startsWith("tool-")) return p;
+				return {
+					type: p.type.replace("data-message-", ""),
+					data: p.data,
+					id: p.id
+				};
+			});
 			return {
 				id: msg.id,
 				role: msg.role,
@@ -107,6 +115,7 @@ function useLanggraph({ api = "/api/chat", headers = {}, getInitialThreadId }) {
 			};
 		});
 	}, [chat.messages]);
+	console.log("messages", messages);
 	return {
 		...chat,
 		sendMessage,

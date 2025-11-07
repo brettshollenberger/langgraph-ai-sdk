@@ -46,6 +46,13 @@ export function getSchemaKeys<T extends z.ZodObject<any>>(
 ): Array<keyof z.infer<T>> {
   return Object.keys(schema.shape) as Array<keyof z.infer<T>>;
 }
+
+// parseToolCalls
+// parseMessages
+// parseState
+// parseCustom
+// accept the writer
+// communicate with other parsers... eg. (Should parse messages? Could we prevent this through configuration?)
 export interface LanggraphBridgeConfig<
   TGraphData extends LanggraphDataBase<any, any>,
 > {
@@ -99,6 +106,9 @@ export function createLanggraphUIStream<
         let canEnterFallbackMode = true;
         let isStructuredComplete = false; // Track if we've completed parsing a structured JSON block
         let currentToolName: string | undefined;
+        
+        const toolCallBuffers: Record<string, { name: string; argsBuffer: string; id: string }> = {};
+        const toolCallStates: Record<string, 'input-streaming' | 'input-available' | 'output-available'> = {};
 
         for await (const chunk of stream) {
           const chunkArray = chunk as StreamChunk;
@@ -121,32 +131,45 @@ export function createLanggraphUIStream<
                 continue;
               }
 
-              // Handle tool calls (structured output via tool calling)
-              if (messageSchema && message?.tool_call_chunks && message.tool_call_chunks.length > 0) {
+              // Handle tool calls (both structured output and regular tools)
+              if (message?.tool_call_chunks && message.tool_call_chunks.length > 0) {
                 message.tool_call_chunks.forEach(async (chunk: ToolCallChunk) => {
                   const toolCallChunk = chunk;
+                  const toolCallId = toolCallChunk.id || 'unknown';
+                  
                   if (!isUndefined(toolCallChunk.name) && !isNull(toolCallChunk.name)) {
                     currentToolName = toolCallChunk.name;
+                    
+                    if (!toolCallBuffers[toolCallId]) {
+                      toolCallBuffers[toolCallId] = {
+                        name: toolCallChunk.name,
+                        argsBuffer: '',
+                        id: toolCallId
+                      };
+                      toolCallStates[toolCallId] = 'input-streaming';
+                    }
                   }
+                  
                   const toolArgs = toolCallChunk.args;
+                  if (!toolArgs || !currentToolName) return;
+                  
+                  const toolBuffer = toolCallBuffers[toolCallId];
+                  if (!toolBuffer) return;
+                  
+                  toolBuffer.argsBuffer += toolArgs;
 
-                  if (currentToolName.match(/^extract-/) && toolArgs) {
-                    // Accumulate the tool arguments
+                  // Structured output tool calls
+                  if (messageSchema && currentToolName.match(/^extract-/)) {
                     toolArgsBuffer += toolArgs;
 
-                    // Parse the accumulated tool call arguments as partial JSON
                     const parseResult = await parsePartialJson(toolArgsBuffer);
                     const parsed = parseResult.value as Partial<TMessage>;
 
                     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-                      // Only write parts that have changed
                       Object.entries(parsed).forEach(([key, value]) => {
-                        // Only write parts that are in the message schema
-                        // Other tool calls we may choose to expose separately
                         if (value !== undefined && messageKeys.includes(key)) {
-                          userDefinedStructuredOutput = true; // We're now sure we have a user defined structured output
+                          userDefinedStructuredOutput = true;
 
-                          // Check if this value has changed since last send
                           const valueStr = JSON.stringify(value);
                           const lastValueStr = lastSentValues[key];
 
@@ -166,14 +189,55 @@ export function createLanggraphUIStream<
                       });
                     }
 
-                    // Check if tool call is complete (stop_reason === 'tool_use')
                     if (message.additional_kwargs?.stop_reason === 'tool_use' && userDefinedStructuredOutput) {
                       isStructuredComplete = true;
-                      toolArgsBuffer = ''; // Clear the buffer
-                      lastSentValues = {}; // Clear tracking for next message
+                      toolArgsBuffer = '';
+                      lastSentValues = {};
+                    }
+                  } else {
+                    const parseResult = await parsePartialJson(toolBuffer.argsBuffer);
+                    const parsedInput = parseResult.value;
+
+                    writer.write({
+                      type: `tool-${currentToolName}`,
+                      toolCallId: toolCallId,
+                      state: 'input-streaming',
+                      input: parsedInput || undefined,
+                    } as any);
+
+                    if (message.additional_kwargs?.stop_reason === 'tool_use') {
+                      toolCallStates[toolCallId] = 'input-available';
+                      
+                      writer.write({
+                        type: `tool-${currentToolName}`,
+                        toolCallId: toolCallId,
+                        state: 'input-available',
+                        input: parsedInput,
+                      } as any);
                     }
                   }
                 })
+              }
+              
+              if (message?._getType && message._getType() === 'tool') {
+                const toolCallId = message.tool_call_id;
+                const toolBuffer = toolCallBuffers[toolCallId];
+                
+                if (toolBuffer && toolCallStates[toolCallId] !== 'output-available') {
+                  toolCallStates[toolCallId] = 'output-available';
+                  
+                  const toolOutput = typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
+                  
+                  writer.write({
+                    type: `tool-${toolBuffer.name}`,
+                    toolCallId: toolCallId,
+                    state: 'output-available',
+                    input: parsePartialJson(toolBuffer.argsBuffer).value,
+                    output: toolOutput,
+                  } as any);
+                }
+                
+                continue;
               }
 
               if (!userDefinedStructuredOutput) {

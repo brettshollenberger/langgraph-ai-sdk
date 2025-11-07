@@ -19,6 +19,7 @@ export function LangGraphChat() {
       return undefined;
     }
   });
+  console.log('messages', messages);
 
   useEffect(() => {
     if (threadId && typeof window !== 'undefined') {
