@@ -5,6 +5,7 @@ import {
   createUIMessageStream,
   createUIMessageStreamResponse,
   type InferUIMessageChunk,
+  type UIMessageStreamWriter,
 } from 'ai';
 import type { CompiledStateGraph } from '@langchain/langgraph';
 import { BaseMessage } from '@langchain/core/messages';
@@ -56,38 +57,42 @@ export interface LanggraphBridgeConfig<
   state?: Partial<InferState<TGraphData>>;
 }
 
-interface Handler<TGraphData extends LanggraphDataBase<any, any>> {
-  constructor(writer: any, messageSchema?: InferMessageSchema<TGraphData>): Handler<TGraphData>;
-  handle(chunk: any): void;
-}
+abstract class Handler<TGraphData extends LanggraphDataBase<any, any>> {
+  protected writer: UIMessageStreamWriter<LanggraphUIMessage<TGraphData>>;
+  protected messageSchema?: InferMessageSchema<TGraphData>;
 
-class ToolCallHandler<TGraphData extends LanggraphDataBase<any, any>> implements Handler<TGraphData> {
-  writer: any;
-  messageSchema?: InferMessageSchema<TGraphData>;
-
-  constructor(writer: any, messageSchema?: InferMessageSchema<TGraphData>) {
+  constructor(writer: UIMessageStreamWriter<LanggraphUIMessage<TGraphData>>, messageSchema?: InferMessageSchema<TGraphData>) {
     this.writer = writer;
     this.messageSchema = messageSchema;
   }
 
+  abstract handle(chunk: any): void;
+}
+
+class ToolCallHandler<TGraphData extends LanggraphDataBase<any, any>> extends Handler<TGraphData> {
+  messagePartIds: Record<string, string> = {};
+  schemaKeys: string[];
+  toolArgsBuffer: string = '';
+  toolValues: Record<string, any> = {}; // Was lastSentValues
+  currentToolName: string | undefined;
+
+  constructor(writer: UIMessageStreamWriter<LanggraphUIMessage<TGraphData>>, messageSchema?: InferMessageSchema<TGraphData>) {
+    super(writer, messageSchema);
+    this.schemaKeys = messageSchema ? getSchemaKeys(messageSchema).filter((key) => typeof key === 'string') : [];
+  }
+  
   handle(chunk: any): void {
     const [message, metadata] = chunk;
     const notify = metadata.tags?.includes('notify');
 
-    this.handleToolCalls(message, messageSchema, notify, writer)
-    this.handleRawMessages(message, messageSchema, notify, writer) 
+    this.handleToolCalls(message, this.messageSchema, notify, this.writer)
+    this.handleRawMessages(message, this.messageSchema, notify, this.writer) 
   }
 }
 
-class RawMessageHandler<TGraphData extends LanggraphDataBase<any, any>> implements Handler<TGraphData> {
-  writer: any;
-  messageSchema?: InferMessageSchema<TGraphData>;
-
-  constructor(writer: any, messageSchema?: InferMessageSchema<TGraphData>) {
-    this.writer = writer;
-    this.messageSchema = messageSchema;
-  }
-
+class RawMessageHandler<TGraphData extends LanggraphDataBase<any, any>> extends Handler<TGraphData> {
+  messageBuffer: string = '';
+  
   handle(chunk: any): void {
     const [message, metadata] = chunk;
     const notify = metadata.tags?.includes('notify');
@@ -96,14 +101,8 @@ class RawMessageHandler<TGraphData extends LanggraphDataBase<any, any>> implemen
   }
 }
 
-class StateHandler<TGraphData extends LanggraphDataBase<any, any>> implements Handler<TGraphData> {
-  writer: any;
-  messageSchema?: InferMessageSchema<TGraphData>;
-
-  constructor(writer: any, messageSchema?: InferMessageSchema<TGraphData>) {
-    this.writer = writer;
-    this.messageSchema = messageSchema;
-  }
+class StateHandler<TGraphData extends LanggraphDataBase<any, any>> extends Handler<TGraphData> {
+  stateDataParts: Record<string, string> = {};
 
   handle(chunk: any): void {
     const [message, metadata] = chunk;
@@ -113,14 +112,7 @@ class StateHandler<TGraphData extends LanggraphDataBase<any, any>> implements Ha
   }
 }
 
-class CustomHandler<TGraphData extends LanggraphDataBase<any, any>> implements Handler<TGraphData> {
-  writer: any;
-  messageSchema?: InferMessageSchema<TGraphData>;
-
-  constructor(writer: any, messageSchema?: InferMessageSchema<TGraphData>) {
-    this.writer = writer;
-    this.messageSchema = messageSchema;
-  }
+class CustomHandler<TGraphData extends LanggraphDataBase<any, any>> extends Handler<TGraphData> {
 
   handle(chunk: any): void {
     const [message, metadata] = chunk;
@@ -130,10 +122,15 @@ class CustomHandler<TGraphData extends LanggraphDataBase<any, any>> implements H
   }
 }
 class LanggraphStreamHandler<TGraphData extends LanggraphDataBase<any, any>> {
-  handlers: Record<string, Handler<TGraphData>> = {};
+  handlers: {
+    tool_calls: Handler<TGraphData>;
+    raw_messages: Handler<TGraphData>;
+    state: Handler<TGraphData>;
+    custom: Handler<TGraphData>;
+  };
   messageSchema?: InferMessageSchema<TGraphData>;
 
-  constructor(writer: any, messageSchema?: InferMessageSchema<TGraphData>) {
+  constructor(writer: UIMessageStreamWriter<LanggraphUIMessage<TGraphData>>, messageSchema?: InferMessageSchema<TGraphData>) {
     this.handlers = {
       tool_calls: new ToolCallHandler<TGraphData>(writer, messageSchema),
       raw_messages: new RawMessageHandler<TGraphData>(writer, messageSchema),
@@ -192,18 +189,21 @@ export function createLanggraphUIStream<
   return createUIMessageStream<LanggraphUIMessage<TGraphData>>({
     execute: async ({ writer }) => {
       try {
+        const handler = new LanggraphStreamHandler(writer, messageSchema);
+        await handler.stream({ graph, messages, threadId, state, messageSchema });
 
-        const stateDataPartIds: Record<string, string> = {};
-        const messagePartIds: Record<string, string> = messageSchema ? {} : { text: crypto.randomUUID() };
-        const messageKeys: string[] = messageSchema ? getSchemaKeys(messageSchema).filter((key) => typeof key === 'string') : [];
-        let messageBuffer = '';
-        let toolArgsBuffer = ''; // Buffer for accumulating tool call arguments
-        let userDefinedStructuredOutput: boolean = false;
-        let lastSentValues: Record<string, any> = {}; // Track what we've already sent
-        let isCapturingJson = false; // Track if we're inside a JSON code block
-        let isFallbackMode = false; // Track if we've switched to fallback text streaming
-        let canEnterFallbackMode = true;
-        let isStructuredComplete = false; // Track if we've completed parsing a structured JSON block
+        // const stateDataPartIds: Record<string, string> = {};
+        // const messagePartIds: Record<string, string> = messageSchema ? {} : { text: crypto.randomUUID() };
+        // const messageKeys: string[] = messageSchema ? getSchemaKeys(messageSchema).filter((key) => typeof key === 'string') : [];
+
+        // let messageBuffer = '';
+        // let toolArgsBuffer = ''; // Buffer for accumulating tool call arguments
+        // let userDefinedStructuredOutput: boolean = false;
+        // let lastSentValues: Record<string, any> = {}; // Track what we've already sent
+        // let isCapturingJson = false; // Track if we're inside a JSON code block
+        // let isFallbackMode = false; // Track if we've switched to fallback text streaming
+        // let canEnterFallbackMode = true;
+        // let isStructuredComplete = false; // Track if we've completed parsing a structured JSON block
         let currentToolName: string | undefined;
 
         for await (const chunk of stream) {
