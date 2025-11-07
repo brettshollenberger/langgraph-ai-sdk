@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { Annotation, messagesStateReducer } from '@langchain/langgraph';
-import type { Message } from '@langchain/core/messages';
+import type { BaseMessage } from '@langchain/core/messages';
 import type { LanggraphDataBase } from 'langgraph-ai-sdk-types';
 
 /**
@@ -46,7 +46,7 @@ export type Brainstorm = Partial<Record<BrainstormTopic, string>>;
  * State annotation for the brainstorm agent
  */
 export const BrainstormStateAnnotation = Annotation.Root({
-  messages: Annotation<Message[]>({
+  messages: Annotation<BaseMessage[]>({
     default: () => [],
     reducer: messagesStateReducer as any
   }),
@@ -68,6 +68,6 @@ export type AgentStateType = typeof BrainstormStateAnnotation.State;
  * Type definition for Agent LangGraph data
  */
 export type AgentLanggraphData = LanggraphDataBase<
-  typeof agentOutputSchema,
-  typeof BrainstormStateAnnotation
+  AgentStateType,
+  typeof questionSchema
 >;

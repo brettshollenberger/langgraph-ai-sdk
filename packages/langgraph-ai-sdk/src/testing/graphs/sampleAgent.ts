@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { StateGraph, END, START, Annotation, messagesStateReducer } from "@langchain/langgraph";
 import { AIMessage, HumanMessage, type BaseMessage } from "@langchain/core/messages";
-import { createAgent } from "langchain";
+import { createAgent, providerStrategy } from "langchain";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
 import { getLLM } from '../llm/llm';
 import { tool, Tool } from "@langchain/core/tools";
@@ -13,6 +13,7 @@ import { type LanggraphData } from '../../types';
 import {
   brainstormTopics,
   BrainstormStateAnnotation,
+  questionSchema,
   agentOutputSchema,
   type BrainstormTopic,
   type Brainstorm,
@@ -150,7 +151,7 @@ const getPrompt = async (state: BrainstormGraphState, config?: LangGraphRunnable
                 You MUST output valid JSON in one of these formats. NO other text.
             </output_format_rules>
 
-            ${await structuredOutputPrompt({ schema: agentOutputSchema })}
+            ${await structuredOutputPrompt({ schema: questionSchema })}
         `
     );
 }
@@ -210,31 +211,32 @@ export const brainstormAgent = async (
           model: llm,
           tools,
           systemPrompt: prompt,
+          responseFormat: questionSchema,
       });
 
       const updatedState = await agent.invoke(state as any, config);
-      const aiResponse = updatedState.messages.at(-1);
+      const structuredResponse = updatedState.structuredResponse
 
-      let content = aiResponse?.content[0];
+    //   let content = aiResponse?.content[0];
 
-      const parser = StructuredOutputParser.fromZodSchema(agentOutputSchema);
+    //   const parser = StructuredOutputParser.fromZodSchema(questionSchema);
 
-      let textContent = content?.text as string;
-      const jsonMatch = textContent.match(/```json\n([\s\S]*?)\n```/);
-      let structuredResult;
-      if (jsonMatch) {
-          textContent = jsonMatch[1];
-          structuredResult = await parser.parse(textContent);
-      } else {
-        structuredResult = {
-          type: 'text',
-          text: textContent
-        }
-      }
+    //   let textContent = content?.text as string;
+    //   const jsonMatch = textContent.match(/```json\n([\s\S]*?)\n```/);
+    //   let structuredResult;
+    //   if (jsonMatch) {
+    //       textContent = jsonMatch[1];
+    //       structuredResult = await parser.parse(textContent);
+    //   } else {
+    //     structuredResult = {
+    //       type: 'text',
+    //       text: textContent
+    //     }
+    //   }
 
       const aiMessage = new AIMessage({
-          content: JSON.stringify(structuredResult, null, 2),
-          response_metadata: structuredResult,
+          content: JSON.stringify(structuredResponse, null, 2),
+          response_metadata: structuredResponse,
       });
       const answers = await readAnswersFromJSON<Brainstorm>();
       const questionsAnswered = Object.keys(answers);
@@ -246,7 +248,7 @@ export const brainstormAgent = async (
       };
     } catch (error) {
       console.error('==========================================');
-      console.error('BRAINSTORM AGENT ERROR - FAILING LOUDLY:');
+      console.error('BRAINSTORM AGENT ERROR:');
       console.error('==========================================');
       console.error('Error details:', error);
       console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');

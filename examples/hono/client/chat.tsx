@@ -40,6 +40,9 @@ export function LangGraphChat() {
 
   return (
     <Wrapper>
+      <div>
+        {status}
+      </div>
       <div className="mb-4 p-4 bg-gray-800 rounded">
         <div className="text-sm text-gray-400 mb-2">State:</div>
         <pre className="text-xs text-green-400">{JSON.stringify(state, null, 2)}</pre>

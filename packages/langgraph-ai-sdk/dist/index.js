@@ -10,112 +10,198 @@ import { jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 //#region src/stream.ts
 function getSchemaKeys(schema) {
+	console.log(schema);
 	return Object.keys(schema.shape);
 }
 function createLanggraphUIStream({ graph, messages, threadId, messageSchema, state }) {
 	return createUIMessageStream({ execute: async ({ writer }) => {
-		console.log(graph.name);
-		const stream = await graph.stream({
-			messages,
-			...state
-		}, {
-			streamMode: [
-				"messages",
-				"updates",
-				"custom"
-			],
-			context: { graphName: graph.name },
-			configurable: { thread_id: threadId }
-		});
-		const stateDataPartIds = {};
-		const messagePartIds = messageSchema ? {} : { text: crypto.randomUUID() };
-		let messageBuffer = "";
-		let isCapturingJson = false;
-		for await (const chunk of stream) {
-			const chunkArray = chunk;
-			let kind;
-			let data;
-			if (chunkArray.length === 2) [kind, data] = chunkArray;
-			else if (chunkArray.length === 3) [, kind, data] = chunkArray;
-			else continue;
-			if (kind === "messages") {
-				const [message, metadata] = data;
-				if (message?.content && metadata?.tags?.includes("notify")) {
-					let content;
-					if (Array.isArray(message.content)) content = message.content.map((content$1) => {
-						return content$1.text;
-					}).join("");
-					else if (typeof message.content === "string") content = message.content;
-					if (messageSchema) {
-						if (!isCapturingJson && content.includes("```json")) {
-							isCapturingJson = true;
-							const jsonStartIndex = content.indexOf("```json") + 7;
-							content = content.substring(jsonStartIndex);
-							messageBuffer = "";
-						}
-						if (isCapturingJson && content.includes("```")) {
-							isCapturingJson = false;
-							const jsonEndIndex = content.indexOf("```");
-							content = content.substring(0, jsonEndIndex);
-						}
-						if (isCapturingJson || content.trim()) {
-							messageBuffer += content;
-							const parsed = (await parsePartialJson(messageBuffer.trim())).value;
-							if (parsed) Object.entries(parsed).forEach(([key, value]) => {
-								if (value !== void 0) {
-									const partId = messagePartIds[key] || crypto.randomUUID();
-									messagePartIds[key] = partId;
-									const structuredMessagePart = {
-										type: `data-message-${key}`,
-										id: partId,
-										data: value
-									};
-									writer.write(structuredMessagePart);
+		try {
+			const stream = await graph.stream({
+				messages,
+				...state
+			}, {
+				streamMode: [
+					"messages",
+					"updates",
+					"custom"
+				],
+				context: { graphName: graph.name },
+				configurable: { thread_id: threadId }
+			});
+			const stateDataPartIds = {};
+			const messagePartIds = messageSchema ? {} : { text: crypto.randomUUID() };
+			const messageKeys = messageSchema ? getSchemaKeys(messageSchema).filter((key) => typeof key === "string") : [];
+			let messageBuffer = "";
+			let toolArgsBuffer = "";
+			let lastSentValues = {};
+			let isCapturingJson = false;
+			let isFallbackMode = false;
+			let canEnterFallbackMode = true;
+			let isStructuredComplete = false;
+			for await (const chunk of stream) {
+				const chunkArray = chunk;
+				let kind;
+				let data;
+				if (chunkArray.length === 2) [kind, data] = chunkArray;
+				else if (chunkArray.length === 3) [, kind, data] = chunkArray;
+				else continue;
+				if (kind === "messages") {
+					const [message, metadata] = data;
+					if (metadata?.tags?.includes("notify")) {
+						if (isStructuredComplete) continue;
+						if (messageSchema && message?.tool_call_chunks && message.tool_call_chunks.length > 0) {
+							const toolArgs = message.tool_call_chunks[0].args;
+							if (toolArgs) {
+								toolArgsBuffer += toolArgs;
+								const parsed = (await parsePartialJson(toolArgsBuffer)).value;
+								if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+									console.log("[STREAM] Parsed tool call data:", Object.keys(parsed));
+									Object.entries(parsed).forEach(([key, value]) => {
+										if (value !== void 0 && messageKeys.includes(key)) {
+											const valueStr = JSON.stringify(value);
+											if (valueStr !== lastSentValues[key]) {
+												const partId = messagePartIds[key] || crypto.randomUUID();
+												messagePartIds[key] = partId;
+												lastSentValues[key] = valueStr;
+												const structuredMessagePart = {
+													type: `data-message-${key}`,
+													id: partId,
+													data: value
+												};
+												console.log(`[STREAM] Writing updated part: ${key}`);
+												writer.write(structuredMessagePart);
+											}
+										}
+									});
 								}
+								if (message.additional_kwargs?.stop_reason === "tool_use") {
+									console.log("[STREAM] ✅ Tool call complete, marking structured output as complete");
+									isStructuredComplete = true;
+									toolArgsBuffer = "";
+									lastSentValues = {};
+								}
+							}
+							continue;
+						}
+						let content = "";
+						if (message?.content) {
+							if (Array.isArray(message.content)) content = message.content.map((content$1) => {
+								return content$1.text;
+							}).join("");
+							else if (typeof message.content === "string") content = message.content;
+						}
+						messageBuffer += content;
+						if (messageSchema) {
+							if (!isCapturingJson && canEnterFallbackMode && !isFallbackMode && messageBuffer.length > 200) {
+								isFallbackMode = true;
+								const partId = messagePartIds.text || crypto.randomUUID();
+								messagePartIds.text = partId;
+								writer.write({
+									type: "data-message-text",
+									id: partId,
+									data: messageBuffer
+								});
+							} else if (isFallbackMode) writer.write({
+								type: "data-message-text",
+								id: messagePartIds.text,
+								data: messageBuffer
+							});
+							else if (!isCapturingJson && messageBuffer.includes("```json")) {
+								isCapturingJson = true;
+								canEnterFallbackMode = false;
+								const jsonStartIndex = messageBuffer.indexOf("```json") + 7;
+								messageBuffer = messageBuffer.substring(jsonStartIndex);
+							}
+							if (!isFallbackMode) {
+								let shouldParse = isCapturingJson;
+								if (isCapturingJson && messageBuffer.includes("```")) {
+									const jsonEndIndex = messageBuffer.indexOf("```");
+									messageBuffer = messageBuffer.substring(0, jsonEndIndex);
+									shouldParse = true;
+									isCapturingJson = false;
+								}
+								if (shouldParse) {
+									const parsed = (await parsePartialJson(messageBuffer.trim())).value;
+									if (parsed) {
+										console.log("[STREAM] Writing structured parts:", Object.keys(parsed));
+										Object.entries(parsed).forEach(([key, value]) => {
+											if (value !== void 0) {
+												const partId = messagePartIds[key] || crypto.randomUUID();
+												messagePartIds[key] = partId;
+												const structuredMessagePart = {
+													type: `data-message-${key}`,
+													id: partId,
+													data: value
+												};
+												console.log(`[STREAM] Writing part: ${key}, data:`, typeof value === "string" ? value.substring(0, 50) : value);
+												writer.write(structuredMessagePart);
+											}
+										});
+										if (!isCapturingJson) {
+											console.log("[STREAM] ✅ Structured output complete, clearing buffer");
+											messageBuffer = "";
+										}
+									}
+								}
+							}
+						} else {
+							console.log("[STREAM] Writing unstructured text, bc no schema!:", messageBuffer);
+							writer.write({
+								type: "data-message-text",
+								id: messagePartIds.text,
+								data: messageBuffer
 							});
 						}
-					} else {
-						messageBuffer += content;
-						writer.write({
-							type: "data-message-text",
-							id: messagePartIds.text,
-							data: messageBuffer
+					}
+				} else if (kind === "updates") {
+					const updates = data;
+					for (const [nodeName, nodeUpdates] of Object.entries(updates)) {
+						if (!nodeUpdates || typeof nodeUpdates !== "object") continue;
+						Object.keys(nodeUpdates).forEach((key) => {
+							const value = nodeUpdates[key];
+							if (value === void 0 || value === null) return;
+							if (key === "messages") return;
+							const keyStr = String(key);
+							const dataPartId = stateDataPartIds[keyStr] || crypto.randomUUID();
+							stateDataPartIds[keyStr] = dataPartId;
+							console.log("Streaming state update:", {
+								type: `data-state-${keyStr}`,
+								id: dataPartId,
+								data: value
+							});
+							writer.write({
+								type: `data-state-${keyStr}`,
+								id: dataPartId,
+								data: value
+							});
 						});
 					}
-				}
-			} else if (kind === "updates") {
-				const updates = data;
-				for (const [nodeName, nodeUpdates] of Object.entries(updates)) {
-					if (!nodeUpdates || typeof nodeUpdates !== "object") continue;
-					Object.keys(nodeUpdates).forEach((key) => {
-						const value = nodeUpdates[key];
-						if (value === void 0 || value === null) return;
-						if (key === "messages") return;
-						const keyStr = String(key);
-						const dataPartId = stateDataPartIds[keyStr] || crypto.randomUUID();
-						stateDataPartIds[keyStr] = dataPartId;
-						writer.write({
-							type: `data-state-${keyStr}`,
-							id: dataPartId,
-							data: value
-						});
+				} else if (kind === "custom") {
+					const customData = data;
+					const defaultKeys = ["id", "event"];
+					const eventName = customData.event;
+					if (!eventName || !customData.id) continue;
+					const dataKeys = Object.entries(customData).reduce((acc, [key, value]) => {
+						if (typeof key === "string" && !defaultKeys.includes(key)) acc[key] = value;
+						return acc;
+					}, {});
+					writer.write({
+						type: kebabCase(`data-custom-${eventName}`),
+						id: customData.id,
+						data: dataKeys
 					});
 				}
-			} else if (kind === "custom") {
-				const customData = data;
-				const defaultKeys = ["id", "event"];
-				const eventName = customData.event;
-				if (!eventName || !customData.id) continue;
-				const dataKeys = Object.entries(customData).reduce((acc, [key, value]) => {
-					if (typeof key === "string" && !defaultKeys.includes(key)) acc[key] = value;
-					return acc;
-				}, {});
-				writer.write({
-					type: kebabCase(`data-custom-${eventName}`),
-					id: customData.id,
-					data: dataKeys
-				});
 			}
+		} catch (error) {
+			console.error("==========================================");
+			console.error("STREAM ERROR - FAILING LOUDLY:");
+			console.error("==========================================");
+			console.error("Error details:", error);
+			console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace");
+			console.error("Graph name:", graph.name);
+			console.error("Thread ID:", threadId);
+			console.error("==========================================");
+			throw error;
 		}
 	} });
 }

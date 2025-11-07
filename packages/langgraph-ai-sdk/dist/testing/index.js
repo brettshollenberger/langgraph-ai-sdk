@@ -1085,34 +1085,23 @@ const structuredOutputPrompt = async ({ schema, tag = "structured-output" }) => 
 /**
 * Schema for structured questions with intro, examples, and conclusion
 */
-const agentStructuredQuestionSchema = z.object({
+const questionSchema = z.object({
 	type: z.literal("structuredQuestion"),
-	intro: z.string().describe("A simple intro to the question"),
-	examples: z.array(z.string()).describe(`List of examples to help the user understand what we're asking`),
-	conclusion: z.string().optional().describe(`Conclusion of the question, restating exactly the information we want to the user to answer`)
-});
-/**
-* Schema for simple text questions
-*/
-const agentSimpleQuestionSchema = z.object({
-	type: z.literal("simpleQuestion"),
-	content: z.string().describe("Simple question to ask the user")
+	text: z.string().describe("A simple intro to the question"),
+	examples: z.array(z.string()).optional().describe(`List of examples to help the user understand what we're asking`),
+	conclusion: z.string().optional().describe(`Optional conclusion text to include after examples`)
 });
 /**
 * Schema for finishing brainstorming
 */
-const agentFinishBrainstormingSchema = z.object({
+const finishBrainstormingSchema = z.object({
 	type: z.literal("finishBrainstorming"),
 	finishBrainstorming: z.literal(true).describe("Call to signal that the user has finished brainstorming")
 });
 /**
 * Union schema for all agent output types
 */
-const agentOutputSchema = z.discriminatedUnion("type", [
-	agentSimpleQuestionSchema,
-	agentStructuredQuestionSchema,
-	agentFinishBrainstormingSchema
-]);
+const agentOutputSchema = z.discriminatedUnion("type", [questionSchema, finishBrainstormingSchema]);
 /**
 * Brainstorm topics
 */
@@ -1146,6 +1135,15 @@ const BrainstormStateAnnotation = Annotation.Root({
 
 //#endregion
 //#region src/testing/graphs/sampleAgent.ts
+async function readAnswersFromJSON(filePath = "./brainstorm-answers.json") {
+	try {
+		const fileContent = await readFile(filePath, "utf-8");
+		return JSON.parse(fileContent);
+	} catch (err) {
+		console.log(`file not exist!`);
+		return {};
+	}
+}
 /**
 * Helper function to write answers to a JSON file by key
 * Merges new data with existing data in the file
@@ -1154,13 +1152,8 @@ const BrainstormStateAnnotation = Annotation.Root({
 */
 async function writeAnswersToJSON(data, filePath = "./brainstorm-answers.json") {
 	try {
-		let existingData = {};
-		try {
-			const fileContent = await readFile(filePath, "utf-8");
-			existingData = JSON.parse(fileContent);
-		} catch (err) {}
 		const mergedData = {
-			...existingData,
+			...await readAnswersFromJSON(filePath),
 			...data
 		};
 		await writeFile(filePath, JSON.stringify(mergedData, null, 2), "utf-8");
@@ -1188,10 +1181,10 @@ const collectedData = (state) => {
 const getPrompt = async (state, config) => {
 	const lastHumanMessage = state.messages.filter(isHumanMessage).at(-1);
 	if (!lastHumanMessage) throw new Error("No human message found");
-	const [chatHistory, outputInstructions] = await Promise.all([chatHistoryPrompt({ messages: state.messages }), structuredOutputPrompt({ schema: agentOutputSchema })]);
+	const chatHistory = await chatHistoryPrompt({ messages: state.messages });
 	return renderPrompt(`
             <role>
-                You are an expert marketer and strategist who specializes in helping businesses develop 
+                You are an expert marketer and strategist who specializes in helping businesses develop
                 HIGHLY PERSUASIVE marketing copy for their landing pages to differentiate their business ideas.
             </role>
 
@@ -1210,38 +1203,50 @@ const getPrompt = async (state, config) => {
                 ${remainingTopics(state.remainingTopics)}
             </remaining_topics>
 
-            <decide_next_action>
-                - If user's last message answered any of the remaining topics → call save_answers
-                - If answer is off-topic/confused → provide clarification
-                - If user asks for help → provide clarification
-                - If no remaining topics → output finish_brainstorming
-                - Otherwise → ask the user the next question, using the output format specified below
-            </decide_next_action>
-
             <users_last_message>
                 ${lastHumanMessage.content}
             </users_last_message>
 
             <workflow>
-                1. Save any unsaved answers
-                2. Decide next action based on user's last message
+                1. If the user has answered any topics, call the save_answers tool
+                2. Then, if:
+                   - The user has answered all topics, output finishBrainstorming
+                   - OTHERWISE, ask a question, following the output_format_rules
             </workflow>
 
-            ${outputInstructions}
+            <ensure_understanding>
+                Ensure you actually understand the answer in the user's own words.
+                If unclear, use simpleQuestion to ask for clarification.
+            </ensure_understanding>
+
+            <output_format_rules>
+                IMPORTANT: Your response MUST be in one of these exact formats:
+
+                To ask a question:
+                {
+                  "type": "question",
+                  "text": "Brief intro to the question",
+                  "examples": ["Example 1", "Example 2", "Example 3"], // Optional
+                  "conclusion": "Restate what you're asking for" // Optional
+                }
+
+                When the user has finished brainstorming, output:
+                {
+                  "type": "finishBrainstorming",
+                  "finishBrainstorming": true
+                }
+
+                You MUST output valid JSON in one of these formats. NO other text.
+            </output_format_rules>
+
+            ${await structuredOutputPrompt({ schema: questionSchema })}
         `);
 };
 const SaveAnswersTool = (state, config) => {
-	const description = `
-        Tool for saving answers to the brainstorming session.
-
-        CAPABILITIES:
-        • Save multiple answers at once
-    `;
 	const saveAnswersInputSchema = z.object({ answers: z.array(z.object({
 		topic: z.enum(brainstormTopics),
 		answer: z.string()
 	})) });
-	z.object({ success: z.boolean() });
 	async function saveAnswers(args) {
 		const updates = args?.answers?.reduce((acc, { topic, answer }) => {
 			if (!topic || !answer) return acc;
@@ -1253,8 +1258,8 @@ const SaveAnswersTool = (state, config) => {
 		return { success: true };
 	}
 	return tool(saveAnswers, {
-		name: "saveAnswers",
-		description,
+		name: "save_answers",
+		description: "Save answers to the brainstorming session. Call this when the user has answered one or more of the remaining topics.",
 		schema: saveAnswersInputSchema
 	});
 };
@@ -1262,23 +1267,36 @@ const SaveAnswersTool = (state, config) => {
 * Node that asks a question to the user during brainstorming mode
 */
 const brainstormAgent = async (state, config) => {
-	const prompt = await getPrompt(state, config);
-	const tools = await Promise.all([SaveAnswersTool].map((tool$1) => tool$1(state, config)));
-	let content = (await (await createAgent({
-		model: getLLM().withConfig({ tags: ["notify"] }),
-		tools,
-		systemPrompt: prompt
-	})).invoke(state, config)).messages.at(-1)?.content[0];
-	const parser = StructuredOutputParser.fromZodSchema(agentOutputSchema);
-	let textContent = content?.text;
-	const jsonMatch = textContent.match(/```json\n([\s\S]*?)\n```/);
-	if (jsonMatch) textContent = jsonMatch[1];
-	const structuredResult = await parser.parse(textContent);
-	const aiMessage = new AIMessage({
-		content: textContent,
-		response_metadata: structuredResult
-	});
-	return { messages: [...state.messages || [], aiMessage] };
+	try {
+		const prompt = await getPrompt(state, config);
+		const tools = [SaveAnswersTool(state, config)];
+		const structuredResponse = (await (await createAgent({
+			model: getLLM().withConfig({ tags: ["notify"] }),
+			tools,
+			systemPrompt: prompt,
+			responseFormat: questionSchema
+		})).invoke(state, config)).structuredResponse;
+		const aiMessage = new AIMessage({
+			content: JSON.stringify(structuredResponse, null, 2),
+			response_metadata: structuredResponse
+		});
+		const answers = await readAnswersFromJSON();
+		const questionsAnswered = Object.keys(answers);
+		const remainingTopics$1 = state.remainingTopics.filter((topic) => !questionsAnswered.includes(topic));
+		return {
+			messages: [...state.messages || [], aiMessage],
+			remainingTopics: remainingTopics$1
+		};
+	} catch (error) {
+		console.error("==========================================");
+		console.error("BRAINSTORM AGENT ERROR:");
+		console.error("==========================================");
+		console.error("Error details:", error);
+		console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace");
+		console.error("State:", JSON.stringify(state, null, 2));
+		console.error("==========================================");
+		throw error;
+	}
 };
 /**
 * Simple test graph for the new brainstorm agent
@@ -1292,4 +1310,4 @@ function createSampleAgent(checkpointer, graphName = "sample") {
 }
 
 //#endregion
-export { BrainstormStateAnnotation, ErrorReporters, NodeMiddleware, NodeMiddlewareFactory, SampleGraphAnnotation, agentFinishBrainstormingSchema, agentOutputSchema, agentSimpleQuestionSchema, agentStructuredQuestionSchema, brainstormAgent, brainstormTopics, configureResponses, configureResponses$1 as configureTestResponses, coreLLMConfig, createSampleAgent, createSampleGraph, getCoreLLM, getLLM, getNodeContext, getTestLLM, hasConfiguredResponses, nameProjectNode, resetLLMConfig, resetLLMConfig$1 as resetTestConfig, responseNode, sampleMessageSchema, simpleMessageSchema, structuredMessageSchema, withContext, withErrorHandling, withNotifications };
+export { BrainstormStateAnnotation, ErrorReporters, NodeMiddleware, NodeMiddlewareFactory, SampleGraphAnnotation, agentOutputSchema, brainstormAgent, brainstormTopics, configureResponses, configureResponses$1 as configureTestResponses, coreLLMConfig, createSampleAgent, createSampleGraph, finishBrainstormingSchema, getCoreLLM, getLLM, getNodeContext, getTestLLM, hasConfiguredResponses, nameProjectNode, questionSchema, resetLLMConfig, resetLLMConfig$1 as resetTestConfig, responseNode, sampleMessageSchema, simpleMessageSchema, structuredMessageSchema, withContext, withErrorHandling, withNotifications };

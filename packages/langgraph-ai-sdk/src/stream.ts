@@ -26,6 +26,21 @@ type StreamChunk = [
   any
 ];
 
+interface ToolCallChunk {
+  id: string;
+  index: number;
+  name: string;
+  args: string;
+}
+
+const isUndefined = (value: unknown): value is undefined => {
+    return typeof value === 'undefined';
+}
+
+const isNull = (value: unknown): value is null => {
+    return value === null;
+}
+
 export function getSchemaKeys<T extends z.ZodObject<any>>(
   schema: T
 ): Array<keyof z.infer<T>> {
@@ -68,11 +83,16 @@ export function createLanggraphUIStream<
 
         const stateDataPartIds: Record<string, string> = {};
         const messagePartIds: Record<string, string> = messageSchema ? {} : { text: crypto.randomUUID() };
+        const messageKeys: string[] = messageSchema ? getSchemaKeys(messageSchema).filter((key) => typeof key === 'string') : [];
         let messageBuffer = '';
+        let toolArgsBuffer = ''; // Buffer for accumulating tool call arguments
+        let userDefinedStructuredOutput: boolean = false;
+        let lastSentValues: Record<string, any> = {}; // Track what we've already sent
         let isCapturingJson = false; // Track if we're inside a JSON code block
         let isFallbackMode = false; // Track if we've switched to fallback text streaming
         let canEnterFallbackMode = true;
         let isStructuredComplete = false; // Track if we've completed parsing a structured JSON block
+        let currentToolName: string | undefined;
 
         for await (const chunk of stream) {
           const chunkArray = chunk as StreamChunk;
@@ -90,105 +110,161 @@ export function createLanggraphUIStream<
           if (kind === 'messages') {
             const [message, metadata] = data;
 
-
-            if (message?.content && metadata?.tags?.includes('notify')) {
+            if (metadata?.tags?.includes('notify')) {
               if (isStructuredComplete) {
                 continue;
               }
 
-              let content;
-              if (Array.isArray(message.content)) {
-                content = message.content.map((content) => {
-                  return content.text;
-                }).join('');
-              } else if (typeof message.content === 'string') {
-                content = message.content;
+              // Handle tool calls (structured output via tool calling)
+              if (messageSchema && message?.tool_call_chunks && message.tool_call_chunks.length > 0) {
+                message.tool_call_chunks.forEach(async (chunk: ToolCallChunk) => {
+                  const toolCallChunk = chunk;
+                  if (!isUndefined(toolCallChunk.name) && !isNull(toolCallChunk.name)) {
+                    currentToolName = toolCallChunk.name;
+                  }
+                  const toolArgs = toolCallChunk.args;
+
+                  if (currentToolName.match(/^extract-/) && toolArgs) {
+                    console.log(`extracting!`)
+                    // Accumulate the tool arguments
+                    toolArgsBuffer += toolArgs;
+
+                    // Parse the accumulated tool call arguments as partial JSON
+                    const parseResult = await parsePartialJson(toolArgsBuffer);
+                    const parsed = parseResult.value as Partial<TMessage>;
+
+                    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                      // Only write parts that have changed
+                      Object.entries(parsed).forEach(([key, value]) => {
+                        // Only write parts that are in the message schema
+                        // Other tool calls we may choose to expose separately
+                        if (value !== undefined && messageKeys.includes(key)) {
+                          userDefinedStructuredOutput = true; // We're now sure we have a user defined structured output
+
+                          // Check if this value has changed since last send
+                          const valueStr = JSON.stringify(value);
+                          const lastValueStr = lastSentValues[key];
+
+                          if (valueStr !== lastValueStr) {
+                            const partId = messagePartIds[key] || crypto.randomUUID();
+                            messagePartIds[key] = partId;
+                            lastSentValues[key] = valueStr;
+
+                            const structuredMessagePart = {
+                              type: `data-message-${key}`,
+                              id: partId,
+                              data: value,
+                            };
+                            writer.write(structuredMessagePart as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+                          }
+                        }
+                      });
+                    }
+
+                    // Check if tool call is complete (stop_reason === 'tool_use')
+                    if (message.additional_kwargs?.stop_reason === 'tool_use' && userDefinedStructuredOutput) {
+                      isStructuredComplete = true;
+                      toolArgsBuffer = ''; // Clear the buffer
+                      lastSentValues = {}; // Clear tracking for next message
+                    }
+                  }
+                })
               }
 
-              messageBuffer += content;
+              if (!userDefinedStructuredOutput) {
+                // Handle regular content
+                let content = '';
+                if (message?.content) {
+                  if (Array.isArray(message.content)) {
+                    content = message.content.map((content) => {
+                      return content.text;
+                    }).join('');
+                  } else if (typeof message.content === 'string') {
+                    content = message.content;
+                  }
+                }
 
-              if (messageSchema) {
-                // Check if we should enter fallback mode
-                if (!isCapturingJson && canEnterFallbackMode && !isFallbackMode && messageBuffer.length > 200) {
-                  // Model has failed to emit a JSON block, switch to fallback mode
-                  isFallbackMode = true;
-                  // Create the text part ID and stream the accumulated buffer as text
-                  const partId = messagePartIds.text || crypto.randomUUID();
-                  messagePartIds.text = partId;
+                messageBuffer += content;
 
-                  writer.write({
-                    type: 'data-message-text',
-                    id: partId,
-                    data: messageBuffer,
-                  } as any);
-                } else if (isFallbackMode) {
-                  // Continue streaming in fallback mode
+                if (messageSchema) {
+                  // Check if we should enter fallback mode
+                  if (!isCapturingJson && canEnterFallbackMode && !isFallbackMode && messageBuffer.length > 200) {
+                    // Model has failed to emit a JSON block, switch to fallback mode
+                    isFallbackMode = true;
+                    // Create the text part ID and stream the accumulated buffer as text
+                    const partId = messagePartIds.text || crypto.randomUUID();
+                    messagePartIds.text = partId;
+
+                    writer.write({
+                      type: 'data-message-text',
+                      id: partId,
+                      data: messageBuffer,
+                    } as any);
+                  } else if (isFallbackMode) {
+                    // Continue streaming in fallback mode
+                    writer.write({
+                      type: 'data-message-text',
+                      id: messagePartIds.text,
+                      data: messageBuffer,
+                    } as any);
+                  } else if (!isCapturingJson && messageBuffer.includes('```json')) {
+                    isCapturingJson = true;
+                    canEnterFallbackMode = false;
+                    // Discard everything before ```json and start fresh
+                    const jsonStartIndex = messageBuffer.indexOf('```json') + 7; // length of '```json'
+                    messageBuffer = messageBuffer.substring(jsonStartIndex);
+                  }
+
+                  if (!isFallbackMode) {
+                    let shouldParse = isCapturingJson;
+
+                    // Check if this chunk contains the closing marker
+                    if (isCapturingJson && messageBuffer.includes('```')) {
+                      // Only keep content before the closing marker
+                      const jsonEndIndex = messageBuffer.indexOf('```');
+                      messageBuffer = messageBuffer.substring(0, jsonEndIndex);
+                      // Parse one final time with the complete JSON before stopping
+                      shouldParse = true;
+                      isCapturingJson = false;
+                    }
+
+                    // Parse and stream if we're capturing or just finished capturing
+                    if (shouldParse) {
+                      // Try to parse the accumulated JSON
+                      const parseResult = await parsePartialJson(messageBuffer.trim());
+                      const parsed = parseResult.value as Partial<TMessage>;
+
+                      if (parsed) {
+                        Object.entries(parsed).forEach(([key, value]) => {
+                          if (value !== undefined) {
+                            const partId = messagePartIds[key] || crypto.randomUUID();
+                            messagePartIds[key] = partId;
+
+                            const structuredMessagePart = {
+                              type: `data-message-${key}`,
+                              id: partId,
+                              data: value,
+                            };
+                            writer.write(structuredMessagePart as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+                          }
+                        });
+
+                        // If we just finished capturing (not still in progress), clear the buffer
+                        // to prevent fallback mode from being triggered by subsequent chunks
+                        if (!isCapturingJson) {
+                          messageBuffer = '';
+                        }
+                      }
+                    }
+                  }
+                } else {
+                  // For unstructured output: stream all content as text
                   writer.write({
                     type: 'data-message-text',
                     id: messagePartIds.text,
                     data: messageBuffer,
-                  } as any);
-                } else if (!isCapturingJson && messageBuffer.includes('```json')) {
-                  isCapturingJson = true;
-                  canEnterFallbackMode = false;
-                  // Discard everything before ```json and start fresh
-                  const jsonStartIndex = messageBuffer.indexOf('```json') + 7; // length of '```json'
-                  messageBuffer = messageBuffer.substring(jsonStartIndex);
+                  } as unknown as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
                 }
-
-                if (!isFallbackMode) {
-                  let shouldParse = isCapturingJson;
-
-                  // Check if this chunk contains the closing marker
-                  if (isCapturingJson && messageBuffer.includes('```')) {
-                    // Only keep content before the closing marker
-                    const jsonEndIndex = messageBuffer.indexOf('```');
-                    messageBuffer = messageBuffer.substring(0, jsonEndIndex);
-                    // Parse one final time with the complete JSON before stopping
-                    shouldParse = true;
-                    isCapturingJson = false;
-                  }
-
-                  // Parse and stream if we're capturing or just finished capturing
-                  if (shouldParse) {
-                    // Try to parse the accumulated JSON
-                    const parseResult = await parsePartialJson(messageBuffer.trim());
-                    const parsed = parseResult.value as Partial<TMessage>;
-
-                    if (parsed) {
-                      console.log('[STREAM] Writing structured parts:', Object.keys(parsed));
-                      Object.entries(parsed).forEach(([key, value]) => {
-                        if (value !== undefined) {
-                          const partId = messagePartIds[key] || crypto.randomUUID();
-                          messagePartIds[key] = partId;
-
-                          const structuredMessagePart = {
-                            type: `data-message-${key}`,
-                            id: partId,
-                            data: value,
-                          };
-                          console.log(`[STREAM] Writing part: ${key}, data:`, typeof value === 'string' ? value.substring(0, 50) : value);
-                          writer.write(structuredMessagePart as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
-                        }
-                      });
-
-                      // If we just finished capturing (not still in progress), clear the buffer
-                      // to prevent fallback mode from being triggered by subsequent chunks
-                      if (!isCapturingJson) {
-                        console.log('[STREAM] ✅ Structured output complete, clearing buffer');
-                        messageBuffer = '';
-                      }
-                    }
-                  }
-                }
-              } else {
-                // For unstructured output: stream all content as text
-                console.log('[STREAM] Writing unstructured text, bc no schema!:', messageBuffer);
-                writer.write({
-                  type: 'data-message-text',
-                  id: messagePartIds.text,
-                  data: messageBuffer,
-                } as unknown as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
               }
             }
           } else if (kind === 'updates') {
