@@ -1,4 +1,4 @@
-import type { LanggraphMessage } from 'langgraph-ai-sdk-react';
+import type { LanggraphMessage, LanggraphMessagePart } from 'langgraph-ai-sdk-react';
 import type { MyLanggraphData } from '../types.ts';
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
@@ -12,6 +12,10 @@ export const Wrapper = (props: {
     </div>
   );
 };
+
+const isTool = (part: LanggraphMessagePart) => part.type === 'tool'; 
+const isText = (part: LanggraphMessagePart) => part.type === 'text';
+const isStructured = (part: LanggraphMessagePart) => !isTool(part) && !isText(part);
 
 export const Message = ({
   message,
@@ -31,7 +35,8 @@ export const Message = ({
       </div>
     );
   } else {
-    const structuredParts = message.parts;
+    const structuredParts = message.parts.filter(isStructured);
+    const tools = message.parts.filter(isTool);
     
     return (
       <div className="prose prose-invert my-6">
@@ -52,6 +57,22 @@ export const Message = ({
               ) : (
                 <ReactMarkdown>{String(value)}</ReactMarkdown>
               )}
+            </div>
+          );
+        })}
+        {tools && tools.map((part, idx) => {
+          const key = String(part.type);
+          const toolName = 'toolName' in part ? part.toolName : '';
+          const toolCallId = 'toolCallId' in part ? part.toolCallId : '';
+          const input = 'input' in part ? part.input : '';
+          const output = 'output' in part ? part.output : '';
+          const state = 'state' in part ? part.state : '';
+          
+          return (
+            <div key={idx} className="my-2">
+              <div className="text-blue-400 font-semibold capitalize">{toolName}:</div>
+              <div>{String(state)}</div>
+              {input && <ReactMarkdown>{JSON.stringify(input)}</ReactMarkdown>}
             </div>
           );
         })}

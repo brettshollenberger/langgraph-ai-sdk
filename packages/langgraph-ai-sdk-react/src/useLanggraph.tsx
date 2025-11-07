@@ -178,15 +178,25 @@ export function useLanggraph<
           id: (p as any).id
         }));
 
+      const toolParts = msg.parts
+        .filter(p => p.type === 'dynamic-tool')
+        .map(p => ({
+          type: 'tool' as const,
+          toolCallId: (p as any).toolCallId,
+          toolName: (p as any).toolName,
+          input: (p as any).input,
+          output: (p as any).output,
+          state: (p as any).state,
+          id: (p as any).id || crypto.randomUUID()
+        }));
+
       return {
         id: msg.id,
         role: msg.role,
-        parts: messageParts
+        parts: [...messageParts, ...toolParts]
       } as LanggraphMessage<TLanggraphData>;
     });
   }, [chat.messages]);
-
-  console.log('messages', messages);
 
   return {
     ...chat,

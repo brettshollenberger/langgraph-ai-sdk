@@ -221,7 +221,6 @@ export const brainstormAgent = async (
 
       const updatedState = await agent.invoke(state as any, config);
       const structuredResponse = updatedState.structuredResponse
-      console.log('Structured response:', structuredResponse)
 
       const aiMessage = new AIMessage({
           content: JSON.stringify(structuredResponse, null, 2),

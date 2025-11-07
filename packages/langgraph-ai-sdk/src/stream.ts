@@ -140,19 +140,88 @@ class StructuredMessageToolHandler<TGraphData extends LanggraphDataBase<any, any
 }
 
 class OtherToolHandler<TGraphData extends LanggraphDataBase<any, any>> extends Handler<TGraphData> {
-  messagePartIds: Record<string, string> = {};
-  toolArgsBuffer: string = '';
-  toolValues: Record<string, string> = {};
   currentToolName: string | undefined;
+  toolCallStates: Map<string, {
+    id: string;
+    name: string;
+    argsBuffer: string;
+  }> = new Map();
 
   async handle(chunk: StreamChunk): Promise<void> {
-    if (!this.messageSchema) return;
     if (chunk[0] !== 'messages' && !(Array.isArray(chunk[0]) && chunk[1] === 'messages')) return;
 
     const data = Array.isArray(chunk[0]) ? chunk[2] : chunk[1];
     const [message, metadata] = data as StreamMessageOutput;
+    const notify = metadata.tags?.includes('notify');
 
-    // TODO: IMPLEMENT
+    if (!notify) return;
+    if (!message || !('tool_call_chunks' in message) || typeof message.tool_call_chunks !== 'object' || !Array.isArray(message.tool_call_chunks)) return;
+
+    for (const chunk of message.tool_call_chunks) {
+      if (isString(chunk.name)) {
+        this.currentToolName = chunk.name;
+      }
+      if (this.currentToolName?.match(/^extract-/)) continue;
+
+      const toolName = this.currentToolName;
+      
+      if (!toolName) continue;
+
+      let toolState = this.toolCallStates.get(toolName);
+      const toolCallId = toolState?.id || crypto.randomUUID();
+      
+      if (!toolState) {
+        toolState = {
+          id: toolCallId,
+          name: toolName,
+          argsBuffer: '',
+        };
+        this.toolCallStates.set(toolName, toolState);
+
+        this.writer.write({
+          type: 'tool-input-start',
+          toolCallId,
+          toolName,
+          dynamic: true
+        } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+      }
+
+      toolState.argsBuffer += chunk.args || '';
+
+      const parseResult = await parsePartialJson(toolState.argsBuffer);
+      const parsedInput = parseResult.value;
+
+      if (parsedInput) {
+        this.writer.write({
+          type: 'tool-input-available',
+          toolCallId,
+          toolName: toolState.name,
+          input: parsedInput,
+          dynamic: true
+        } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+      }
+    }
+
+    // if (message.tool_calls && Array.isArray(message.tool_calls)) {
+    //   for (const toolCall of message.tool_calls) {
+    //     if (toolCall.name?.match(/^extract-/)) continue;
+
+    //     const toolCallId = toolCall.id;
+    //     const toolState = this.toolCallStates.get(toolCallId);
+        
+    //     if (toolState && !toolState.inputSent) {
+    //       toolState.inputSent = true;
+          
+    //       this.writer.write({
+    //         type: 'tool-input-available',
+    //         toolCallId,
+    //         toolName: toolState.name,
+    //         input: toolCall.args,
+    //         dynamic: true
+    //       } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+    //     }
+    //   }
+    // }
   }
 }
 
