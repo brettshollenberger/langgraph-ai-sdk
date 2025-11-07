@@ -7,7 +7,7 @@ import {
   type InferUIMessageChunk,
   type UIMessageStreamWriter,
 } from 'ai';
-import type { CompiledStateGraph } from '@langchain/langgraph';
+import type { CompiledStateGraph, StreamMode } from '@langchain/langgraph';
 import { BaseMessage } from '@langchain/core/messages';
 import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
 import type { 
@@ -18,14 +18,15 @@ import type {
   InferMessageSchema,
 } from 'langgraph-ai-sdk-types'
 
-type StreamChunk = [
-  'messages' | 'updates',
-  any
-] | [
-  [string, string],
-  'messages' | 'updates', 
-  any
-];
+type StreamMessageOutput = [BaseMessage, Record<string, any>];
+
+type StreamChunk = 
+  | ['messages', StreamMessageOutput]
+  | ['updates', Record<string, any>]
+  | ['custom', any]
+  | [[string, string], 'messages', StreamMessageOutput]
+  | [[string, string], 'updates', Record<string, any>]
+  | [[string, string], 'custom', any];
 
 interface ToolCallChunk {
   id: string;
@@ -40,6 +41,10 @@ const isUndefined = (value: unknown): value is undefined => {
 
 const isNull = (value: unknown): value is null => {
     return value === null;
+}
+
+const isString = (value: unknown): value is string => {
+    return typeof value === 'string';
 }
 
 export function getSchemaKeys<T extends z.ZodObject<any>>(
@@ -66,7 +71,89 @@ abstract class Handler<TGraphData extends LanggraphDataBase<any, any>> {
     this.messageSchema = messageSchema;
   }
 
-  abstract handle(chunk: any): void;
+  abstract handle(chunk: StreamChunk): void;
+}
+class StructuredMessageToolHandler<TGraphData extends LanggraphDataBase<any, any>> extends Handler<TGraphData> {
+  messagePartIds: Record<string, string> = {};
+  schemaKeys: string[];
+  toolArgsBuffer: string = '';
+  toolValues: Record<string, string> = {};
+  currentToolName: string | undefined;
+
+  constructor(writer: UIMessageStreamWriter<LanggraphUIMessage<TGraphData>>, messageSchema?: InferMessageSchema<TGraphData>) {
+    super(writer, messageSchema);
+    this.schemaKeys = messageSchema ? getSchemaKeys(messageSchema).filter((key) => typeof key === 'string') : [];
+  }
+
+  async handle(chunk: StreamChunk): Promise<void> {
+    if (!this.messageSchema) return;
+    if (chunk[0] !== 'messages' && !(Array.isArray(chunk[0]) && chunk[1] === 'messages')) return;
+
+    const data = Array.isArray(chunk[0]) ? chunk[2] : chunk[1];
+    const [message, metadata] = data as StreamMessageOutput;
+    const notify = metadata.tags?.includes('notify');
+
+    if (!notify) return;
+    if (!message || !('tool_call_chunks' in message) || typeof message.tool_call_chunks !== 'object' || !Array.isArray(message.tool_call_chunks)) return; 
+
+    message.tool_call_chunks.forEach(async (chunk: ToolCallChunk) => {
+      if (isString(chunk.name)) {
+        this.currentToolName = chunk.name;
+      }
+      // Only parse structured tool calls
+      if (!this.currentToolName?.match(/^extract-/)) return;
+
+      const toolArgs = chunk.args;
+      this.toolArgsBuffer += toolArgs;
+
+      await this.writeToolCall();
+    });
+  }
+
+  async writeToolCall(): Promise<void> {
+    type TMessage = InferMessage<TGraphData>
+
+    // Parse the accumulated tool call arguments as partial JSON
+    const parseResult = await parsePartialJson(this.toolArgsBuffer);
+    const parsed = parseResult.value as Partial<TMessage>;
+
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      Object.entries(parsed).forEach(([key, value]) => {
+        if (this.schemaKeys.includes(key) && isString(value)) {
+          const lastValue = this.toolValues[key];
+          if (lastValue !== value) {
+            this.toolValues[key] = value; // Track last sent value
+
+            const messagePartId = this.messagePartIds[key] || crypto.randomUUID();
+            this.messagePartIds[key] = messagePartId;
+            const structuredMessagePart = {
+              type: `data-message-${key}`,
+              id: messagePartId,
+              data: value,
+            };
+            this.writer.write(structuredMessagePart as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+          }
+        }
+      });
+    }
+  }
+}
+
+class OtherToolHandler<TGraphData extends LanggraphDataBase<any, any>> extends Handler<TGraphData> {
+  messagePartIds: Record<string, string> = {};
+  toolArgsBuffer: string = '';
+  toolValues: Record<string, string> = {};
+  currentToolName: string | undefined;
+
+  async handle(chunk: StreamChunk): Promise<void> {
+    if (!this.messageSchema) return;
+    if (chunk[0] !== 'messages' && !(Array.isArray(chunk[0]) && chunk[1] === 'messages')) return;
+
+    const data = Array.isArray(chunk[0]) ? chunk[2] : chunk[1];
+    const [message, metadata] = data as StreamMessageOutput;
+
+    // TODO: IMPLEMENT
+  }
 }
 
 class ToolCallHandler<TGraphData extends LanggraphDataBase<any, any>> extends Handler<TGraphData> {
@@ -75,68 +162,137 @@ class ToolCallHandler<TGraphData extends LanggraphDataBase<any, any>> extends Ha
   toolArgsBuffer: string = '';
   toolValues: Record<string, any> = {}; // Was lastSentValues
   currentToolName: string | undefined;
+  handlers: {
+    structured_messages: StructuredMessageToolHandler<TGraphData>;
+    other_tools: OtherToolHandler<TGraphData>;
+  }
 
   constructor(writer: UIMessageStreamWriter<LanggraphUIMessage<TGraphData>>, messageSchema?: InferMessageSchema<TGraphData>) {
     super(writer, messageSchema);
     this.schemaKeys = messageSchema ? getSchemaKeys(messageSchema).filter((key) => typeof key === 'string') : [];
+    this.handlers = {
+      structured_messages: new StructuredMessageToolHandler<TGraphData>(writer, messageSchema),
+      other_tools: new OtherToolHandler<TGraphData>(writer, messageSchema),
+    };
   }
   
-  handle(chunk: any): void {
-    const [message, metadata] = chunk;
-    const notify = metadata.tags?.includes('notify');
-
-    this.handleToolCalls(message, this.messageSchema, notify, this.writer)
-    this.handleRawMessages(message, this.messageSchema, notify, this.writer) 
+  handle(chunk: StreamChunk): void {
+    this.handlers.structured_messages.handle(chunk);
+    this.handlers.other_tools.handle(chunk);
   }
 }
-
 class RawMessageHandler<TGraphData extends LanggraphDataBase<any, any>> extends Handler<TGraphData> {
   messageBuffer: string = '';
+  messagePartId: string | undefined;
   
-  handle(chunk: any): void {
-    const [message, metadata] = chunk;
-    const notify = metadata.tags?.includes('notify');
+  handle(chunk: StreamChunk): void {
+    if (this.messageSchema) return; // Don't handle raw messages if we have a message schema
 
-    this.handleRawMessages(message, messageSchema, notify, writer) 
+    const data = Array.isArray(chunk[0]) ? chunk[2] : chunk[1];
+    const [message, metadata] = data as StreamMessageOutput;
+    const notify = metadata.tags?.includes('notify');
+    if (!notify) return;
+
+    if (isUndefined(this.messagePartId)) {
+      this.messagePartId = crypto.randomUUID();
+    }
+
+    this.messageBuffer += message.text;
+
+    this.writer.write({
+      type: 'data-message-text',
+      id: this.messagePartId,
+      data: this.messageBuffer,
+    } as any);
   }
 }
 
 class StateHandler<TGraphData extends LanggraphDataBase<any, any>> extends Handler<TGraphData> {
   stateDataParts: Record<string, string> = {};
+  dataPartIds: Record<string, string> = {};
 
-  handle(chunk: any): void {
-    const [message, metadata] = chunk;
-    const notify = metadata.tags?.includes('notify');
+  handle(chunk: StreamChunk): void {
+    type TState = InferState<TGraphData>
+    type StateDataParts = Omit<TState, 'messages'>;
 
-    this.handleState(message, messageSchema, notify, writer) 
+    const data = Array.isArray(chunk[0]) ? chunk[2] : chunk[1];
+    const updates = data as TState;
+
+    for (const [nodeName, nodeUpdates] of Object.entries(updates)) {
+      if (!nodeUpdates || typeof nodeUpdates !== 'object') continue;
+      
+      Object.entries(nodeUpdates).forEach(([key, value]) => {
+        if (key === 'messages') return;
+        if (isUndefined(value) || isNull(value)) return;
+        
+        const keyStr = String(key) as Exclude<keyof TState, 'messages'> & string;
+        const dataPartId = this.dataPartIds[keyStr] || crypto.randomUUID();
+        this.dataPartIds[keyStr] = dataPartId;
+        
+        this.writer.write({
+          type: `data-state-${keyStr}`,
+          id: dataPartId,
+          data: value
+        } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+      });
+    }
   }
 }
 
 class CustomHandler<TGraphData extends LanggraphDataBase<any, any>> extends Handler<TGraphData> {
+  handle(chunk: StreamChunk): void {
+    const data = Array.isArray(chunk[0]) ? chunk[2] : chunk[1];
+    const defaultKeys = ['id', 'event'];
+    const eventName = data.event;
+    if (!eventName || !data.id) return;
+    
+    const dataKeys = Object.entries(data).reduce((acc, [key, value]) => {
+      if (typeof key === 'string' && !defaultKeys.includes(key)) {
+        acc[key] = value;
+      }
+      return acc;
+    }, {} as Record<string, any>);
 
-  handle(chunk: any): void {
-    const [message, metadata] = chunk;
-    const notify = metadata.tags?.includes('notify');
+    this.writer.write({
+      type: kebabCase(`data-custom-${eventName}`),
+      id: data.id,
+      data: dataKeys,
+    } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+  }
+}
 
-    this.handleCustom(message, messageSchema, notify, writer) 
+class Handlers<TGraphData extends LanggraphDataBase<any, any>> {
+  tool_calls: Handler<TGraphData>;
+  raw_messages: Handler<TGraphData>;
+  state: Handler<TGraphData>;
+  custom: Handler<TGraphData>;
+
+  constructor(writer: UIMessageStreamWriter<LanggraphUIMessage<TGraphData>>, messageSchema?: InferMessageSchema<TGraphData>) {
+    this.tool_calls = new ToolCallHandler<TGraphData>(writer, messageSchema);
+    this.raw_messages = new RawMessageHandler<TGraphData>(writer, messageSchema);
+    this.state = new StateHandler<TGraphData>(writer, messageSchema);
+    this.custom = new CustomHandler<TGraphData>(writer, messageSchema);
+  }
+
+  handle(chunk: StreamChunk): void {
+    const [type, _] = chunk;
+
+    if (type === 'messages') {
+      this.tool_calls.handle(chunk);
+      this.raw_messages.handle(chunk);
+    } else if (type === 'updates') {
+      this.state.handle(chunk);
+    } else if (type === 'custom') {
+      this.custom.handle(chunk);
+    }
   }
 }
 class LanggraphStreamHandler<TGraphData extends LanggraphDataBase<any, any>> {
-  handlers: {
-    tool_calls: Handler<TGraphData>;
-    raw_messages: Handler<TGraphData>;
-    state: Handler<TGraphData>;
-    custom: Handler<TGraphData>;
-  };
+  handlers: Handlers<TGraphData>;
   messageSchema?: InferMessageSchema<TGraphData>;
 
   constructor(writer: UIMessageStreamWriter<LanggraphUIMessage<TGraphData>>, messageSchema?: InferMessageSchema<TGraphData>) {
-    this.handlers = {
-      tool_calls: new ToolCallHandler<TGraphData>(writer, messageSchema),
-      raw_messages: new RawMessageHandler<TGraphData>(writer, messageSchema),
-      state: new StateHandler<TGraphData>(writer, messageSchema),
-      custom: new CustomHandler<TGraphData>(writer, messageSchema),
-    };
+    this.handlers = new Handlers<TGraphData>(writer, messageSchema);
   }
   
   async stream({ graph, messages, threadId, state, messageSchema }: LanggraphBridgeConfig<TGraphData>) {
@@ -155,22 +311,9 @@ class LanggraphStreamHandler<TGraphData extends LanggraphDataBase<any, any>> {
       const [message, metadata] = chunk;
       const notify = metadata.tags?.includes('notify');
 
-      this.handlers.tool_calls.handle(chunk);
-      this.handlers.raw_messages.handle(chunk);
-      this.handlers.state.handle(chunk);
       this.handlers.custom.handle(chunk);
     }
   }
-}
-
-const handleToolCalls = <TGraphData extends LanggraphDataBase<any, any>>(data: any, messageSchema: InferMessageSchema<TGraphData>, notify: boolean, writer: any) => {
-  const [message, metadata] = data;
-  if (!notify) return;
-}
-
-const handleRawMessages = <TGraphData extends LanggraphDataBase<any, any>>(data: any, messageSchema: InferMessageSchema<TGraphData>, notify: boolean, writer: any) => {
-  const [message, metadata] = data;
-  if (!notify) return;
 }
 
 export function createLanggraphUIStream<
@@ -182,250 +325,11 @@ export function createLanggraphUIStream<
   messageSchema,
   state,
 }: LanggraphBridgeConfig<TGraphData>) {
-  type TState = InferState<TGraphData>
-  type TMessage = InferMessage<TGraphData>
-  type StateDataParts = Omit<TState, 'messages'>;
-    
   return createUIMessageStream<LanggraphUIMessage<TGraphData>>({
     execute: async ({ writer }) => {
       try {
-        const handler = new LanggraphStreamHandler(writer, messageSchema);
+        const handler = new LanggraphStreamHandler<TGraphData>(writer, messageSchema);
         await handler.stream({ graph, messages, threadId, state, messageSchema });
-
-        // const stateDataPartIds: Record<string, string> = {};
-        // const messagePartIds: Record<string, string> = messageSchema ? {} : { text: crypto.randomUUID() };
-        // const messageKeys: string[] = messageSchema ? getSchemaKeys(messageSchema).filter((key) => typeof key === 'string') : [];
-
-        // let messageBuffer = '';
-        // let toolArgsBuffer = ''; // Buffer for accumulating tool call arguments
-        // let userDefinedStructuredOutput: boolean = false;
-        // let lastSentValues: Record<string, any> = {}; // Track what we've already sent
-        // let isCapturingJson = false; // Track if we're inside a JSON code block
-        // let isFallbackMode = false; // Track if we've switched to fallback text streaming
-        // let canEnterFallbackMode = true;
-        // let isStructuredComplete = false; // Track if we've completed parsing a structured JSON block
-        let currentToolName: string | undefined;
-
-        for await (const chunk of stream) {
-          const chunkArray = chunk as StreamChunk;
-          let kind: string;
-          let data;
-
-          if (chunkArray.length === 2) {
-            [kind, data] = chunkArray;
-          } else if (chunkArray.length === 3) {
-            [, kind, data] = chunkArray;
-          } else {
-            continue;
-          }
-
-          if (kind === 'messages') {
-            const [message, metadata] = data;
-
-            if (metadata?.tags?.includes('notify')) {
-              if (isStructuredComplete) {
-                continue;
-              }
-
-              // Handle tool calls (structured output via tool calling)
-              if (messageSchema && message?.tool_call_chunks && message.tool_call_chunks.length > 0) {
-                message.tool_call_chunks.forEach(async (chunk: ToolCallChunk) => {
-                  const toolCallChunk = chunk;
-                  if (!isUndefined(toolCallChunk.name) && !isNull(toolCallChunk.name)) {
-                    currentToolName = toolCallChunk.name;
-                  }
-                  const toolArgs = toolCallChunk.args;
-
-                  if (currentToolName && typeof currentToolName === 'string' && currentToolName.match(/^extract-/) && toolArgs) {
-                    // Accumulate the tool arguments
-                    toolArgsBuffer += toolArgs;
-
-                    // Parse the accumulated tool call arguments as partial JSON
-                    const parseResult = await parsePartialJson(toolArgsBuffer);
-                    const parsed = parseResult.value as Partial<TMessage>;
-
-                    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-                      // Only write parts that have changed
-                      Object.entries(parsed).forEach(([key, value]) => {
-                        // Only write parts that are in the message schema
-                        // Other tool calls we may choose to expose separately
-                        if (value !== undefined && messageKeys.includes(key)) {
-                          userDefinedStructuredOutput = true; // We're now sure we have a user defined structured output
-
-                          // Check if this value has changed since last send
-                          const valueStr = JSON.stringify(value);
-                          const lastValueStr = lastSentValues[key];
-
-                          if (valueStr !== lastValueStr) {
-                            const partId = messagePartIds[key] || crypto.randomUUID();
-                            messagePartIds[key] = partId;
-                            lastSentValues[key] = valueStr;
-
-                            const structuredMessagePart = {
-                              type: `data-message-${key}`,
-                              id: partId,
-                              data: value,
-                            };
-                            writer.write(structuredMessagePart as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
-                          }
-                        }
-                      });
-                    }
-
-                    // Check if tool call is complete (stop_reason === 'tool_use')
-                    if (message.additional_kwargs?.stop_reason === 'tool_use' && userDefinedStructuredOutput) {
-                      isStructuredComplete = true;
-                      toolArgsBuffer = ''; // Clear the buffer
-                      lastSentValues = {}; // Clear tracking for next message
-                    }
-                  }
-                })
-              }
-
-              if (!userDefinedStructuredOutput) {
-                // Handle regular content
-                let content = '';
-                if (message?.content) {
-                  if (Array.isArray(message.content)) {
-                    content = message.content.map((content) => {
-                      return content.text;
-                    }).join('');
-                  } else if (typeof message.content === 'string') {
-                    content = message.content;
-                  }
-                }
-
-                messageBuffer += content;
-
-                if (messageSchema) {
-                  // Check if we should enter fallback mode
-                  if (!isCapturingJson && canEnterFallbackMode && !isFallbackMode && messageBuffer.length > 200) {
-                    // Model has failed to emit a JSON block, switch to fallback mode
-                    isFallbackMode = true;
-                    // Create the text part ID and stream the accumulated buffer as text
-                    const partId = messagePartIds.text || crypto.randomUUID();
-                    messagePartIds.text = partId;
-
-                    writer.write({
-                      type: 'data-message-text',
-                      id: partId,
-                      data: messageBuffer,
-                    } as any);
-                  } else if (isFallbackMode) {
-                    // Continue streaming in fallback mode
-                    writer.write({
-                      type: 'data-message-text',
-                      id: messagePartIds.text,
-                      data: messageBuffer,
-                    } as any);
-                  } else if (!isCapturingJson && messageBuffer.includes('```json')) {
-                    isCapturingJson = true;
-                    canEnterFallbackMode = false;
-                    // Discard everything before ```json and start fresh
-                    const jsonStartIndex = messageBuffer.indexOf('```json') + 7; // length of '```json'
-                    messageBuffer = messageBuffer.substring(jsonStartIndex);
-                  }
-
-                  if (!isFallbackMode) {
-                    let shouldParse = isCapturingJson;
-
-                    // Check if this chunk contains the closing marker
-                    if (isCapturingJson && messageBuffer.includes('```')) {
-                      // Only keep content before the closing marker
-                      const jsonEndIndex = messageBuffer.indexOf('```');
-                      messageBuffer = messageBuffer.substring(0, jsonEndIndex);
-                      // Parse one final time with the complete JSON before stopping
-                      shouldParse = true;
-                      isCapturingJson = false;
-                    }
-
-                    // Parse and stream if we're capturing or just finished capturing
-                    if (shouldParse) {
-                      // Try to parse the accumulated JSON
-                      const parseResult = await parsePartialJson(messageBuffer.trim());
-                      const parsed = parseResult.value as Partial<TMessage>;
-
-                      if (parsed) {
-                        Object.entries(parsed).forEach(([key, value]) => {
-                          if (value !== undefined) {
-                            const partId = messagePartIds[key] || crypto.randomUUID();
-                            messagePartIds[key] = partId;
-
-                            const structuredMessagePart = {
-                              type: `data-message-${key}`,
-                              id: partId,
-                              data: value,
-                            };
-                            writer.write(structuredMessagePart as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
-                          }
-                        });
-
-                        // If we just finished capturing (not still in progress), clear the buffer
-                        // to prevent fallback mode from being triggered by subsequent chunks
-                        if (!isCapturingJson) {
-                          messageBuffer = '';
-                        }
-                      }
-                    }
-                  }
-                } else {
-                  // For unstructured output: stream all content as text
-                  writer.write({
-                    type: 'data-message-text',
-                    id: messagePartIds.text,
-                    data: messageBuffer,
-                  } as unknown as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
-                }
-              }
-            }
-          } else if (kind === 'updates') {
-            const updates = data as Record<string, any>;
-            
-            for (const [nodeName, nodeUpdates] of Object.entries(updates)) {
-              if (!nodeUpdates || typeof nodeUpdates !== 'object') continue;
-              
-              (Object.keys(nodeUpdates) as Array<keyof StateDataParts>).forEach((key) => {
-                const value = nodeUpdates[key as string];
-                if (value === undefined || value === null) return;
-                if (key === 'messages') return;
-                
-                const keyStr = String(key) as Exclude<keyof TState, 'messages'> & string;
-                const dataPartId = stateDataPartIds[keyStr] || crypto.randomUUID();
-                stateDataPartIds[keyStr] = dataPartId;
-                
-                console.log('Streaming state update:', {
-                  type: `data-state-${keyStr}`,
-                  id: dataPartId,
-                  data: value
-                });
-                writer.write({
-                  type: `data-state-${keyStr}`,
-                  id: dataPartId,
-                  data: value
-                } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
-              });
-            }
-          } else if (kind === 'custom') {
-            const customData = data as Record<string, any>;
-            const defaultKeys = ['id', 'event'];
-            const eventName = customData.event;
-            if (!eventName || !customData.id) {
-              continue;
-            }
-            const dataKeys = Object.entries(customData).reduce((acc, [key, value]) => {
-              if (typeof key === 'string' && !defaultKeys.includes(key)) {
-                acc[key] = value;
-              }
-              return acc;
-            }, {} as Record<string, any>);
-
-            writer.write({
-              type: kebabCase(`data-custom-${eventName}`),
-              id: customData.id,
-              data: dataKeys,
-            } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
-          }
-        }
       } catch (error) {
         console.error('==========================================');
         console.error('STREAM ERROR - FAILING LOUDLY:');
