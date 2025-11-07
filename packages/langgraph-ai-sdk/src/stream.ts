@@ -71,7 +71,7 @@ abstract class Handler<TGraphData extends LanggraphDataBase<any, any>> {
     this.messageSchema = messageSchema;
   }
 
-  abstract handle(chunk: StreamChunk): void;
+  abstract handle(chunk: StreamChunk): Promise<void>;
 }
 class StructuredMessageToolHandler<TGraphData extends LanggraphDataBase<any, any>> extends Handler<TGraphData> {
   messagePartIds: Record<string, string> = {};
@@ -96,18 +96,18 @@ class StructuredMessageToolHandler<TGraphData extends LanggraphDataBase<any, any
     if (!notify) return;
     if (!message || !('tool_call_chunks' in message) || typeof message.tool_call_chunks !== 'object' || !Array.isArray(message.tool_call_chunks)) return; 
 
-    message.tool_call_chunks.forEach(async (chunk: ToolCallChunk) => {
+    for (const chunk of message.tool_call_chunks) {
       if (isString(chunk.name)) {
         this.currentToolName = chunk.name;
       }
       // Only parse structured tool calls
-      if (!this.currentToolName?.match(/^extract-/)) return;
+      if (!this.currentToolName?.match(/^extract-/)) continue;
 
       const toolArgs = chunk.args;
       this.toolArgsBuffer += toolArgs;
 
       await this.writeToolCall();
-    });
+    }
   }
 
   async writeToolCall(): Promise<void> {
@@ -119,10 +119,10 @@ class StructuredMessageToolHandler<TGraphData extends LanggraphDataBase<any, any
 
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       Object.entries(parsed).forEach(([key, value]) => {
-        if (this.schemaKeys.includes(key) && isString(value)) {
+        if (this.schemaKeys.includes(key) && !isUndefined(value) && !isNull(value)) {
           const lastValue = this.toolValues[key];
           if (lastValue !== value) {
-            this.toolValues[key] = value; // Track last sent value
+            this.toolValues[key] = JSON.stringify(value); // Track last sent value
 
             const messagePartId = this.messagePartIds[key] || crypto.randomUUID();
             this.messagePartIds[key] = messagePartId;
@@ -176,17 +176,18 @@ class ToolCallHandler<TGraphData extends LanggraphDataBase<any, any>> extends Ha
     };
   }
   
-  handle(chunk: StreamChunk): void {
-    this.handlers.structured_messages.handle(chunk);
-    this.handlers.other_tools.handle(chunk);
+  async handle(chunk: StreamChunk): Promise<void> {
+    await this.handlers.structured_messages.handle(chunk);
+    await this.handlers.other_tools.handle(chunk);
   }
 }
 class RawMessageHandler<TGraphData extends LanggraphDataBase<any, any>> extends Handler<TGraphData> {
   messageBuffer: string = '';
   messagePartId: string | undefined;
   
-  handle(chunk: StreamChunk): void {
+  async handle(chunk: StreamChunk): Promise<void> {
     if (this.messageSchema) return; // Don't handle raw messages if we have a message schema
+    if (chunk[0] !== 'messages' && !(Array.isArray(chunk[0]) && chunk[1] === 'messages')) return;
 
     const data = Array.isArray(chunk[0]) ? chunk[2] : chunk[1];
     const [message, metadata] = data as StreamMessageOutput;
@@ -197,7 +198,8 @@ class RawMessageHandler<TGraphData extends LanggraphDataBase<any, any>> extends 
       this.messagePartId = crypto.randomUUID();
     }
 
-    this.messageBuffer += message.text;
+    const content = typeof message.content === 'string' ? message.content : '';
+    this.messageBuffer += content;
 
     this.writer.write({
       type: 'data-message-text',
@@ -211,7 +213,7 @@ class StateHandler<TGraphData extends LanggraphDataBase<any, any>> extends Handl
   stateDataParts: Record<string, string> = {};
   dataPartIds: Record<string, string> = {};
 
-  handle(chunk: StreamChunk): void {
+  async handle(chunk: StreamChunk): Promise<void> {
     type TState = InferState<TGraphData>
     type StateDataParts = Omit<TState, 'messages'>;
 
@@ -240,7 +242,7 @@ class StateHandler<TGraphData extends LanggraphDataBase<any, any>> extends Handl
 }
 
 class CustomHandler<TGraphData extends LanggraphDataBase<any, any>> extends Handler<TGraphData> {
-  handle(chunk: StreamChunk): void {
+  async handle(chunk: StreamChunk): Promise<void> {
     const data = Array.isArray(chunk[0]) ? chunk[2] : chunk[1];
     const defaultKeys = ['id', 'event'];
     const eventName = data.event;
@@ -274,16 +276,16 @@ class Handlers<TGraphData extends LanggraphDataBase<any, any>> {
     this.custom = new CustomHandler<TGraphData>(writer, messageSchema);
   }
 
-  handle(chunk: StreamChunk): void {
-    const [type, _] = chunk;
+  async handle(chunk: StreamChunk): Promise<void> {
+    const type = Array.isArray(chunk[0]) ? chunk[1] : chunk[0];
 
     if (type === 'messages') {
-      this.tool_calls.handle(chunk);
-      this.raw_messages.handle(chunk);
+      await this.tool_calls.handle(chunk);
+      await this.raw_messages.handle(chunk);
     } else if (type === 'updates') {
-      this.state.handle(chunk);
+      await this.state.handle(chunk);
     } else if (type === 'custom') {
-      this.custom.handle(chunk);
+      await this.custom.handle(chunk);
     }
   }
 }
@@ -308,10 +310,7 @@ class LanggraphStreamHandler<TGraphData extends LanggraphDataBase<any, any>> {
     );
 
     for await (const chunk of stream) {
-      const [message, metadata] = chunk;
-      const notify = metadata.tags?.includes('notify');
-
-      this.handlers.custom.handle(chunk);
+      await this.handlers.handle(chunk);
     }
   }
 }

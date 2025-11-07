@@ -212,7 +212,6 @@ export const brainstormAgent = async (
       const llm = getLLM()
         .withConfig({ tags: ['notify'] })
 
-      console.log(prompt)
       const agent = await createAgent({
           model: llm,
           tools,
@@ -222,23 +221,7 @@ export const brainstormAgent = async (
 
       const updatedState = await agent.invoke(state as any, config);
       const structuredResponse = updatedState.structuredResponse
-
-    //   let content = aiResponse?.content[0];
-
-    //   const parser = StructuredOutputParser.fromZodSchema(questionSchema);
-
-    //   let textContent = content?.text as string;
-    //   const jsonMatch = textContent.match(/```json\n([\s\S]*?)\n```/);
-    //   let structuredResult;
-    //   if (jsonMatch) {
-    //       textContent = jsonMatch[1];
-    //       structuredResult = await parser.parse(textContent);
-    //   } else {
-    //     structuredResult = {
-    //       type: 'text',
-    //       text: textContent
-    //     }
-    //   }
+      console.log('Structured response:', structuredResponse)
 
       const aiMessage = new AIMessage({
           content: JSON.stringify(structuredResponse, null, 2),

@@ -9,8 +9,8 @@ import type { LanggraphDataBase } from 'langgraph-ai-sdk-types';
 export const questionSchema = z.object({
   type: z.literal("structuredQuestion"),
   text: z.string().describe('A simple intro to the question'),
-  examples: z.array(z.string()).optional().describe(`List of examples to help the user understand what we're asking`),
-  conclusion: z.string().optional().describe(`Optional conclusion text to include after examples`),
+  examples: z.array(z.string()).optional().describe(`OPTIONAL: List of examples to help the user understand what we're asking.`),
+  conclusion: z.string().optional().describe(`OPTIONAL: Conclusion text to include after examples`),
 });
 
 export type Question = z.infer<typeof questionSchema>;
