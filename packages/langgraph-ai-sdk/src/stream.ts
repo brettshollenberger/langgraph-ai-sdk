@@ -56,6 +56,126 @@ export interface LanggraphBridgeConfig<
   state?: Partial<InferState<TGraphData>>;
 }
 
+interface Handler<TGraphData extends LanggraphDataBase<any, any>> {
+  constructor(writer: any, messageSchema?: InferMessageSchema<TGraphData>): Handler<TGraphData>;
+  handle(chunk: any): void;
+}
+
+class ToolCallHandler<TGraphData extends LanggraphDataBase<any, any>> implements Handler<TGraphData> {
+  writer: any;
+  messageSchema?: InferMessageSchema<TGraphData>;
+
+  constructor(writer: any, messageSchema?: InferMessageSchema<TGraphData>) {
+    this.writer = writer;
+    this.messageSchema = messageSchema;
+  }
+
+  handle(chunk: any): void {
+    const [message, metadata] = chunk;
+    const notify = metadata.tags?.includes('notify');
+
+    this.handleToolCalls(message, messageSchema, notify, writer)
+    this.handleRawMessages(message, messageSchema, notify, writer) 
+  }
+}
+
+class RawMessageHandler<TGraphData extends LanggraphDataBase<any, any>> implements Handler<TGraphData> {
+  writer: any;
+  messageSchema?: InferMessageSchema<TGraphData>;
+
+  constructor(writer: any, messageSchema?: InferMessageSchema<TGraphData>) {
+    this.writer = writer;
+    this.messageSchema = messageSchema;
+  }
+
+  handle(chunk: any): void {
+    const [message, metadata] = chunk;
+    const notify = metadata.tags?.includes('notify');
+
+    this.handleRawMessages(message, messageSchema, notify, writer) 
+  }
+}
+
+class StateHandler<TGraphData extends LanggraphDataBase<any, any>> implements Handler<TGraphData> {
+  writer: any;
+  messageSchema?: InferMessageSchema<TGraphData>;
+
+  constructor(writer: any, messageSchema?: InferMessageSchema<TGraphData>) {
+    this.writer = writer;
+    this.messageSchema = messageSchema;
+  }
+
+  handle(chunk: any): void {
+    const [message, metadata] = chunk;
+    const notify = metadata.tags?.includes('notify');
+
+    this.handleState(message, messageSchema, notify, writer) 
+  }
+}
+
+class CustomHandler<TGraphData extends LanggraphDataBase<any, any>> implements Handler<TGraphData> {
+  writer: any;
+  messageSchema?: InferMessageSchema<TGraphData>;
+
+  constructor(writer: any, messageSchema?: InferMessageSchema<TGraphData>) {
+    this.writer = writer;
+    this.messageSchema = messageSchema;
+  }
+
+  handle(chunk: any): void {
+    const [message, metadata] = chunk;
+    const notify = metadata.tags?.includes('notify');
+
+    this.handleCustom(message, messageSchema, notify, writer) 
+  }
+}
+class LanggraphStreamHandler<TGraphData extends LanggraphDataBase<any, any>> {
+  handlers: Record<string, Handler<TGraphData>> = {};
+  messageSchema?: InferMessageSchema<TGraphData>;
+
+  constructor(writer: any, messageSchema?: InferMessageSchema<TGraphData>) {
+    this.handlers = {
+      tool_calls: new ToolCallHandler<TGraphData>(writer, messageSchema),
+      raw_messages: new RawMessageHandler<TGraphData>(writer, messageSchema),
+      state: new StateHandler<TGraphData>(writer, messageSchema),
+      custom: new CustomHandler<TGraphData>(writer, messageSchema),
+    };
+  }
+  
+  async stream({ graph, messages, threadId, state, messageSchema }: LanggraphBridgeConfig<TGraphData>) {
+    this.messageSchema = messageSchema;
+
+    const stream = await graph.stream(
+      { messages, ...state },
+      {
+        streamMode: ['messages', 'updates', 'custom'],
+        context: { graphName: graph.name },
+        configurable: { thread_id: threadId }
+      }
+    );
+
+    for await (const chunk of stream) {
+      const [message, metadata] = chunk;
+      const notify = metadata.tags?.includes('notify');
+
+      this.handlers.tool_calls.handle(chunk);
+      this.handlers.raw_messages.handle(chunk);
+      this.handlers.state.handle(chunk);
+      this.handlers.custom.handle(chunk);
+    }
+  }
+}
+
+const handleToolCalls = <TGraphData extends LanggraphDataBase<any, any>>(data: any, messageSchema: InferMessageSchema<TGraphData>, notify: boolean, writer: any) => {
+  const [message, metadata] = data;
+  if (!notify) return;
+}
+
+const handleRawMessages = <TGraphData extends LanggraphDataBase<any, any>>(data: any, messageSchema: InferMessageSchema<TGraphData>, notify: boolean, writer: any) => {
+  const [message, metadata] = data;
+  if (!notify) return;
+}
+
 export function createLanggraphUIStream<
   TGraphData extends LanggraphDataBase<any, any>,
 >({
@@ -72,20 +192,6 @@ export function createLanggraphUIStream<
   return createUIMessageStream<LanggraphUIMessage<TGraphData>>({
     execute: async ({ writer }) => {
       try {
-        const stream = await graph.stream(
-          { messages, ...state },
-          {
-            streamMode: ['messages', 'updates', 'custom'],
-            context: { graphName: graph.name },
-            configurable: { thread_id: threadId }
-          }
-        );
-
-        writer.write({
-          type: 'data-stream-start',
-          id: crypto.randomUUID(),
-          data: { status: 'streaming' }
-        } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
 
         const stateDataPartIds: Record<string, string> = {};
         const messagePartIds: Record<string, string> = messageSchema ? {} : { text: crypto.randomUUID() };
@@ -103,7 +209,7 @@ export function createLanggraphUIStream<
         for await (const chunk of stream) {
           const chunkArray = chunk as StreamChunk;
           let kind: string;
-          let data: any;
+          let data;
 
           if (chunkArray.length === 2) {
             [kind, data] = chunkArray;
@@ -130,7 +236,7 @@ export function createLanggraphUIStream<
                   }
                   const toolArgs = toolCallChunk.args;
 
-                  if (currentToolName.match(/^extract-/) && toolArgs) {
+                  if (currentToolName && typeof currentToolName === 'string' && currentToolName.match(/^extract-/) && toolArgs) {
                     // Accumulate the tool arguments
                     toolArgsBuffer += toolArgs;
 
