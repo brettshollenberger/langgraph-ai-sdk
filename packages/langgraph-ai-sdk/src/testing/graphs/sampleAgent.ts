@@ -126,6 +126,11 @@ const getPrompt = async (state: BrainstormGraphState, config?: LangGraphRunnable
                    - OTHERWISE, ask a question, following the output_format_rules
             </workflow>
 
+            <important>
+                Do not miss anything important the user said! Any important
+                business context they give you should be saved to the answers.
+            </important>
+
             <ensure_understanding>
                 Ensure you actually understand the answer in the user's own words.
                 If unclear, use simpleQuestion to ask for clarification.
@@ -207,6 +212,7 @@ export const brainstormAgent = async (
       const llm = getLLM()
         .withConfig({ tags: ['notify'] })
 
+      console.log(prompt)
       const agent = await createAgent({
           model: llm,
           tools,

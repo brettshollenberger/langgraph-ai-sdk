@@ -81,6 +81,12 @@ export function createLanggraphUIStream<
           }
         );
 
+        writer.write({
+          type: 'data-stream-start',
+          id: crypto.randomUUID(),
+          data: { status: 'streaming' }
+        } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+
         const stateDataPartIds: Record<string, string> = {};
         const messagePartIds: Record<string, string> = messageSchema ? {} : { text: crypto.randomUUID() };
         const messageKeys: string[] = messageSchema ? getSchemaKeys(messageSchema).filter((key) => typeof key === 'string') : [];
@@ -125,7 +131,6 @@ export function createLanggraphUIStream<
                   const toolArgs = toolCallChunk.args;
 
                   if (currentToolName.match(/^extract-/) && toolArgs) {
-                    console.log(`extracting!`)
                     // Accumulate the tool arguments
                     toolArgsBuffer += toolArgs;
 
