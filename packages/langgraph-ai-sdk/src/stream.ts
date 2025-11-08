@@ -8,6 +8,7 @@ import {
   type UIMessageStreamWriter,
 } from 'ai';
 import type { CompiledStateGraph, StreamMode } from '@langchain/langgraph';
+import type { StreamEvent } from "@langchain/core/tracers/log_stream";
 import { BaseMessage } from '@langchain/core/messages';
 import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
 import type { 
@@ -20,14 +21,27 @@ import type {
 
 type StreamMessageOutput = [BaseMessage, Record<string, any>];
 
+type EventsStreamEvent = {
+  id?: string;
+  event: "events";
+  data: {
+    event:
+      | `on_${"chat_model" | "llm" | "chain" | "tool" | "retriever" | "prompt"}_${"start" | "stream" | "end"}`
+      | (string & {});
+    name: string;
+    tags: string[];
+    run_id: string;
+    metadata: Record<string, unknown>;
+    parent_ids: string[];
+    data: unknown;
+  };
+};
+
 type StreamChunk = 
   | ['messages', StreamMessageOutput]
   | ['updates', Record<string, any>]
   | ['custom', any]
-  | [[string, string], 'messages', StreamMessageOutput]
-  | [[string, string], 'updates', Record<string, any>]
-  | [[string, string], 'custom', any];
-
+  | ['events', EventsStreamEvent];
 interface ToolCallChunk {
   id: string;
   index: number;
@@ -145,6 +159,7 @@ class OtherToolHandler<TGraphData extends LanggraphDataBase<any, any>> extends H
     id: string;
     name: string;
     argsBuffer: string;
+    completed?: boolean;
   }> = new Map();
 
   async handle(chunk: StreamChunk): Promise<void> {
@@ -201,35 +216,42 @@ class OtherToolHandler<TGraphData extends LanggraphDataBase<any, any>> extends H
         } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
       }
     }
+  }
 
-    // if (message.tool_calls && Array.isArray(message.tool_calls)) {
-    //   for (const toolCall of message.tool_calls) {
-    //     if (toolCall.name?.match(/^extract-/)) continue;
+  async handleToolEnd(toolName: string): Promise<void> {
+    const toolState = this.toolCallStates.get(toolName);
+    if (!toolState || toolState.completed) return;
 
-    //     const toolCallId = toolCall.id;
-    //     const toolState = this.toolCallStates.get(toolCallId);
-        
-    //     if (toolState && !toolState.inputSent) {
-    //       toolState.inputSent = true;
-          
-    //       this.writer.write({
-    //         type: 'tool-input-available',
-    //         toolCallId,
-    //         toolName: toolState.name,
-    //         input: toolCall.args,
-    //         dynamic: true
-    //       } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
-    //     }
-    //   }
-    // }
+    toolState.completed = true;
+
+    this.writer.write({
+      type: 'tool-call-complete',
+      toolCallId: toolState.id,
+      toolName: toolState.name,
+      dynamic: true
+    } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+  }
+
+  async handleToolError(toolName: string, error: unknown): Promise<void> {
+    const toolState = this.toolCallStates.get(toolName);
+    if (!toolState || toolState.completed) return;
+
+    toolState.completed = true;
+
+    this.writer.write({
+      type: 'tool-call-error',
+      toolCallId: toolState.id,
+      toolName: toolState.name,
+      error: error,
+      dynamic: true
+    } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
   }
 }
-
 class ToolCallHandler<TGraphData extends LanggraphDataBase<any, any>> extends Handler<TGraphData> {
   messagePartIds: Record<string, string> = {};
   schemaKeys: string[];
   toolArgsBuffer: string = '';
-  toolValues: Record<string, any> = {}; // Was lastSentValues
+  toolValues: Record<string, any> = {};
   currentToolName: string | undefined;
   handlers: {
     structured_messages: StructuredMessageToolHandler<TGraphData>;
@@ -248,6 +270,14 @@ class ToolCallHandler<TGraphData extends LanggraphDataBase<any, any>> extends Ha
   async handle(chunk: StreamChunk): Promise<void> {
     await this.handlers.structured_messages.handle(chunk);
     await this.handlers.other_tools.handle(chunk);
+  }
+
+  async handleToolEnd(toolName: string): Promise<void> {
+    await this.handlers.other_tools.handleToolEnd(toolName);
+  }
+
+  async handleToolError(toolName: string, error: unknown): Promise<void> {
+    await this.handlers.other_tools.handleToolError(toolName, error);
   }
 }
 class RawMessageHandler<TGraphData extends LanggraphDataBase<any, any>> extends Handler<TGraphData> {
@@ -332,17 +362,45 @@ class CustomHandler<TGraphData extends LanggraphDataBase<any, any>> extends Hand
   }
 }
 
+class EventsHandler<TGraphData extends LanggraphDataBase<any, any>> extends Handler<TGraphData> {
+  toolCallHandler: ToolCallHandler<TGraphData>;
+
+  constructor(writer: UIMessageStreamWriter<LanggraphUIMessage<TGraphData>>, messageSchema: InferMessageSchema<TGraphData> | undefined, toolCallHandler: ToolCallHandler<TGraphData>) {
+    super(writer, messageSchema);
+    this.toolCallHandler = toolCallHandler;
+  }
+
+  async handle(chunk: StreamChunk): Promise<void> {
+    if (chunk[0] !== 'events') return;
+
+    const eventsData = chunk[1] as EventsStreamEvent;
+    const event = eventsData.data.event;
+    const name = eventsData.data.name;
+    const data = eventsData.data.data;
+
+    console.log(chunk)
+    if (event === 'on_tool_end') {
+      console.log('on_tool_end', name);
+      await this.toolCallHandler.handleToolEnd(name);
+    } else if (event === 'on_tool_error') {
+      await this.toolCallHandler.handleToolError(name, data);
+    }
+  }
+}
+
 class Handlers<TGraphData extends LanggraphDataBase<any, any>> {
-  tool_calls: Handler<TGraphData>;
+  tool_calls: ToolCallHandler<TGraphData>;
   raw_messages: Handler<TGraphData>;
   state: Handler<TGraphData>;
   custom: Handler<TGraphData>;
+  events: EventsHandler<TGraphData>;
 
   constructor(writer: UIMessageStreamWriter<LanggraphUIMessage<TGraphData>>, messageSchema?: InferMessageSchema<TGraphData>) {
     this.tool_calls = new ToolCallHandler<TGraphData>(writer, messageSchema);
     this.raw_messages = new RawMessageHandler<TGraphData>(writer, messageSchema);
     this.state = new StateHandler<TGraphData>(writer, messageSchema);
     this.custom = new CustomHandler<TGraphData>(writer, messageSchema);
+    this.events = new EventsHandler<TGraphData>(writer, messageSchema, this.tool_calls);
   }
 
   async handle(chunk: StreamChunk): Promise<void> {
@@ -355,6 +413,10 @@ class Handlers<TGraphData extends LanggraphDataBase<any, any>> {
       await this.state.handle(chunk);
     } else if (type === 'custom') {
       await this.custom.handle(chunk);
+    } else if (type === 'events') {
+      await this.events.handle(chunk);
+    } else {
+      console.log(type)
     }
   }
 }
@@ -365,20 +427,64 @@ class LanggraphStreamHandler<TGraphData extends LanggraphDataBase<any, any>> {
   constructor(writer: UIMessageStreamWriter<LanggraphUIMessage<TGraphData>>, messageSchema?: InferMessageSchema<TGraphData>) {
     this.handlers = new Handlers<TGraphData>(writer, messageSchema);
   }
+
+  async *adaptStreamEvents<TGraphData extends LanggraphDataBase<any, any>>(
+    stream: AsyncIterable<StreamEvent>
+  ): AsyncGenerator<StreamChunk> {
+    for await (const event of stream) {
+      // Handle state/message/custom events from on_chain_stream
+      if (event.event === "on_chain_stream") {
+        const chunk = event.data.chunk;
+
+        // Extract [mode, data] tuple (or [namespace, mode, data] if subgraphs)
+        const [modeOrNs, dataOrMode, maybeData] = Array.isArray(chunk)
+          ? chunk
+          : [null, ...chunk];
+
+        const mode = maybeData !== undefined ? dataOrMode : modeOrNs;
+        const data = maybeData !== undefined ? maybeData : dataOrMode;
+
+        if (mode === "messages" || mode === "updates" || mode === "custom") {
+          yield [mode, data] as StreamChunk;
+        }
+      }
+      // Handle lifecycle events (tool start/end, etc.)
+      else if (event.event.startsWith("on_")) {
+        yield ["events", {
+          event: "events",
+          data: event
+        }] as StreamChunk;
+      }
+    }
+  }
   
   async stream({ graph, messages, threadId, state, messageSchema }: LanggraphBridgeConfig<TGraphData>) {
     this.messageSchema = messageSchema;
 
-    const stream = await graph.stream(
-      { messages, ...state },
-      {
-        streamMode: ['messages', 'updates', 'custom'],
-        context: { graphName: graph.name },
-        configurable: { thread_id: threadId }
-      }
-    );
+    // Must use streamEvents to get events output (including tool_call_end)
+    // so we can detect lifecycle events properly
+    const graphState = { messages, ...state }
+    // Returns IterableReadableStream<StreamEvent>
+    const stream = graph.streamEvents(graphState, {
+      version: "v2",
+      streamMode: ["updates", "custom", "messages"],
+      context: { graphName: graph.name },
+      configurable: { thread_id: threadId }
+    });
 
-    for await (const chunk of stream) {
+    // Non-event approach
+    // Returns IterableReadableStream<["custom", any] | ["messages", StreamOutput] | ["updates", Record<"__start__", UpdateType<StateDefinition>>] | ["values", StateType<StateDefinition>] | ["debug", StreamDebugOutput] | ["checkpoints", StreamCheckpointsOutput<StateType<StateDefinition>>] | ["tasks", StreamTasksOutput<UpdateType<StateDefinition>, StateType<StateDefinition>, "__start__">]>>
+    // const stream = await graph.stream(
+    //   { messages, ...state },
+    //   {
+    //     streamMode: ['messages', 'custom', 'events'] as StreamMode[],
+    //     context: { graphName: graph.name },
+    //     configurable: { thread_id: threadId }
+    //   }
+    // );
+    const eventsStream = this.adaptStreamEvents(stream);
+
+    for await (const chunk of eventsStream) {
       await this.handlers.handle(chunk);
     }
   }
