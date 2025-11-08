@@ -1,11 +1,11 @@
 import React from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Wrapper, ChatInput, Message } from './components.tsx';
 import { type AgentLanggraphData } from '../types.ts';
 import { useLanggraph } from 'langgraph-ai-sdk-react';
 
 export function LangGraphChat() {
-  const { messages, sendMessage, status, state, threadId, error, events, isLoadingHistory } = useLanggraph<AgentLanggraphData>({
+  const { messages, sendMessage, status, state, threadId, tools, error, events, isLoadingHistory } = useLanggraph<AgentLanggraphData>({
     api: '/api/agent/chat',
     headers: {
       'Content-Type': 'application/json',
@@ -19,6 +19,17 @@ export function LangGraphChat() {
       return undefined;
     }
   });
+  console.log(tools)
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   useEffect(() => {
     if (threadId && typeof window !== 'undefined') {
@@ -38,6 +49,21 @@ export function LangGraphChat() {
     );
   }
 
+        // {tools && tools.map((part, idx) => {
+        //   const key = String(part.type);
+        //   const toolName = 'toolName' in part ? part.toolName : '';
+        //   const toolCallId = 'toolCallId' in part ? part.toolCallId : '';
+        //   const input = 'input' in part ? part.input : '';
+        //   const output = 'output' in part ? part.output : '';
+        //   const state = 'state' in part ? part.state : '';
+          
+        //   return (
+        //     <div key={idx} className="my-2">
+        //       <div className="text-blue-400 font-semibold capitalize">{toolName}:</div>
+        //       <div>{String(state)}</div>
+        //     </div>
+        //   );
+        // })}
   return (
     <Wrapper>
       <div>
@@ -55,12 +81,14 @@ export function LangGraphChat() {
           message={message}
         />
       ))}
+      <div ref={messagesEndRef} />
       <ChatInput
         input={input}
         onChange={(e) => setInput(e.target.value)}
         onSubmit={(e) => {
           e.preventDefault();
-          sendMessage({ text: input })
+          sendMessage({ text: input });
+          setInput('');
         }}
       />
     </Wrapper>

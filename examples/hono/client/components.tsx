@@ -1,4 +1,4 @@
-import type { LanggraphMessage, LanggraphMessagePart } from 'langgraph-ai-sdk-react';
+import type { LanggraphUIMessage } from 'langgraph-ai-sdk-react';
 import type { MyLanggraphData } from '../types.ts';
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
@@ -13,38 +13,31 @@ export const Wrapper = (props: {
   );
 };
 
-const isTool = (part: LanggraphMessagePart) => part.type === 'tool'; 
-const isText = (part: LanggraphMessagePart) => part.type === 'text';
-const isStructured = (part: LanggraphMessagePart) => !isTool(part) && !isText(part);
+const isTool = (part: LanggraphUIMessage<MyLanggraphData>) => part.type === 'tool'; 
+const isText = (part: LanggraphUIMessage<MyLanggraphData>) => part.type === 'text';
+const isStructured = (part: LanggraphUIMessage<MyLanggraphData>) => !isTool(part) && !isText(part);
 
 export const Message = ({
   message,
 }: {
-  message: LanggraphMessage<MyLanggraphData>;
+  message: LanggraphUIMessage<MyLanggraphData>;
 }) => {
   const prefix = message.role === 'user' ? 'User: ' : 'AI: ';
-  const isText = message.parts.every((part) => part.type === 'text');
+  const isText = message.type === "text"
 
   if (isText) {
-    const text = message.parts
-      .filter((part): part is Extract<typeof part, { type: 'text' }> => part.type === 'text')
-      .map((part) => part.text);
     return (
       <div className="prose prose-invert my-6">
-        <ReactMarkdown>{prefix + text}</ReactMarkdown>
+        <ReactMarkdown>{message.text}</ReactMarkdown>
       </div>
     );
   } else {
-    const structuredParts = message.parts.filter(isStructured);
-    const tools = message.parts.filter(isTool);
+    const structuredParts = Object.fromEntries(Object.entries(message).filter(([k]) => k !== 'type'))
     
     return (
       <div className="prose prose-invert my-6">
         <div className="font-bold">{prefix}</div>
-        {structuredParts.map((part, idx) => {
-          const key = String(part.type);
-          const value = 'data' in part ? part.data : '';
-          
+        {Object.entries(structuredParts).map(([key, value], idx) => {
           return (
             <div key={idx} className="my-2">
               <div className="text-blue-400 font-semibold capitalize">{key}:</div>
@@ -57,21 +50,6 @@ export const Message = ({
               ) : (
                 <ReactMarkdown>{String(value)}</ReactMarkdown>
               )}
-            </div>
-          );
-        })}
-        {tools && tools.map((part, idx) => {
-          const key = String(part.type);
-          const toolName = 'toolName' in part ? part.toolName : '';
-          const toolCallId = 'toolCallId' in part ? part.toolCallId : '';
-          const input = 'input' in part ? part.input : '';
-          const output = 'output' in part ? part.output : '';
-          const state = 'state' in part ? part.state : '';
-          
-          return (
-            <div key={idx} className="my-2">
-              <div className="text-blue-400 font-semibold capitalize">{toolName}:</div>
-              <div>{String(state)}</div>
             </div>
           );
         })}
@@ -89,13 +67,21 @@ export const ChatInput = ({
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onSubmit: (e: React.FormEvent) => void;
 }) => (
-  <form onSubmit={onSubmit}>
-    <input
-      className="fixed bottom-0 w-full max-w-md p-2 mb-8 border-2 border-zinc-700 rounded shadow-xl bg-gray-800"
-      value={input}
-      placeholder="Say something..."
-      onChange={onChange}
-      autoFocus
-    />
+  <form onSubmit={onSubmit} className="fixed bottom-0 w-full max-w-md mb-8">
+    <div className="flex gap-2">
+      <input
+        className="flex-1 p-2 border-2 border-zinc-700 rounded shadow-xl bg-gray-800 text-white"
+        value={input}
+        placeholder="Say something..."
+        onChange={onChange}
+        autoFocus
+      />
+      <button
+        type="submit"
+        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded shadow-xl font-medium transition-colors"
+      >
+        Send
+      </button>
+    </div>
   </form>
 );

@@ -37,7 +37,7 @@ export type LanggraphDataParts<T extends LanggraphDataBase<any, any>> =
     ? { [K in keyof InferMessage<T> as `message-${K & string}`]: InferMessage<T>[K] }
     : { 'message-text': string });
 
-export type LanggraphUIMessage<T extends LanggraphDataBase<any, any>> = UIMessage<
+export type LanggraphAISDKUIMessage<T extends LanggraphDataBase<any, any>> = UIMessage<
     unknown,
     LanggraphDataParts<T>
 >
@@ -55,3 +55,9 @@ export type LanggraphMessage<T extends LanggraphDataBase<any, any>> = {
   role: 'system' | 'user' | 'assistant';
   parts: MessagePart<T>[];
 };
+
+export type LanggraphUIMessage<T extends LanggraphDataBase<any, any>> = {
+  id: string;
+  role: 'system' | 'user' | 'assistant';
+  type: string;
+} & InferMessage<T>
