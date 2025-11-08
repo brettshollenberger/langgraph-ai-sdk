@@ -15,13 +15,15 @@ export const Wrapper = (props: {
 
 export const Message = ({
   message,
+  onExampleClick,
 }: {
   message: LanggraphUIMessage<MyLanggraphData>;
+  onExampleClick?: (text: string) => void;
 }) => {
   const isUser = message.role === 'user';
   const isText = message.type === "text";
   
-  const excludedKeys = ['id', 'role', 'type'];
+  const excludedKeys = ['id', 'role', 'type', 'state'];
   const structuredParts = Object.fromEntries(
     Object.entries(message).filter(([k]) => !excludedKeys.includes(k))
   );
@@ -37,10 +39,23 @@ export const Message = ({
           : 'bg-gray-600 text-white'
       }`}>
         {hasStructuredData && (
-          <div className="space-y-2 mt-2">
+          <div className="space-y-3">
             {Object.entries(structuredParts).map(([key, value], idx) => (
               <div key={idx}>
-                {Array.isArray(value) ? (
+                {key === 'examples' && Array.isArray(value) ? (
+                  <div className="space-y-2 mt-3">
+                    {value.map((item, i) => (
+                      <button
+                        key={i}
+                        onClick={() => onExampleClick?.(String(item))}
+                        className="w-full text-left p-3 bg-gray-700 hover:bg-gray-600 rounded-lg border border-gray-500 transition-colors cursor-pointer text-sm"
+                      >
+                        <div className="font-medium text-blue-300 text-xs mb-1">Sample Answer:</div>
+                        <div>{String(item)}</div>
+                      </button>
+                    ))}
+                  </div>
+                ) : Array.isArray(value) ? (
                   <ul className="list-disc pl-5 text-sm">
                     {value.map((item, i) => (
                       <li key={i}>{String(item)}</li>

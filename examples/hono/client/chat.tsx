@@ -50,13 +50,18 @@ export function LangGraphChat() {
 
   const lastMessage = messages.at(-1);
   const isThinking = lastMessage?.state === 'thinking';
+  
+  const visibleMessages = messages.filter(msg => msg.state !== 'thinking');
 
   return (
     <Wrapper>
-      {messages.map((message) => (
+      {visibleMessages.map((message) => (
         <Message
           key={message.id}
           message={message}
+          onExampleClick={(text) => {
+            setInput(text);
+          }}
         />
       ))}
       {isThinking && (
