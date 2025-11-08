@@ -20,6 +20,14 @@ import {
   type AgentStateType,
 } from '../agentTypes';
 
+async function wipeJSON(filePath: string = './brainstorm-answers.json'): Promise<void> {
+    try {
+        await writeFile(filePath, '{}', 'utf-8');
+    } catch (error) {
+        console.error('Error wiping JSON file:', error);
+        throw error;
+    }
+}
 
 async function readAnswersFromJSON<T extends Record<string, any>>(
     filePath: string = './brainstorm-answers.json'
@@ -182,6 +190,7 @@ const SaveAnswersTool = (state: BrainstormGraphState, config?: LangGraphRunnable
             return acc;
         }, {} as Record<BrainstormTopic, string>) || {}
 
+        await wipeJSON('./brainstorm-answers.json');
         await writeAnswersToJSON(updates);
         console.log('Saved answers:', updates);
 

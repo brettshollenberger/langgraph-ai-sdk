@@ -72,7 +72,6 @@ export const Message = ({
             <div key={idx} className="my-2">
               <div className="text-blue-400 font-semibold capitalize">{toolName}:</div>
               <div>{String(state)}</div>
-              {input && <ReactMarkdown>{JSON.stringify(input)}</ReactMarkdown>}
             </div>
           );
         })}

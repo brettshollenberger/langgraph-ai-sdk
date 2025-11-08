@@ -18,6 +18,16 @@ interface CustomEvent {
   data: any;
 }
 
+interface ToolCall {
+  id?: string;
+  type: string;
+  errorText?: string;
+  input: Record<string, any>;
+  output?: Record<string, any>;
+  state: Record<string, any>;
+  toolCallId: string;
+}
+
 export function useLanggraph<
   TLanggraphData extends LanggraphDataBase<any, any>
 >({
@@ -179,16 +189,26 @@ export function useLanggraph<
         }));
 
       const toolParts = msg.parts
-        .filter(p => p.type === 'dynamic-tool')
-        .map(p => ({
-          type: 'tool' as const,
-          toolCallId: (p as any).toolCallId,
-          toolName: (p as any).toolName,
-          input: (p as any).input,
-          output: (p as any).output,
-          state: (p as any).state,
-          id: (p as any).id || crypto.randomUUID()
-        }));
+        .filter(p => p.type.startsWith('tool-'))
+        .map((p) => {
+          const toolCall = p as ToolCall;
+          const toolCallId = toolCall.toolCallId;
+          
+          const output = toolCall.output
+          const isError = toolCall.errorText !== undefined
+          const state = isError ? 'error' : (output ? 'complete' : 'running')
+
+          return {
+            type: 'tool' as const,
+            toolCallId,
+            toolName: toolCall.type,
+            input: toolCall.input,
+            output,
+            state,
+            error: toolCall.errorText,
+            id: toolCall.id || crypto.randomUUID()
+          };
+        });
 
       return {
         id: msg.id,

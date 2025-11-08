@@ -196,8 +196,7 @@ class OtherToolHandler<TGraphData extends LanggraphDataBase<any, any>> extends H
         this.writer.write({
           type: 'tool-input-start',
           toolCallId,
-          toolName,
-          dynamic: true
+          toolName
         } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
       }
 
@@ -211,8 +210,7 @@ class OtherToolHandler<TGraphData extends LanggraphDataBase<any, any>> extends H
           type: 'tool-input-available',
           toolCallId,
           toolName: toolState.name,
-          input: parsedInput,
-          dynamic: true
+          input: parsedInput
         } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
       }
     }
@@ -227,10 +225,8 @@ class OtherToolHandler<TGraphData extends LanggraphDataBase<any, any>> extends H
 
     this.writer.write({
       type: 'tool-output-available',
-      output: data?.data?.data?.output,
       toolCallId: toolState.id,
-      toolName: toolState.name,
-      dynamic: true
+      output: data?.data?.data?.output
     } as unknown as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
   }
 
@@ -241,11 +237,9 @@ class OtherToolHandler<TGraphData extends LanggraphDataBase<any, any>> extends H
     toolState.completed = true;
 
     this.writer.write({
-      type: 'tool-call-error',
+      type: 'tool-output-error',
       toolCallId: toolState.id,
-      toolName: toolState.name,
-      error: error as string,
-      dynamic: true
+      errorText: String(error)
     } as unknown as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
   }
 }
