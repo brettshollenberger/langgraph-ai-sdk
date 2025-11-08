@@ -39,6 +39,7 @@ export function LangGraphChat() {
   }, [threadId]);
 
   const [input, setInput] = useState(`We make chatbots`);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   if (isLoadingHistory) {
     return (
@@ -61,6 +62,7 @@ export function LangGraphChat() {
           message={message}
           onExampleClick={(text) => {
             setInput(text);
+            setTimeout(() => inputRef.current?.focus(), 0);
           }}
         />
       ))}
@@ -69,6 +71,7 @@ export function LangGraphChat() {
       )}
       <div ref={messagesEndRef} />
       <ChatInput
+        inputRef={inputRef}
         input={input}
         onChange={(e) => setInput(e.target.value)}
         onSubmit={(e) => {

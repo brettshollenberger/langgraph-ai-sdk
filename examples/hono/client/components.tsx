@@ -103,10 +103,12 @@ export const ThinkingIndicator = ({ tools }: { tools: any[] }) => {
 };
 
 export const ChatInput = ({
+  inputRef,
   input,
   onChange,
   onSubmit,
 }: {
+  inputRef?: React.RefObject<HTMLInputElement>;
   input: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onSubmit: (e: React.FormEvent) => void;
@@ -114,10 +116,17 @@ export const ChatInput = ({
   <form onSubmit={onSubmit} className="fixed bottom-0 w-full max-w-2xl mb-8">
     <div className="flex gap-2">
       <input
+        ref={inputRef}
         className="flex-1 p-2 border-2 border-zinc-700 rounded shadow-xl bg-gray-800 text-white"
         value={input}
         placeholder="Say something..."
         onChange={onChange}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            onSubmit(e as any);
+          }
+        }}
         autoFocus
       />
       <button
