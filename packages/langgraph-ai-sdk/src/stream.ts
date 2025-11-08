@@ -218,18 +218,20 @@ class OtherToolHandler<TGraphData extends LanggraphDataBase<any, any>> extends H
     }
   }
 
-  async handleToolEnd(toolName: string): Promise<void> {
+  async handleToolEnd(toolName: string, chunk: StreamChunk): Promise<void> {
     const toolState = this.toolCallStates.get(toolName);
     if (!toolState || toolState.completed) return;
 
     toolState.completed = true;
+    const [type, data] = chunk;
 
     this.writer.write({
-      type: 'tool-call-complete',
+      type: 'tool-output-available',
+      output: data?.data?.data?.output,
       toolCallId: toolState.id,
       toolName: toolState.name,
       dynamic: true
-    } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+    } as unknown as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
   }
 
   async handleToolError(toolName: string, error: unknown): Promise<void> {
@@ -242,9 +244,9 @@ class OtherToolHandler<TGraphData extends LanggraphDataBase<any, any>> extends H
       type: 'tool-call-error',
       toolCallId: toolState.id,
       toolName: toolState.name,
-      error: error,
+      error: error as string,
       dynamic: true
-    } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+    } as unknown as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
   }
 }
 class ToolCallHandler<TGraphData extends LanggraphDataBase<any, any>> extends Handler<TGraphData> {
@@ -272,8 +274,8 @@ class ToolCallHandler<TGraphData extends LanggraphDataBase<any, any>> extends Ha
     await this.handlers.other_tools.handle(chunk);
   }
 
-  async handleToolEnd(toolName: string): Promise<void> {
-    await this.handlers.other_tools.handleToolEnd(toolName);
+  async handleToolEnd(toolName: string, chunk: StreamChunk): Promise<void> {
+    await this.handlers.other_tools.handleToolEnd(toolName, chunk);
   }
 
   async handleToolError(toolName: string, error: unknown): Promise<void> {
@@ -378,10 +380,8 @@ class EventsHandler<TGraphData extends LanggraphDataBase<any, any>> extends Hand
     const name = eventsData.data.name;
     const data = eventsData.data.data;
 
-    console.log(chunk)
     if (event === 'on_tool_end') {
-      console.log('on_tool_end', name);
-      await this.toolCallHandler.handleToolEnd(name);
+      await this.toolCallHandler.handleToolEnd(name, chunk);
     } else if (event === 'on_tool_error') {
       await this.toolCallHandler.handleToolError(name, data);
     }
