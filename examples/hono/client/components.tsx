@@ -7,55 +7,84 @@ export const Wrapper = (props: {
   children: React.ReactNode;
 }) => {
   return (
-    <div className="flex flex-col w-full max-w-md py-24 mx-auto stretch">
+    <div className="flex flex-col w-full max-w-2xl py-24 mx-auto stretch">
       {props.children}
     </div>
   );
 };
-
-const isTool = (part: LanggraphUIMessage<MyLanggraphData>) => part.type === 'tool'; 
-const isText = (part: LanggraphUIMessage<MyLanggraphData>) => part.type === 'text';
-const isStructured = (part: LanggraphUIMessage<MyLanggraphData>) => !isTool(part) && !isText(part);
 
 export const Message = ({
   message,
 }: {
   message: LanggraphUIMessage<MyLanggraphData>;
 }) => {
-  const prefix = message.role === 'user' ? 'User: ' : 'AI: ';
-  const isText = message.type === "text"
+  const isUser = message.role === 'user';
+  const isText = message.type === "text";
+  
+  const excludedKeys = ['id', 'role', 'type'];
+  const structuredParts = Object.fromEntries(
+    Object.entries(message).filter(([k]) => !excludedKeys.includes(k))
+  );
+  const hasStructuredData = Object.keys(structuredParts).length > 0;
 
-  if (isText) {
-    return (
-      <div className="prose prose-invert my-6">
-        <ReactMarkdown>{message.text}</ReactMarkdown>
+  return (
+    <div className={`flex w-full mb-4 ${
+      isUser ? 'justify-end' : 'justify-start'
+    }`}>
+      <div className={`max-w-[70%] rounded-lg p-4 ${
+        isUser 
+          ? 'bg-blue-800 text-white' 
+          : 'bg-gray-600 text-white'
+      }`}>
+        {hasStructuredData && (
+          <div className="space-y-2 mt-2">
+            {Object.entries(structuredParts).map(([key, value], idx) => (
+              <div key={idx}>
+                {Array.isArray(value) ? (
+                  <ul className="list-disc pl-5 text-sm">
+                    {value.map((item, i) => (
+                      <li key={i}>{String(item)}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="prose prose-sm prose-invert max-w-none">
+                    <ReactMarkdown>{String(value)}</ReactMarkdown>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
-    );
-  } else {
-    const structuredParts = Object.fromEntries(Object.entries(message).filter(([k]) => k !== 'type'))
-    
-    return (
-      <div className="prose prose-invert my-6">
-        <div className="font-bold">{prefix}</div>
-        {Object.entries(structuredParts).map(([key, value], idx) => {
-          return (
-            <div key={idx} className="my-2">
-              <div className="text-blue-400 font-semibold capitalize">{key}:</div>
-              {Array.isArray(value) ? (
-                <ul className="list-disc pl-5">
-                  {value.map((item, i) => (
-                    <li key={i}>{String(item)}</li>
-                  ))}
-                </ul>
-              ) : (
-                <ReactMarkdown>{String(value)}</ReactMarkdown>
-              )}
+    </div>
+  );
+};
+
+export const ThinkingIndicator = ({ tools }: { tools: any[] }) => {
+  if (!tools || tools.length === 0) return null;
+  
+  return (
+    <div className="flex w-full mb-4 justify-start">
+      <div className="max-w-[70%] rounded-lg p-4 bg-gray-700 text-white">
+        <div className="text-xs opacity-70 mb-2">AI is thinking...</div>
+        <div className="space-y-2">
+          {tools.map((tool, idx) => (
+            <div key={idx} className="text-sm">
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${
+                  tool.state === 'complete' ? 'bg-green-500' :
+                  tool.state === 'error' ? 'bg-red-500' :
+                  'bg-yellow-500 animate-pulse'
+                }`} />
+                <span className="font-medium">{tool.toolName}</span>
+                <span className="text-xs opacity-70">({tool.state})</span>
+              </div>
             </div>
-          );
-        })}
+          ))}
+        </div>
       </div>
-    );
-  }
+    </div>
+  );
 };
 
 export const ChatInput = ({
@@ -67,7 +96,7 @@ export const ChatInput = ({
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onSubmit: (e: React.FormEvent) => void;
 }) => (
-  <form onSubmit={onSubmit} className="fixed bottom-0 w-full max-w-md mb-8">
+  <form onSubmit={onSubmit} className="fixed bottom-0 w-full max-w-2xl mb-8">
     <div className="flex gap-2">
       <input
         className="flex-1 p-2 border-2 border-zinc-700 rounded shadow-xl bg-gray-800 text-white"

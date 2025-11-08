@@ -190,7 +190,6 @@ const SaveAnswersTool = (state: BrainstormGraphState, config?: LangGraphRunnable
             return acc;
         }, {} as Record<BrainstormTopic, string>) || {}
 
-        await wipeJSON('./brainstorm-answers.json');
         await writeAnswersToJSON(updates);
 
         return { success: true };
@@ -227,7 +226,6 @@ export const brainstormAgent = async (
           responseFormat: questionSchema,
       });
 
-      console.log(prompt)
       const updatedState = await agent.invoke(state as any, config);
       const structuredResponse = updatedState.structuredResponse
 

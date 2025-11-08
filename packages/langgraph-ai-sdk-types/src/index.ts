@@ -60,4 +60,5 @@ export type LanggraphUIMessage<T extends LanggraphDataBase<any, any>> = {
   id: string;
   role: 'system' | 'user' | 'assistant';
   type: string;
+  state: 'streaming' | 'thinking';
 } & InferMessage<T>
