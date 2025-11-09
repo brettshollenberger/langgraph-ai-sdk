@@ -1,15 +1,13 @@
 import { z } from "zod";
-import { StateGraph, END, START, Annotation, messagesStateReducer } from "@langchain/langgraph";
-import { AIMessage, HumanMessage, type BaseMessage } from "@langchain/core/messages";
-import { createAgent, providerStrategy } from "langchain";
+import { StateGraph, END, START } from "@langchain/langgraph";
+import { AIMessage, type BaseMessage } from "@langchain/core/messages";
+import { createAgent } from "langchain";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
 import { getLLM } from '../llm/llm';
 import { tool, Tool } from "@langchain/core/tools";
-import { StructuredOutputParser } from "@langchain/core/output_parsers";
 import { toJSON, renderPrompt, chatHistoryPrompt, structuredOutputPrompt, isHumanMessage } from '../prompts';
 import { writeFile, readFile } from 'fs/promises';
-import { withContext } from "../node";
-import { type LanggraphData } from '../../types';
+import { NodeMiddleware } from "../node";
 import {
   brainstormTopics,
   BrainstormStateAnnotation,
@@ -36,7 +34,6 @@ async function readAnswersFromJSON<T extends Record<string, any>>(
         const fileContent = await readFile(filePath, 'utf-8');
         return JSON.parse(fileContent);
     } catch (err) {
-        console.log(`file not exist!`)
         // File doesn't exist or is invalid, start with empty object
         return {} as T;
     }
@@ -260,7 +257,7 @@ export const brainstormAgent = async (
  */
 export function createSampleAgent(checkpointer?: any, graphName: string = 'sample') {
   return new StateGraph(BrainstormStateAnnotation)
-      .addNode("agent", withContext(brainstormAgent, {}))
+      .addNode("agent", NodeMiddleware.use({}, brainstormAgent))
       .addEdge(START, "agent")
       .addEdge("agent", END)
       .compile({ checkpointer, name: graphName });

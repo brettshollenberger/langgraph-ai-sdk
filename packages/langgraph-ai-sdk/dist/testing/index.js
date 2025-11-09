@@ -411,7 +411,6 @@ const withErrorHandling = (nodeFunction, options) => {
 		try {
 			return await nodeFunction(state, config);
 		} catch (error) {
-			console.log(`caught error`);
 			ErrorReporters.report(error);
 			throw error;
 		}
@@ -58111,17 +58110,9 @@ const NodeMiddleware = new NodeMiddlewareFactory().addMiddleware("context", with
 */
 const structuredMessageSchema = z.object({
 	intro: z.string().describe("Introduction to the response"),
-	examples: z.array(z.string()).describe("List of examples"),
-	conclusion: z.string().describe("Conclusion of the response")
+	bulletPoints: z.array(z.string()).optional().describe("List of bullet points"),
+	conclusion: z.string().optional().describe("Conclusion of the response")
 });
-/**
-* Schema for simple text messages
-*/
-const simpleMessageSchema = z.object({ content: z.string().describe("Content of the message") });
-/**
-* Union schema allowing either simple or structured messages
-*/
-const sampleMessageSchema = z.union([simpleMessageSchema, structuredMessageSchema]);
 /**
 * Graph state annotation for the sample graph
 */
@@ -58170,7 +58161,7 @@ const responseNode = NodeMiddleware.use({ notifications: { taskName: "Generate R
 	const userPrompt = state.messages[state.messages.length - 1];
 	if (!userPrompt) throw new Error("Need user prompt");
 	const projectContext = state.projectName ? `Project: "${state.projectName}"\n\n` : "";
-	const parser$1 = StructuredOutputParser.fromZodSchema(sampleMessageSchema);
+	const parser$1 = StructuredOutputParser.fromZodSchema(structuredMessageSchema);
 	const prompt = `${projectContext}
     <task>
       Answer the user's question
@@ -58776,7 +58767,6 @@ async function readAnswersFromJSON(filePath = "./brainstorm-answers.json") {
 		const fileContent = await readFile(filePath, "utf-8");
 		return JSON.parse(fileContent);
 	} catch (err) {
-		console.log(`file not exist!`);
 		return {};
 	}
 }
@@ -58942,11 +58932,11 @@ const brainstormAgent = async (state, config) => {
 * Usage: Load this in LangGraph Studio to test the agent
 */
 function createSampleAgent(checkpointer, graphName = "sample") {
-	return new StateGraph(BrainstormStateAnnotation).addNode("agent", withContext(brainstormAgent, {})).addEdge(START, "agent").addEdge("agent", END).compile({
+	return new StateGraph(BrainstormStateAnnotation).addNode("agent", NodeMiddleware.use({}, brainstormAgent)).addEdge(START, "agent").addEdge("agent", END).compile({
 		checkpointer,
 		name: graphName
 	});
 }
 
 //#endregion
-export { BrainstormStateAnnotation, ErrorReporters, NodeMiddleware, NodeMiddlewareFactory, SampleGraphAnnotation, agentOutputSchema, brainstormAgent, brainstormTopics, configureResponses, configureResponses$1 as configureTestResponses, coreLLMConfig, createSampleAgent, createSampleGraph, finishBrainstormingSchema, getCoreLLM, getLLM, getNodeContext, getTestLLM, hasConfiguredResponses, nameProjectNode, questionSchema, resetLLMConfig, resetLLMConfig$1 as resetTestConfig, responseNode, sampleMessageSchema, simpleMessageSchema, structuredMessageSchema, withContext, withErrorHandling, withNotifications };
+export { BrainstormStateAnnotation, ErrorReporters, NodeMiddleware, NodeMiddlewareFactory, SampleGraphAnnotation, agentOutputSchema, brainstormAgent, brainstormTopics, configureResponses, configureResponses$1 as configureTestResponses, coreLLMConfig, createSampleAgent, createSampleGraph, finishBrainstormingSchema, getCoreLLM, getLLM, getNodeContext, getTestLLM, hasConfiguredResponses, nameProjectNode, questionSchema, resetLLMConfig, resetLLMConfig$1 as resetTestConfig, responseNode, structuredMessageSchema, withContext, withErrorHandling, withNotifications };

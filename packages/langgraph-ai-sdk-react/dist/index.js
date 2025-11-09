@@ -5,31 +5,13 @@ import { v7 } from "uuid";
 
 //#region src/useLanggraph.tsx
 function useLanggraph({ api = "/api/chat", headers = {}, getInitialThreadId }) {
-	const [currentApi, setCurrentApi] = useState(api);
-	const [chatKey, setChatKey] = useState(0);
-	const getInitialThreadIdEvent = useEffectEvent(() => {
-		return getInitialThreadId?.() ?? v7();
-	});
-	useEffect(() => {
-		if (currentApi !== api) {
-			setCurrentApi(api);
-			setChatKey((prev) => prev + 1);
-			setError(null);
-			setServerState({});
-			setHasSubmitted(false);
-			setIsLoadingHistory(true);
-			threadIdRef.current = getInitialThreadIdEvent();
-		}
-	}, [api, currentApi]);
-	const threadIdRef = useRef(getInitialThreadId?.() ?? v7());
-	const threadId = threadIdRef.current;
+	const threadId = useRef(getInitialThreadId?.() ?? v7()).current;
 	const [error, setError] = useState(null);
 	const [serverState, setServerState] = useState({});
 	const [hasSubmitted, setHasSubmitted] = useState(false);
 	const headersRef = useRef(headers);
 	const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 	const chat = useChat({
-		id: `chat-${chatKey}`,
 		transport: new DefaultChatTransport({
 			api,
 			headers,

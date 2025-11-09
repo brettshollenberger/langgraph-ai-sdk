@@ -31,7 +31,6 @@ function authMiddleware(handler: (req: Request) => Promise<Response>) {
 }
 
 export const POST = authMiddleware(async (req: Request): Promise<Response> => {
-  console.log(`hit the graph endpoint`)
   return streamLanggraph<GraphLanggraphData>({ 
     graphName: 'default', 
     messageSchema: structuredMessageSchema

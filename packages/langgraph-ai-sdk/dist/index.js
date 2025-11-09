@@ -9,6 +9,7 @@ import pkg from "pg";
 import { jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 //#region src/stream.ts
+const TOOL_CALL_REGEX = /^extract/;
 const isUndefined = (value) => {
 	return typeof value === "undefined";
 };
@@ -84,7 +85,7 @@ var OtherToolHandler = class extends Handler {
 		if (!message || !("tool_call_chunks" in message) || typeof message.tool_call_chunks !== "object" || !Array.isArray(message.tool_call_chunks)) return;
 		for (const chunk$1 of message.tool_call_chunks) {
 			if (isString(chunk$1.name)) this.currentToolName = chunk$1.name;
-			if (this.currentToolName?.match(/^extract-/)) continue;
+			if (this.currentToolName?.match(TOOL_CALL_REGEX)) continue;
 			const toolName = this.currentToolName;
 			if (!toolName) continue;
 			let toolState = this.toolCallStates.get(toolName);

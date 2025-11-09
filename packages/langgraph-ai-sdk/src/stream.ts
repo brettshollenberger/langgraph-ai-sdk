@@ -470,7 +470,6 @@ class LanggraphStreamHandler<TGraphData extends LanggraphDataBase<any, any>> {
     // Must use streamEvents to get events output (including tool_call_end)
     // so we can detect lifecycle events properly
     const graphState = { messages, ...state }
-    // Returns IterableReadableStream<StreamEvent>
     const stream = graph.streamEvents(graphState, {
       version: "v2",
       streamMode: ["updates", "custom", "messages"],
@@ -478,16 +477,6 @@ class LanggraphStreamHandler<TGraphData extends LanggraphDataBase<any, any>> {
       configurable: { thread_id: threadId }
     });
 
-    // Non-event approach
-    // Returns IterableReadableStream<["custom", any] | ["messages", StreamOutput] | ["updates", Record<"__start__", UpdateType<StateDefinition>>] | ["values", StateType<StateDefinition>] | ["debug", StreamDebugOutput] | ["checkpoints", StreamCheckpointsOutput<StateType<StateDefinition>>] | ["tasks", StreamTasksOutput<UpdateType<StateDefinition>, StateType<StateDefinition>, "__start__">]>>
-    // const stream = await graph.stream(
-    //   { messages, ...state },
-    //   {
-    //     streamMode: ['messages', 'custom', 'events'] as StreamMode[],
-    //     context: { graphName: graph.name },
-    //     configurable: { thread_id: threadId }
-    //   }
-    // );
     const eventsStream = this.adaptStreamEvents(stream);
 
     for await (const chunk of eventsStream) {
