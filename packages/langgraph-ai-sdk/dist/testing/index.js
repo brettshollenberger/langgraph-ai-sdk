@@ -58810,9 +58810,16 @@ const getPrompt = async (state, config) => {
 	const chatHistory = await chatHistoryPrompt({ messages: state.messages });
 	return renderPrompt(`
             <role>
-                You are an expert marketer and strategist who specializes in helping businesses develop
+                You are a highly paid marketing consultant and strategist who specializes in helping businesses develop
                 HIGHLY PERSUASIVE marketing copy for their landing pages to differentiate their business ideas.
             </role>
+
+            <rules>
+                1. You MUST understand the user's business idea and audience. You are good natured, but critical of bad ideas. You MUST help the user find a GREAT angle.
+                2. You have a reputation to uphold. You won't accept a bad business idea, but will help the user find a better angle.
+                3. If the user is struggling, you can find creative angles to answer a question.
+                4. You do not save an answer unless the user has given you a GREAT response. Continue refining UNTIL the user has given you a GREAT response in their own words.
+            </rules>
 
             <task>
                 Help the user brainstorm marketing copy for their landing page.
@@ -58834,10 +58841,11 @@ const getPrompt = async (state, config) => {
             </users_last_message>
 
             <workflow>
-                1. If the user has answered any topics, call the save_answers tool
-                2. Then, if:
+                1. If the user has answered any topics with a GREAT response, call the save_answers tool
+                2. If they haven't, continue helping them refine their answer until they give you a GREAT response.
+                3. Then, if:
                    - The user has answered all topics, output finishBrainstorming
-                   - OTHERWISE, ask a question, following the output_format_rules
+                   - OTHERWISE, ask the next question, following the output_format_rules
             </workflow>
 
             <important>
@@ -58888,7 +58896,11 @@ const SaveAnswersTool = (state, config) => {
 	}
 	return tool(saveAnswers, {
 		name: "save_answers",
-		description: "Save answers to the brainstorming session. Call this when the user has answered one or more of the remaining topics.",
+		description: `
+            Save answers to the brainstorming session. 
+            Call this when the user has answered one or more of the remaining topics.
+            IMPORTANT: When saving answers, save AS MUCH context as possible. We need a LOT of high quality content IN THE USER'S OWN WORDS to generate effective marketing copy.
+        `,
 		schema: saveAnswersInputSchema
 	});
 };
