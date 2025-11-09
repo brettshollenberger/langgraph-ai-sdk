@@ -19,6 +19,7 @@ export function LangGraphChat() {
       return undefined;
     }
   });
+  console.log(state)
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -56,6 +57,12 @@ export function LangGraphChat() {
 
   return (
     <Wrapper>
+      <div className="mb-4 p-4 bg-gray-800 rounded">
+        <div className="text-sm text-gray-400 mb-2">State:</div>
+        <pre className="text-xs text-green-400">{JSON.stringify(state, null, 2)}</pre>
+        <div className="text-sm text-gray-400 mb-2">Events:</div>
+        <pre className="text-xs text-green-400">{JSON.stringify(events, null, 2)}</pre>
+      </div>
       {visibleMessages.map((message) => (
         <Message
           key={message.id}

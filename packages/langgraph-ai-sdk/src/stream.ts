@@ -62,8 +62,9 @@ const isString = (value: unknown): value is string => {
 }
 
 export function getSchemaKeys<T extends z.ZodObject<any>>(
-  schema: T
+  schema: T | undefined
 ): Array<keyof z.infer<T>> {
+  if (!schema || !schema.shape) return [];
   return Object.keys(schema.shape) as Array<keyof z.infer<T>>;
 }
 export interface LanggraphBridgeConfig<
@@ -105,17 +106,29 @@ class StructuredMessageToolHandler<TGraphData extends LanggraphDataBase<any, any
 
     const data = Array.isArray(chunk[0]) ? chunk[2] : chunk[1];
     const [message, metadata] = data as StreamMessageOutput;
-    const notify = metadata.tags?.includes('notify');
 
-    if (!notify) return;
-    if (!message || !('tool_call_chunks' in message) || typeof message.tool_call_chunks !== 'object' || !Array.isArray(message.tool_call_chunks)) return; 
+    if (!message || !('tool_call_chunks' in message) || typeof message.tool_call_chunks !== 'object' || !Array.isArray(message.tool_call_chunks)) {
+      return;
+    }
+
+    // Skip if no tool_call_chunks to process
+    if (message.tool_call_chunks.length === 0) {
+      return;
+    }
+
+    console.log('[StructuredMessageToolHandler] Processing', message.tool_call_chunks.length, 'tool_call_chunks');
 
     for (const chunk of message.tool_call_chunks) {
       if (isString(chunk.name)) {
         this.currentToolName = chunk.name;
       }
-      // Only parse structured tool calls
-      if (!this.currentToolName?.match(/^extract-/)) continue;
+      console.log('[StructuredMessageToolHandler] chunk.name:', chunk.name, 'currentToolName:', this.currentToolName, 'args:', chunk.args);
+
+      // Only parse structured tool calls (match "extract" or "extract-*")
+      if (!this.currentToolName?.match(/^extract/)) {
+        console.log('[StructuredMessageToolHandler] Skipping - tool name doesn\'t match /^extract/');
+        continue;
+      }
 
       const toolArgs = chunk.args;
       this.toolArgsBuffer += toolArgs;
@@ -131,8 +144,11 @@ class StructuredMessageToolHandler<TGraphData extends LanggraphDataBase<any, any
     const parseResult = await parsePartialJson(this.toolArgsBuffer);
     const parsed = parseResult.value as Partial<TMessage>;
 
+    console.log('[writeToolCall] Buffer:', this.toolArgsBuffer, 'Parsed:', parsed);
+
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       Object.entries(parsed).forEach(([key, value]) => {
+        console.log('[writeToolCall] Checking key:', key, 'schemaKeys includes:', this.schemaKeys.includes(key));
         if (this.schemaKeys.includes(key) && !isUndefined(value) && !isNull(value)) {
           const lastValue = this.toolValues[key];
           if (lastValue !== value) {
@@ -145,6 +161,7 @@ class StructuredMessageToolHandler<TGraphData extends LanggraphDataBase<any, any
               id: messagePartId,
               data: value,
             };
+            console.log('[writeToolCall] WRITING chunk:', structuredMessagePart);
             this.writer.write(structuredMessagePart as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
           }
         }
@@ -409,8 +426,6 @@ class Handlers<TGraphData extends LanggraphDataBase<any, any>> {
       await this.custom.handle(chunk);
     } else if (type === 'events') {
       await this.events.handle(chunk);
-    } else {
-      console.log(type)
     }
   }
 }

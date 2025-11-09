@@ -81,7 +81,7 @@ const structuredMessageSchema = z.object({
 type StructuredMessageType = z.infer<typeof structuredMessageSchema>;
 ```
 
-5. (Optional): In your node, tell the LLM about your structured message type (but DO NOT use `llm.withStructuredOutput`, which doesn't stream data):
+5. In your node, use `llm.withStructuredOutput` to emit structured output:
 
 ```typescript
 const prompt = `
@@ -97,17 +97,16 @@ const prompt = `
     ${structuredMessageSchema.getFormatInstructions()}
 </output>`;
 
-// Stream the response first. The AI SDK will stream this to the frontend
-const output = await llm.invoke(prompt);
-
-// Parse structured output afterwards, and attach it as metadata so we can use this to reload
-// structured messages from the database
-const structuredOutput = structuredMessageSchema.parse(output.content);
+// The AI SDK will stream this to the frontend
+const structuredOutput = await llm
+  .withStructuredOutput(structuredMessageSchema)
+  .withConfig({ tags: ["notify"] }) // Attach tags: ["notify"]!
+  .invoke(prompt);
 
 return {
   messages: [
     new AIMessage({
-      content: output.content,
+      content: JSON.stringify(structuredOutput),
       response_metadata: structuredOutput, // Attach the structured output as metadata
     }),
   ],
