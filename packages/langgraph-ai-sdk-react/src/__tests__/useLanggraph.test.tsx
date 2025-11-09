@@ -156,32 +156,14 @@ describe('useLanggraph', () => {
       if (!message) {
         throw new Error('No message found');
       }
+
+      // The message should be flattened with all properties directly on the object
       expect(message.role).toBe('assistant');
-      expect(message.parts).toHaveLength(3);
-
-      // Check intro part
-      const introPart = message.parts.find((p: any) => p.type === 'intro');
-      if (!introPart || !('data' in introPart)) {
-        throw new Error('No intro part found');
-      }
-      expect(introPart).toBeDefined();
-      expect(introPart.data).toBe('Introduction');
-
-      // Check examples part
-      const examplesPart = message.parts.find((p: any) => p.type === 'examples');
-      if (!examplesPart || !('data' in examplesPart)) {
-        throw new Error('No examples part found');
-      }
-      expect(examplesPart).toBeDefined();
-      expect(examplesPart.data).toEqual(['a', 'b', 'c']);
-
-      // Check conclusion part
-      const conclusionPart = message.parts.find((p: any) => p.type === 'conclusion');
-      if (!conclusionPart || !('data' in conclusionPart)) {
-        throw new Error('No conclusion part found');
-      }
-      expect(conclusionPart).toBeDefined();
-      expect(conclusionPart?.data).toBe('Conclusion');
+      expect(message.type).toBe('intro'); // Type is determined from first part
+      expect(message.state).toBe('streaming');
+      expect((message as any).intro).toBe('Introduction');
+      expect((message as any).examples).toEqual(['a', 'b', 'c']);
+      expect((message as any).conclusion).toBe('Conclusion');
     });
 
     it('should handle simple text messages', async () => {
@@ -219,12 +201,11 @@ describe('useLanggraph', () => {
       if (!message) {
         throw new Error('No message found');
       }
-      const part = message.parts.at(0);
-      if (!part || !('text' in part)) {
-        throw new Error('No part found');
-      }
-      expect(part.type).toBe('text');
-      expect(part.text).toBe('Simple text response');
+
+      // Text messages are flattened with text property directly on the object
+      expect(message.role).toBe('assistant');
+      expect(message.type).toBe('text');
+      expect((message as any).text).toBe('Simple text response');
     });
 
     it('should handle user messages', async () => {
@@ -260,13 +241,11 @@ describe('useLanggraph', () => {
       if (!message) {
         throw new Error('No message found');
       }
-      const part = message.parts.at(0);
-      if (!part || !('text' in part)) {
-        throw new Error('No part found');
-      }
+
+      // User messages are also flattened with text property directly on the object
       expect(message.role).toBe('user');
-      expect(part.type).toBe('text');
-      expect(part.text).toBe('User question');
+      expect(message.type).toBe('text');
+      expect((message as any).text).toBe('User question');
     });
   });
 

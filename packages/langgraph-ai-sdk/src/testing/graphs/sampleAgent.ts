@@ -202,7 +202,11 @@ const SaveAnswersTool = (state: BrainstormGraphState, config?: LangGraphRunnable
 
     return tool(saveAnswers, {
         name: "save_answers",
-        description: "Save answers to the brainstorming session. Call this when the user has answered one or more of the remaining topics.",
+        description: `
+            Save answers to the brainstorming session. 
+            Call this when the user has answered one or more of the remaining topics.
+            IMPORTANT: When saving answers, save AS MUCH context as possible. We need a LOT of high quality content IN THE USER'S OWN WORDS to generate effective marketing copy.
+        `,
         schema: saveAnswersInputSchema,
     });
 }

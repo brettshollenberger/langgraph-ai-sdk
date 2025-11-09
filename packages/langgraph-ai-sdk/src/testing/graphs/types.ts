@@ -8,7 +8,7 @@ import { Annotation, messagesStateReducer } from '@langchain/langgraph';
  */
 export const structuredMessageSchema = z.object({
   intro: z.string().describe('Introduction to the response'),
-  examples: z.array(z.string()).optional().describe('List of examples'),
+  bulletPoints: z.array(z.string()).optional().describe('List of bullet points'),
   conclusion: z.string().optional().describe('Conclusion of the response'),
 });
 
