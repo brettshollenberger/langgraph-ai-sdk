@@ -92,7 +92,6 @@ function ChatContent({ endpoint }: { endpoint: EndpointKey }) {
 
   const lastMessage = messages.at(-1);
   const isThinking = lastMessage?.state === 'thinking';
-  
   const visibleMessages = messages.filter(msg => msg.state !== 'thinking');
 
   return (
