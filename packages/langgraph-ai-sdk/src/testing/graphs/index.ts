@@ -12,3 +12,4 @@
 export * from './types';
 export * from './sampleGraph';
 export * from "./sampleAgent";
+export * from "./agentTypes";

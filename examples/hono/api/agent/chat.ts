@@ -30,6 +30,7 @@ function authMiddleware(handler: (req: Request) => Promise<Response>) {
 }
 
 export const POST = authMiddleware(async (req: Request): Promise<Response> => {
+  console.log(`hit the agent endpoint`)
   return streamLanggraph<AgentLanggraphData>({
     graphName: 'agent',
     messageSchema: questionSchema

@@ -42,6 +42,27 @@ export function useLanggraph<
   type TState = InferState<TLanggraphData>
   type TMessage = InferMessage<TLanggraphData>
 
+  // Track API changes to force reinitialization
+  const [currentApi, setCurrentApi] = useState(api);
+  const [chatKey, setChatKey] = useState(0);
+
+  const getInitialThreadIdEvent = useEffectEvent(() => {
+    return getInitialThreadId?.() ?? uuidv7();
+  });
+
+  // Reset when API changes
+  useEffect(() => {
+    if (currentApi !== api) {
+      setCurrentApi(api);
+      setChatKey(prev => prev + 1);
+      setError(null);
+      setServerState({});
+      setHasSubmitted(false);
+      setIsLoadingHistory(true);
+      threadIdRef.current = getInitialThreadIdEvent();
+    }
+  }, [api, currentApi]);
+
   const threadIdRef = useRef<string>(getInitialThreadId?.() ?? uuidv7());
   const threadId = threadIdRef.current;
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +72,7 @@ export function useLanggraph<
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
   const chat = useChat<LanggraphAISDKUIMessage<TLanggraphData>>({
+    id: `chat-${chatKey}`, // Force new instance when key changes
     transport: new DefaultChatTransport({
       api,
       headers,

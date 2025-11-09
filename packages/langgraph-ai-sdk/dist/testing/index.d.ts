@@ -307,7 +307,7 @@ type SampleStateType = typeof SampleGraphAnnotation.State;
 /**
  * Type for LangGraph data in the sample graph
  */
-type SampleLanggraphData = LanggraphData<SampleStateType, typeof sampleMessageSchema>;
+type GraphLanggraphData = LanggraphData<SampleStateType, typeof sampleMessageSchema>;
 //#endregion
 //#region src/testing/graphs/sampleGraph.d.ts
 /**
@@ -477,4 +477,4 @@ declare function createSampleAgent(checkpointer?: any, graphName?: string): _lan
   agent: Partial<BrainstormGraphState>;
 }, unknown, unknown>;
 //#endregion
-export { AgentLanggraphData, AgentOutputType, AgentStateType, Brainstorm, BrainstormStateAnnotation, BrainstormTopic, ErrorReporters, FinishBrainstorming, type LLMAppConfig, type LLMConfig, type LLMCost, type LLMProvider, type LLMSkill, type LLMSpeed, MiddlewareConfigType, type MockResponses, NodeContext, NodeFunction, NodeMiddleware, NodeMiddlewareFactory, NodeMiddlewareType, Question, SampleGraphAnnotation, SampleLanggraphData, SampleMessageType, SampleStateType, SimpleMessage, StructuredMessage, agentOutputSchema, brainstormAgent, brainstormTopics, configureResponses, configureResponses$1 as configureTestResponses, coreLLMConfig, createSampleAgent, createSampleGraph, finishBrainstormingSchema, getCoreLLM, getLLM, getNodeContext, getTestLLM, hasConfiguredResponses, nameProjectNode, questionSchema, resetLLMConfig, resetLLMConfig$1 as resetTestConfig, responseNode, sampleMessageSchema, simpleMessageSchema, structuredMessageSchema, withContext, withErrorHandling, withNotifications };
+export { AgentLanggraphData, AgentOutputType, AgentStateType, Brainstorm, BrainstormStateAnnotation, BrainstormTopic, ErrorReporters, FinishBrainstorming, type LLMAppConfig, type LLMConfig, type LLMCost, type LLMProvider, type LLMSkill, type LLMSpeed, MiddlewareConfigType, type MockResponses, NodeContext, NodeFunction, NodeMiddleware, NodeMiddlewareFactory, NodeMiddlewareType, Question, SampleGraphAnnotation, GraphLanggraphData, SampleMessageType, SampleStateType, SimpleMessage, StructuredMessage, agentOutputSchema, brainstormAgent, brainstormTopics, configureResponses, configureResponses$1 as configureTestResponses, coreLLMConfig, createSampleAgent, createSampleGraph, finishBrainstormingSchema, getCoreLLM, getLLM, getNodeContext, getTestLLM, hasConfiguredResponses, nameProjectNode, questionSchema, resetLLMConfig, resetLLMConfig$1 as resetTestConfig, responseNode, sampleMessageSchema, simpleMessageSchema, structuredMessageSchema, withContext, withErrorHandling, withNotifications };

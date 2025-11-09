@@ -1,7 +1,7 @@
 import React from 'react';
 import { useState, useEffect, useRef } from 'react';
 import { Wrapper, ChatInput, Message, ThinkingIndicator } from './components.tsx';
-import { type AgentLanggraphData, type SampleLanggraphData } from '../types.ts';
+import { type AgentLanggraphData, type GraphLanggraphData } from '../types.ts';
 import { useLanggraph } from 'langgraph-ai-sdk-react';
 
 const endpoints = ["graph", "agent"] as const;
@@ -19,10 +19,10 @@ const EndpointConfig: Record<EndpointKey, { api: string; label: string }> = {
 }
 
 // Union type for all possible graph data
-type AllGraphData = SampleLanggraphData | AgentLanggraphData;
+type AllGraphData = GraphLanggraphData | AgentLanggraphData;
 
 export function LangGraphChat() {
-  const [endpoint, setEndpoint] = useState<EndpointKey>("graph");
+  const [endpoint, setEndpoint] = useState<EndpointKey>("agent");
 
   // Use union type - messages will be properly typed as the union of both message types
   const { messages, sendMessage, status, state, threadId, tools, error, events, isLoadingHistory } =
@@ -82,7 +82,7 @@ export function LangGraphChat() {
         {endpoints.map((ep) => (
           <button
             key={ep}
-            onClick={() => setEndpoint(ep)}
+            onClick={() => setEndpoint(ep satisfies EndpointKey)}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               endpoint === ep
                 ? 'bg-blue-600 text-white'

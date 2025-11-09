@@ -69,5 +69,5 @@ export type AgentStateType = typeof BrainstormStateAnnotation.State;
  */
 export type AgentLanggraphData = LanggraphData<
   AgentStateType,
-  typeof agentOutputSchema
+  typeof questionSchema
 >;

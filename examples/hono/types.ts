@@ -11,8 +11,8 @@ export {
   type SimpleMessage,
   type SampleMessageType as MessageType,
   type SampleStateType as StateType,
-  type SampleLanggraphData as MyLanggraphData,
-  type SampleLanggraphData,
+  type GraphLanggraphData as MyLanggraphData,
+  type GraphLanggraphData,
 } from 'langgraph-ai-sdk/testing';
 
 /**

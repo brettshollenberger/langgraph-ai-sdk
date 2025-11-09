@@ -1,4 +1,4 @@
-import { messageSchema, type MyLanggraphData } from '../types.ts';
+import { structuredMessageSchema, type GraphLanggraphData } from '../types.ts';
 import { registerGraph, streamLanggraph, fetchLanggraphHistory } from 'langgraph-ai-sdk';
 import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
 import { createSampleGraph } from 'langgraph-ai-sdk/testing';
@@ -13,7 +13,7 @@ const checkpointer = new PostgresSaver(pool);
 
 // Create and register the default graph
 export const graph = createSampleGraph(checkpointer, 'default');
-registerGraph<MyLanggraphData>('default', graph);
+registerGraph<GraphLanggraphData>('default', graph);
 
 function authMiddleware(handler: (req: Request) => Promise<Response>) {
   return async (req: Request): Promise<Response> => {
@@ -31,15 +31,16 @@ function authMiddleware(handler: (req: Request) => Promise<Response>) {
 }
 
 export const POST = authMiddleware(async (req: Request): Promise<Response> => {
-  return streamLanggraph<MyLanggraphData>({ 
+  console.log(`hit the graph endpoint`)
+  return streamLanggraph<GraphLanggraphData>({ 
     graphName: 'default', 
-    messageSchema
+    messageSchema: structuredMessageSchema
   })(req);
 });
 
 export const GET = authMiddleware((req: Request): Promise<Response> => {
-  return fetchLanggraphHistory<MyLanggraphData>({ 
+  return fetchLanggraphHistory<GraphLanggraphData>({ 
     graphName: 'default', 
-    messageSchema
+    messageSchema: structuredMessageSchema
   })(req);
 });

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { StateGraph, START, END } from '@langchain/langgraph';
 import { LangGraphRunnableConfig } from '@langchain/langgraph';
-import { sampleMessageSchema, type SampleMessageType, type SampleStateType, SampleGraphAnnotation } from './types';
+import { structuredMessageSchema, type SampleStateType, SampleGraphAnnotation } from './types';
 import { StructuredOutputParser } from '@langchain/core/output_parsers';
 import { AIMessage } from '@langchain/core/messages';
 import { getLLM } from '../llm/llm';
@@ -36,9 +36,9 @@ Return ONLY the project name, nothing else.`;
   let projectName;
   const llm = getLLM();
   try {
-    projectName = (await llm.withStructuredOutput(schema).invoke(prompt)).projectName;
+    const structuredLlm = llm.withStructuredOutput(schema);
+    projectName = (await structuredLlm.invoke(prompt)).projectName;
   } catch (e) {
-    console.error(`failed to name project: ${e}`);
     return {};
   }
 
@@ -62,7 +62,7 @@ export const responseNode = NodeMiddleware.use({
     ? `Project: "${state.projectName}"\n\n`
     : '';
 
-  const parser = StructuredOutputParser.fromZodSchema(sampleMessageSchema);
+  const parser = StructuredOutputParser.fromZodSchema(structuredMessageSchema);
   const prompt = `${projectContext}
     <task>
       Answer the user's question
@@ -88,27 +88,14 @@ export const responseNode = NodeMiddleware.use({
     </output>
   `;
 
-  const llm = getLLM();
-  const rawMessage = await llm.withConfig({ tags: ['notify'] }).invoke(prompt);
-
-  let content = typeof rawMessage.content === 'string'
-    ? rawMessage.content
-    : '';
-
-  content = content.replace(/```json/g, '').replace(/```/g, '').trim();
-
-  let structured: SampleMessageType;
-  try {
-    structured = sampleMessageSchema.parse(JSON.parse(content));
-  } catch (e) {
-    structured = {
-      content: 'I apologize, I had trouble formatting my response properly.',
-    };
-  }
+  // Use withStructuredOutput for proper streaming support
+  // Note: Using structuredMessageSchema directly instead of union to avoid API issues
+  const structuredLlm = getLLM().withStructuredOutput(structuredMessageSchema).withConfig({ tags: ["notify"] });
+  const structuredOutput = await structuredLlm.invoke(prompt, config);
 
   const aiMessage = new AIMessage({
-    content: content,
-    response_metadata: structured,
+    content: JSON.stringify(structuredOutput),
+    response_metadata: structuredOutput,
   });
 
   return {

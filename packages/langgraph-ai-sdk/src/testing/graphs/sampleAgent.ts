@@ -18,7 +18,7 @@ import {
   type BrainstormTopic,
   type Brainstorm,
   type AgentStateType,
-} from '../agentTypes';
+} from './agentTypes';
 
 async function wipeJSON(filePath: string = './brainstorm-answers.json'): Promise<void> {
     try {
