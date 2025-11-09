@@ -22,7 +22,7 @@ declare function fetchLanggraphHistory<TGraphData extends LanggraphDataBase<any,
 }): (req: Request) => Promise<Response>;
 //#endregion
 //#region src/stream.d.ts
-declare function getSchemaKeys<T extends z.ZodObject<any>>(schema: T): Array<keyof z.infer<T>>;
+declare function getSchemaKeys<T extends z.ZodObject<any>>(schema: T | undefined): Array<keyof z.infer<T>>;
 interface LanggraphBridgeConfig<TGraphData extends LanggraphDataBase<any, any>> {
   graph: CompiledStateGraph<InferState<TGraphData>, any>;
   messages: BaseMessage[];

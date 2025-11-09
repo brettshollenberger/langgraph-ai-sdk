@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { Annotation, messagesStateReducer } from '@langchain/langgraph';
 import type { BaseMessage } from '@langchain/core/messages';
-import type { LanggraphDataBase } from 'langgraph-ai-sdk-types';
+import type { LanggraphData } from '../../types';
 
 /**
  * Schema for structured questions with intro, examples, and conclusion
@@ -67,7 +67,7 @@ export type AgentStateType = typeof BrainstormStateAnnotation.State;
 /**
  * Type definition for Agent LangGraph data
  */
-export type AgentLanggraphData = LanggraphDataBase<
+export type AgentLanggraphData = LanggraphData<
   AgentStateType,
-  typeof questionSchema
+  typeof agentOutputSchema
 >;

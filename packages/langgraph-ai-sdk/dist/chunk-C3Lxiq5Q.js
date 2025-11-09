@@ -1,3 +1,5 @@
+import { createRequire } from "node:module";
+
 //#region rolldown:runtime
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -30,6 +32,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 	value: mod,
 	enumerable: true
 }) : target, mod));
+var __require = /* @__PURE__ */ createRequire(import.meta.url);
 
 //#endregion
-export { __export as n, __toESM as r, __commonJS as t };
+export { __toESM as i, __export as n, __require as r, __commonJS as t };

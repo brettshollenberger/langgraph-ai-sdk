@@ -12,20 +12,19 @@ export {
   type SampleMessageType as MessageType,
   type SampleStateType as StateType,
   type SampleLanggraphData as MyLanggraphData,
+  type SampleLanggraphData,
 } from 'langgraph-ai-sdk/testing';
 
 /**
  * Re-export types from the agent graph
  */
 export {
-  agentStructuredQuestionSchema,
-  agentSimpleQuestionSchema,
-  agentFinishBrainstormingSchema,
+  questionSchema,
+  finishBrainstormingSchema,
   agentOutputSchema,
   BrainstormStateAnnotation as AgentStateAnnotation,
-  type AgentStructuredQuestion,
-  type AgentSimpleQuestion,
-  type AgentFinishBrainstorming,
+  type Question,
+  type FinishBrainstorming,
   type AgentOutputType,
   type AgentStateType,
   type AgentLanggraphData,

@@ -1,12 +1,11 @@
 import { r as LanggraphData } from "../types-B4Qke7pC.js";
 import * as _langchain_core_messages15 from "@langchain/core/messages";
 import { BaseMessage } from "@langchain/core/messages";
-import { FakeListChatModel } from "@langchain/core/utils/testing";
+import { FakeStreamingChatModel } from "@langchain/core/utils/testing";
 import { z } from "zod";
 import * as _langchain_langgraph11 from "@langchain/langgraph";
 import { LangGraphRunnableConfig } from "@langchain/langgraph";
 import * as langchain0 from "langchain";
-import { LanggraphDataBase } from "langgraph-ai-sdk-types";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ValueOf } from "type-fest";
 
@@ -69,9 +68,16 @@ interface ILLMManager {
 }
 //#endregion
 //#region src/testing/llm/test.d.ts
-declare class StructuredOutputAwareFakeModel extends FakeListChatModel {
+declare class StructuredOutputAwareFakeModel extends FakeStreamingChatModel {
   private useStructuredOutput;
-  withStructuredOutput(schema: any, config?: any): any;
+  private structuredSchema;
+  private boundTools;
+  private includeRaw;
+  private streamingChunks;
+  withStructuredOutput(schema: any, config?: any): this;
+  private convertResponsesToStructuredChunks;
+  bindTools(tools: any[], config?: any): any;
+  _streamResponseChunks(messages: any, options?: any, runManager?: any): AsyncGenerator<any>;
   invoke(input: any, options?: any): Promise<any>;
 }
 /**
@@ -232,9 +238,11 @@ declare class NodeMiddlewareFactory<TRegistered extends string = never, TMiddlew
 }
 //#endregion
 //#region src/testing/node/nodeMiddleware.d.ts
-declare const NodeMiddleware: NodeMiddlewareFactory<"context" | "notifications" | "errorHandling", Record<"context", <TState extends Record<string, unknown>>(nodeFunction: NodeFunction<TState>, options: {}) => NodeFunction<TState>> & Record<"notifications", <TState extends Record<string, unknown>>(nodeFunction: NodeFunction<TState>, options: {
+declare const NodeMiddleware: NodeMiddlewareFactory<"context" | "notifications" | "errorHandling" | "polly", Record<"context", <TState extends Record<string, unknown>>(nodeFunction: NodeFunction<TState>, options: {}) => NodeFunction<TState>> & Record<"notifications", <TState extends Record<string, unknown>>(nodeFunction: NodeFunction<TState>, options: {
   taskName: string | ((...args: any) => Promise<string> | string);
-}) => NodeFunction<TState>> & Record<"errorHandling", <TState extends Record<string, unknown>>(nodeFunction: NodeFunction<TState>, options: {}) => NodeFunction<TState>>>;
+}) => NodeFunction<TState>> & Record<"errorHandling", <TState extends Record<string, unknown>>(nodeFunction: NodeFunction<TState>, options: {}) => NodeFunction<TState>> & Record<"polly", <TState extends Record<string, unknown>>(nodeFunction: NodeFunction<TState>, options: {
+  [x: string]: never;
+}) => NodeFunction<TState>>>;
 //#endregion
 //#region src/testing/graphs/types.d.ts
 /**
@@ -351,7 +359,7 @@ declare function createSampleGraph(checkpointer?: any, graphName?: string): _lan
   }>>;
 }, unknown, unknown>;
 //#endregion
-//#region src/testing/agentTypes.d.ts
+//#region src/testing/graphs/agentTypes.d.ts
 /**
  * Schema for structured questions with intro, examples, and conclusion
  */
@@ -433,7 +441,7 @@ type AgentStateType = typeof BrainstormStateAnnotation.State;
 /**
  * Type definition for Agent LangGraph data
  */
-type AgentLanggraphData = LanggraphDataBase<AgentStateType, typeof questionSchema>;
+type AgentLanggraphData = LanggraphData<AgentStateType, typeof agentOutputSchema>;
 //#endregion
 //#region src/testing/graphs/sampleAgent.d.ts
 type BrainstormGraphState = {
