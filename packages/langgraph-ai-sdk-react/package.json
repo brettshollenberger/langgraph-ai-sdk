@@ -1,6 +1,6 @@
 {
   "name": "langgraph-ai-sdk-react",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "React hooks for LangGraph AI SDK",
   "main": "index.js",
   "type": "module",
@@ -35,7 +35,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "ai": "^5.0.0",
-    "happy-dom": "^15.0.0",
+    "happy-dom": "^16.7.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "tsdown": "^0.15.12",

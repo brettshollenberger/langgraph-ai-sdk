@@ -76,34 +76,66 @@ function useLanggraph({ api = "/api/chat", headers = {}, getInitialThreadId }) {
 	}, [chat.messages]);
 	const messages = useMemo(() => {
 		return chat.messages.map((msg) => {
-			if (msg.role !== "assistant") return {
-				id: msg.id,
-				role: msg.role,
-				parts: msg.parts.filter((p) => p.type === "text").map((p) => ({
+			if (msg.role !== "assistant") {
+				const textPart = msg.parts.find((p) => p.type === "text");
+				const text = textPart && "text" in textPart ? textPart.text : "";
+				return {
+					id: msg.id,
+					role: msg.role,
 					type: "text",
-					text: p.text,
-					id: p.id || crypto.randomUUID()
-				}))
-			};
+					text
+				};
+			}
 			const textParts = msg.parts.filter((p) => p.type === "data-message-text");
-			if (textParts.length > 0) return {
-				id: msg.id,
-				role: msg.role,
-				parts: textParts.map((p) => ({
+			const otherParts = msg.parts.filter((p) => p.type !== "data-message-text" && p.type.startsWith("data-message-"));
+			if (textParts.length > 0 && otherParts.length === 0) {
+				const text = textParts.map((p) => p.data).join("");
+				return {
+					id: msg.id,
+					role: msg.role,
 					type: "text",
-					text: p.data,
-					id: p.id
-				}))
-			};
-			const messageParts = msg.parts.filter((p) => p.type.startsWith("data-message-")).map((p) => ({
-				type: p.type.replace("data-message-", ""),
+					text
+				};
+			}
+			const messageParts = msg.parts.filter((p) => typeof p.type === "string" && p.type.startsWith("data-message-")).map((p) => ({
+				type: p.type,
 				data: p.data,
 				id: p.id
 			}));
+			const userSpecifiedOutputType = messageParts.reduce((acc, part) => {
+				if (typeof part.type !== "string") return acc;
+				const key = part.type.replace("data-message-", "");
+				acc[key] = part.data;
+				return acc;
+			}, {});
+			const messageType = messageParts.length > 0 ? messageParts[0].type.replace("data-message-", "") : "structured";
+			const state$1 = Object.keys(userSpecifiedOutputType).filter((k) => k !== "type").length > 0 ? "streaming" : "thinking";
 			return {
 				id: msg.id,
+				state: state$1,
 				role: msg.role,
-				parts: messageParts
+				type: messageType,
+				...userSpecifiedOutputType
+			};
+		});
+	}, [chat.messages]);
+	const tools = useMemo(() => {
+		const lastAIMessage = chat.messages.filter((m) => m.role === "assistant").at(-1);
+		if (!lastAIMessage) return [];
+		return lastAIMessage.parts.filter((p) => p.type.startsWith("tool-")).map((p) => {
+			const toolCall = p;
+			const toolCallId = toolCall.toolCallId;
+			const output = toolCall.output;
+			const state$1 = toolCall.errorText !== void 0 ? "error" : output ? "complete" : "running";
+			return {
+				type: "tool",
+				toolCallId,
+				toolName: toolCall.type.replace("tool-", ""),
+				input: toolCall.input,
+				output,
+				state: state$1,
+				error: toolCall.errorText,
+				id: toolCall.id || crypto.randomUUID()
 			};
 		});
 	}, [chat.messages]);
@@ -112,6 +144,7 @@ function useLanggraph({ api = "/api/chat", headers = {}, getInitialThreadId }) {
 		sendMessage,
 		messages,
 		state,
+		tools,
 		events: customEvents,
 		threadId: hasSubmitted ? threadId : void 0,
 		error,

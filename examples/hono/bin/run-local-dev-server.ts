@@ -62,6 +62,11 @@ const runHonoApp = async (opts: {
       c.res = await handler(c.req.raw);
       return;
     } catch (e) {
+      console.error('URL:', url.pathname);
+      console.error('Method:', c.req.method);
+      console.error('Error:', e);
+      console.error('Error stack:', e instanceof Error ? e.stack : 'No stack trace');
+
       if (
         e instanceof Error &&
         e.message.includes('Error when evaluating SSR module')
@@ -69,10 +74,17 @@ const runHonoApp = async (opts: {
         c.res = new Response('Not found', { status: 404 });
         return;
       } else {
-        console.error(e);
-        c.res = new Response('Internal server error', {
-          status: 500,
-        });
+        c.res = new Response(
+          JSON.stringify({
+            error: 'Internal server error',
+            message: e instanceof Error ? e.message : String(e),
+            stack: e instanceof Error ? e.stack : undefined
+          }),
+          {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' }
+          }
+        );
         return;
       }
     }

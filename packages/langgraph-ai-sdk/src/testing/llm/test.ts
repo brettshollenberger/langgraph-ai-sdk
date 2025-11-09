@@ -1,4 +1,5 @@
-import { FakeListChatModel } from "@langchain/core/utils/testing";
+import { FakeStreamingChatModel } from "@langchain/core/utils/testing";
+import { AIMessage, AIMessageChunk } from "@langchain/core/messages";
 import { type BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { getNodeContext } from "../node/withContext";
 import {
@@ -9,28 +10,163 @@ import {
   LLMNames,
 } from "./types";
 
-class StructuredOutputAwareFakeModel extends FakeListChatModel {
+class StructuredOutputAwareFakeModel extends FakeStreamingChatModel {
   private useStructuredOutput = false;
+  private structuredSchema: any = null;
+  private boundTools: any[] = [];
+  private includeRaw: boolean = false;
+  private streamingChunks: any[] = [];
 
-  withStructuredOutput(schema: any, config?: any): this {
+  override withStructuredOutput(schema: any, config?: any): this {
+    this.useStructuredOutput = true;
+    this.structuredSchema = schema;
+    this.includeRaw = config?.includeRaw ?? false;
+
+    // Don't convert to chunks yet - wait until invoke is called
+    return this;
+  }
+
+  private convertResponsesToStructuredChunks(responses: any[]): any[] {
+    if (!responses || responses.length === 0 || !this.useStructuredOutput) {
+      return [];
+    }
+
+    // Flatten the response array to create multiple chunks per response
+    const allChunks: any[] = [];
+
+    for (const response of responses) {
+      const content = typeof response === 'string'
+        ? response
+        : response.content || '';
+
+      const stripped = content.replace(/```json\n?/g, '').replace(/```/g, '').trim();
+
+      try {
+        const parsed = JSON.parse(stripped);
+        const jsonString = JSON.stringify(parsed);
+
+        // Split the JSON string into chunks to simulate streaming
+        // We'll use a chunk size that makes sense for streaming (e.g., 20 characters)
+        const chunkSize = 20;
+        const chunks: string[] = [];
+
+        for (let i = 0; i < jsonString.length; i += chunkSize) {
+          chunks.push(jsonString.substring(i, i + chunkSize));
+        }
+
+        // Create AIMessageChunk for each piece
+        // First chunk includes the tool name, subsequent chunks only have args
+        chunks.forEach((argsChunk, idx) => {
+          const toolCallChunk: any = {
+            args: argsChunk,
+            id: 'extract-1',
+            index: 0,
+          };
+
+          // Only include name in the first chunk
+          if (idx === 0) {
+            toolCallChunk.name = 'extract-structured_output';
+          }
+
+          const messageChunk = new AIMessageChunk({
+            content: '',
+            tool_call_chunks: [toolCallChunk],
+            id: `msg-${idx}`,
+          });
+
+          if (this.includeRaw) {
+            // For includeRaw, we need to aggregate all chunks and return at the end
+            // For simplicity, we'll just add the chunks and handle aggregation separately
+            allChunks.push({
+              raw: messageChunk,
+              parsed: idx === chunks.length - 1 ? parsed : undefined
+            });
+          } else {
+            allChunks.push(messageChunk);
+          }
+        });
+
+      } catch (e) {
+        // Handle parse error - return empty message chunk
+        const errorChunk = new AIMessageChunk({ content });
+
+        if (this.includeRaw) {
+          allChunks.push({
+            raw: errorChunk,
+            parsed: null
+          });
+        } else {
+          allChunks.push(errorChunk);
+        }
+      }
+    }
+
+    return allChunks;
+  }
+
+  override bindTools(tools: any[], config?: any): any {
     const clone = Object.create(Object.getPrototypeOf(this));
     Object.assign(clone, this);
-    clone.useStructuredOutput = true;
+    clone.boundTools = tools;
+    // When tools are bound, treat it like structured output for streaming
+    // Check if any tool starts with 'extract-' which indicates structured output
+    const hasExtractTool = tools.some(t => t.name?.startsWith('extract-'));
+    if (hasExtractTool) {
+      clone.useStructuredOutput = true;
+      clone.structuredSchema = tools.find(t => t.name?.startsWith('extract-'))?.parameters;
+    }
     return clone;
   }
 
-  override async invoke(input: any, options?: any): Promise<any> {
-    const response = await super.invoke(input, options);
-    
-    if (this.useStructuredOutput && typeof response.content === 'string') {
-      const stripped = response.content.replace(/```json\n?/g, '').replace(/```/g, '').trim();
-      try {
-        return JSON.parse(stripped);
-      } catch (e) {
-        return response.content;
+  // Override _streamResponseChunks instead of stream() so parent class can handle event emission
+  override async *_streamResponseChunks(
+    messages: any,
+    options?: any,
+    runManager?: any
+  ): AsyncGenerator<any> {
+    if (this.useStructuredOutput) {
+      // Convert responses to chunks with tool_call_chunks
+      const originalResponses = this.responses || [];
+      this.streamingChunks = this.convertResponsesToStructuredChunks(originalResponses);
+
+      // Yield chunks in the format expected by parent class
+      for (let i = 0; i < this.streamingChunks.length; i++) {
+        const chunk = this.streamingChunks[i];
+        const messageChunk = this.includeRaw ? chunk.raw : chunk;
+        yield {
+          message: messageChunk,
+          chunk: messageChunk,
+          // Include generation info with metadata that might include tags
+          generation_info: options?.tags ? { metadata: { tags: options.tags } } : undefined,
+        };
+        await new Promise(resolve => setTimeout(resolve, 1));
       }
+    } else {
+      // Fall back to parent implementation
+      yield* super._streamResponseChunks(messages, options, runManager);
     }
-    
+  }
+
+  override async invoke(input: any, options?: any): Promise<any> {
+    if (this.useStructuredOutput) {
+      // Let the parent invoke() call our _streamResponseChunks() and aggregate
+      // This ensures events are properly emitted
+      const response = await super.invoke(input, options);
+
+      // Extract parsed result from tool_calls
+      if (response && response.tool_calls && response.tool_calls.length > 0) {
+        const toolCall = response.tool_calls[0];
+        const parsed = toolCall.args;
+        if (this.includeRaw) {
+          return { raw: response, parsed };
+        }
+        return parsed;
+      }
+
+      return response;
+    }
+
+    const response = await super.invoke(input, options);
     return response;
   }
 }
@@ -81,8 +217,13 @@ class TestLLMManager implements ILLMManager {
         throw new Error("No responses configured for this graph/node combination.");
       }
 
+      const responses = graphResponses[nodeName].map(responseStr => {
+        return new AIMessage({ content: responseStr });
+      });
+
       return new StructuredOutputAwareFakeModel({
-        responses: graphResponses[nodeName],
+        responses,
+        sleep: 0,
       });
     }
 }

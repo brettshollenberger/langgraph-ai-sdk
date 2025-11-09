@@ -1,5 +1,5 @@
 import * as ai0 from "ai";
-import { InferState, LanggraphDataBase, LanggraphMessage, LanggraphMessage as LanggraphMessage$1, LanggraphUIMessage, LanggraphUIMessage as LanggraphUIMessage$1, MessagePart, StatePart } from "langgraph-ai-sdk-types";
+import { InferState, LanggraphAISDKUIMessage, LanggraphDataBase, LanggraphMessage, LanggraphUIMessage, LanggraphUIMessage as LanggraphUIMessage$1, MessagePart, StatePart } from "langgraph-ai-sdk-types";
 
 //#region src/useLanggraph.d.ts
 interface CustomEvent {
@@ -16,7 +16,7 @@ declare function useLanggraph<TLanggraphData extends LanggraphDataBase<any, any>
   headers?: Record<string, string>;
   getInitialThreadId?: () => string | undefined;
 }): {
-  sendMessage: (message?: (Omit<LanggraphUIMessage$1<TLanggraphData>, "id" | "role"> & {
+  sendMessage: (message?: (Omit<LanggraphAISDKUIMessage<TLanggraphData>, "id" | "role"> & {
     id?: string | undefined;
     role?: "system" | "user" | "assistant" | undefined;
   } & {
@@ -35,14 +35,24 @@ declare function useLanggraph<TLanggraphData extends LanggraphDataBase<any, any>
     parts?: never;
     messageId?: string;
   } | undefined, options?: ai0.ChatRequestOptions | undefined) => void;
-  messages: LanggraphMessage$1<TLanggraphData>[];
+  messages: LanggraphUIMessage$1<TLanggraphData>[];
   state: Partial<InferState<TLanggraphData>>;
+  tools: {
+    type: "tool";
+    toolCallId: string;
+    toolName: string;
+    input: Record<string, any>;
+    output: Record<string, any> | undefined;
+    state: string;
+    error: string | undefined;
+    id: string;
+  }[];
   events: CustomEvent[];
   threadId: string | undefined;
   error: string | null;
   isLoadingHistory: boolean;
   id: string;
-  setMessages: (messages: LanggraphUIMessage$1<TLanggraphData>[] | ((messages: LanggraphUIMessage$1<TLanggraphData>[]) => LanggraphUIMessage$1<TLanggraphData>[])) => void;
+  setMessages: (messages: LanggraphAISDKUIMessage<TLanggraphData>[] | ((messages: LanggraphAISDKUIMessage<TLanggraphData>[]) => LanggraphAISDKUIMessage<TLanggraphData>[])) => void;
   regenerate: ({
     messageId,
     ...options

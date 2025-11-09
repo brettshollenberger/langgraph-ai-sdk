@@ -1,7 +1,6 @@
-import { structuredMessageSchema, type GraphLanggraphData } from '../types.ts';
 import { registerGraph, streamLanggraph, fetchLanggraphHistory } from 'langgraph-ai-sdk';
 import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
-import { createSampleGraph } from 'langgraph-ai-sdk/testing';
+import { createSampleAgent, questionSchema, type AgentLanggraphData } from 'langgraph-ai-sdk/testing';
 import pkg from 'pg';
 
 const { Pool } = pkg;
@@ -11,35 +10,35 @@ const pool = new Pool({
 });
 const checkpointer = new PostgresSaver(pool);
 
-// Create and register the default graph
-export const graph = createSampleGraph(checkpointer, 'default');
-registerGraph<GraphLanggraphData>('default', graph);
+// Create and register the agent graph
+export const agentGraph = createSampleAgent(checkpointer, 'agent');
+registerGraph<AgentLanggraphData>('agent', agentGraph);
 
 function authMiddleware(handler: (req: Request) => Promise<Response>) {
   return async (req: Request): Promise<Response> => {
     const authHeader = req.headers.get('Authorization');
-    
+
     if (authHeader !== 'Bearer 12345') {
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { 'Content-Type': 'application/json' } }
       );
     }
-    
+
     return handler(req);
   };
 }
 
 export const POST = authMiddleware(async (req: Request): Promise<Response> => {
-  return streamLanggraph<GraphLanggraphData>({ 
-    graphName: 'default', 
-    messageSchema: structuredMessageSchema
+  return streamLanggraph<AgentLanggraphData>({
+    graphName: 'agent',
+    messageSchema: questionSchema
   })(req);
 });
 
 export const GET = authMiddleware((req: Request): Promise<Response> => {
-  return fetchLanggraphHistory<GraphLanggraphData>({ 
-    graphName: 'default', 
-    messageSchema: structuredMessageSchema
+  return fetchLanggraphHistory<AgentLanggraphData>({
+    graphName: 'agent',
+    messageSchema: questionSchema
   })(req);
 });

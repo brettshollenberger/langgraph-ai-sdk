@@ -1,6 +1,6 @@
 {
   "name": "langgraph-ai-sdk",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Server utilities for LangGraph AI SDK",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -42,8 +42,14 @@
     "@langchain/core": "^1.0.0",
     "@langchain/langgraph": "^1.0.0",
     "@langchain/langgraph-checkpoint-postgres": "^1.0.0",
+    "@langchain/langgraph-checkpoint": "^1.0.0",
+    "@pollyjs/adapter-fetch": "^6.0.7",
+    "@pollyjs/adapter-node-http": "^6.0.6",
+    "@pollyjs/core": "^6.0.6",
+    "@pollyjs/persister-fs": "^6.0.6",
     "@types/node": "^22.10.5",
     "ai": "^5.0.0",
+    "fast-json-stable-stringify": "^2.1.0",
     "langchain": "^1.0.0",
     "pg": "^8.0.0",
     "tsdown": "^0.15.12",
@@ -51,6 +57,7 @@
     "type-fest": "^5.1.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.0",
+    "xml-formatter": "^3.6.7",
     "zod": "^3.24.1"
   },
   "dependencies": {

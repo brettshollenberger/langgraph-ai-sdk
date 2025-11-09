@@ -1,4 +1,4 @@
-import { i as LanggraphUIMessage, n as InferMessageSchema, r as LanggraphData, t as ExtractGraphState } from "./types-CvBj0tDP.js";
+import { i as LanggraphUIMessage, n as InferMessageSchema, r as LanggraphData, t as ExtractGraphState } from "./types-B4Qke7pC.js";
 import { BaseMessage } from "@langchain/core/messages";
 import { InferUIMessageChunk } from "ai";
 import { z } from "zod";
@@ -22,7 +22,7 @@ declare function fetchLanggraphHistory<TGraphData extends LanggraphDataBase<any,
 }): (req: Request) => Promise<Response>;
 //#endregion
 //#region src/stream.d.ts
-declare function getSchemaKeys<T extends z.ZodObject<any>>(schema: T): Array<keyof z.infer<T>>;
+declare function getSchemaKeys<T extends z.ZodObject<any>>(schema: T | undefined): Array<keyof z.infer<T>>;
 interface LanggraphBridgeConfig<TGraphData extends LanggraphDataBase<any, any>> {
   graph: CompiledStateGraph<InferState<TGraphData>, any>;
   messages: BaseMessage[];

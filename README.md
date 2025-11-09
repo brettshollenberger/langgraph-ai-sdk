@@ -81,7 +81,7 @@ const structuredMessageSchema = z.object({
 type StructuredMessageType = z.infer<typeof structuredMessageSchema>;
 ```
 
-5. (Optional): In your node, tell the LLM about your structured message type (but DO NOT use `llm.withStructuredOutput`, which doesn't stream data):
+5. In your node, use `llm.withStructuredOutput` to emit structured output:
 
 ```typescript
 const prompt = `
@@ -97,17 +97,16 @@ const prompt = `
     ${structuredMessageSchema.getFormatInstructions()}
 </output>`;
 
-// Stream the response first. The AI SDK will stream this to the frontend
-const output = await llm.invoke(prompt);
-
-// Parse structured output afterwards, and attach it as metadata so we can use this to reload
-// structured messages from the database
-const structuredOutput = structuredMessageSchema.parse(output.content);
+// The AI SDK will stream this to the frontend
+const structuredOutput = await llm
+  .withStructuredOutput(structuredMessageSchema)
+  .withConfig({ tags: ["notify"] }) // Attach tags: ["notify"]!
+  .invoke(prompt);
 
 return {
   messages: [
     new AIMessage({
-      content: output.content,
+      content: JSON.stringify(structuredOutput),
       response_metadata: structuredOutput, // Attach the structured output as metadata
     }),
   ],
@@ -161,7 +160,7 @@ app.get(
 ); // Add a get route to fetch graph history
 ```
 
-8. On your client, the provided hooks will expose the graph state and messages to your UI:
+8. On your client, the provided hooks will expose the graph state, tool calls, and messages to your UI:
 
 ```typescript
 import { useLanggraph } from "@langgraph-ai-sdk/client";
@@ -170,7 +169,7 @@ import { type LanggraphData } from "./your-shared-types";
 function App() {
   // Provide type safety to the hook, you'll automatically get autocompletion for messages and state,
   // including your structured message type
-  const { messages, state, sendMessage, status, threadId, error } =
+  const { messages, state, tools, sendMessage, status, threadId, error } =
     useLanggraph<GraphData>({
       api: "/api/chat", // What endpoint has the graph?
       headers: {
@@ -211,7 +210,7 @@ function App() {
 }
 ```
 
-9. (Optional): Expose any custom data you want via the Langgraph writer:
+9. (Optional): Expose any custom events you want via the Langgraph writer:
 
 For example, in your node, you can emit custom events:
 
@@ -244,6 +243,96 @@ const myNode = (state: StateType, config: LangGraphRunnableConfig) => {
 const { events } = useLanggraph<GraphData>(...);
 
 // Show the user what tasks the AI is currently working on
+```
+
+## Agent Example
+
+Using an agent is exactly the same as using a workflow, the only thing you need to add is:
+
+1. Ensure you attach tags: "notify" to the LLM
+2. Pass your schema to the agent as `responseFormat`:
+
+```typescript
+export const brainstormAgent = async (
+  state: BrainstormGraphState,
+  config?: LangGraphRunnableConfig
+): Promise<Partial<BrainstormGraphState>> => {
+  const prompt = await getPrompt(state, config);
+
+  // Add tools to the agent, these will be streamed to the frontend
+  const tools = [SaveAnswersTool(state, config)];
+
+  // Use structured output for the response format
+  const llm = getLLM().withConfig({ tags: ["notify"] });
+
+  const agent = await createAgent({
+    model: llm,
+    tools,
+    systemPrompt: prompt,
+    responseFormat: questionSchema,
+  });
+
+  const updatedState = await agent.invoke(state as any, config);
+  const structuredResponse = updatedState.structuredResponse;
+
+  const aiMessage = new AIMessage({
+    content: JSON.stringify(structuredResponse, null, 2),
+    response_metadata: structuredResponse,
+  });
+
+  return {
+    messages: [...(state.messages || []), aiMessage],
+  };
+};
+```
+
+## Tool Calls
+
+When using agents, the agent may be running tools, but not yet producing messages. You can illustrate this either by showing tool calls, or a thinking indicator.
+
+```typescript
+const { tools } = useLanggraph<GraphData>(...);
+
+return (
+  <div className="flex w-full mb-4 justify-start">
+    <div className="max-w-[70%] rounded-lg p-4 bg-gray-700 text-white">
+      <div className="text-xs opacity-70 mb-2">AI is thinking...</div>
+      <div className="space-y-2">
+        {tools.map((tool, idx) => (
+          <div key={idx} className="text-sm">
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${
+                tool.state === 'complete' ? 'bg-green-500' :
+                tool.state === 'error' ? 'bg-red-500' :
+                'bg-yellow-500 animate-pulse'
+              }`} />
+              <span className="font-medium">{tool.toolName}</span>
+              <span className="text-xs opacity-70">({tool.state})</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+);
+```
+
+## Thinking Indicator
+
+```typescript
+const { messages } = useLanggraph<GraphData>(...);
+
+const latestAIMessage = messages.filter(msg => msg.type === "assitant").at(-1);
+const isThinking = latestAIMessage?.state === "thinking";
+
+return (
+  <>
+    {isThinking && <ThinkingIndicator />}
+    {messages.map((message) => (
+      <Message key={message.id} message={message} />
+    ))}
+  </>
+)
 ```
 
 ## Contributing

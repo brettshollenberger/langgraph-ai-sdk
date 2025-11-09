@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { getNodeContext, withContext, withErrorHandling, ErrorReporters, NodeMiddleware } from '../testing/node';
+import { NodeMiddlewareFactory } from '../testing/node/nodeMiddlewareFactory';
 import { LangGraphRunnableConfig } from "@langchain/langgraph";
 import { StateGraph } from "@langchain/langgraph";
 import { Annotation } from "@langchain/langgraph";
@@ -131,6 +132,60 @@ describe('Node Core', () => {
       expect(spy).toHaveBeenCalledWith(expect.objectContaining({ message: 'Test error' }));
 
       expect(nodeName).toBe('errorNode');
+    });
+
+    it('applies middlewares in order of addMiddleware calls', async () => {
+      const executionOrder: string[] = [];
+
+      const middlewareA = (node: any) => {
+        return async (state: any, config: LangGraphRunnableConfig) => {
+          executionOrder.push('A-before');
+          const result = await node(state, config);
+          executionOrder.push('A-after');
+          return result;
+        };
+      };
+
+      const middlewareB = (node: any) => {
+        return async (state: any, config: LangGraphRunnableConfig) => {
+          executionOrder.push('B-before');
+          const result = await node(state, config);
+          executionOrder.push('B-after');
+          return result;
+        };
+      };
+
+      const middlewareC = (node: any) => {
+        return async (state: any, config: LangGraphRunnableConfig) => {
+          executionOrder.push('C-before');
+          const result = await node(state, config);
+          executionOrder.push('C-after');
+          return result;
+        };
+      };
+
+      const testMiddleware = new NodeMiddlewareFactory()
+        .addMiddleware('A', middlewareA)
+        .addMiddleware('C', middlewareC)
+        .addMiddleware('B', middlewareB)
+
+      const node = testMiddleware.use(
+        {},
+        async (state: any, config: LangGraphRunnableConfig) => {
+          executionOrder.push('node');
+          return {};
+        }
+      );
+
+      const graph = new StateGraph(Annotation.Root({}))
+        .addNode('testNode', node)
+        .addEdge('__start__', 'testNode')
+        .addEdge('testNode', '__end__')
+        .compile();
+
+      await graph.invoke({});
+
+      expect(executionOrder).toEqual(['A-before', 'C-before', 'B-before', 'node', 'B-after', 'C-after', 'A-after']);
     });
 
   });

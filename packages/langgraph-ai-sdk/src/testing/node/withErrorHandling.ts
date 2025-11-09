@@ -42,7 +42,6 @@ export const withErrorHandling = <TState extends Record<string, unknown>>(
         try {
             return await nodeFunction(state, config);
         } catch (error) {
-            console.log(`caught error`)
             ErrorReporters.report(error as Error);
             throw error;
         }

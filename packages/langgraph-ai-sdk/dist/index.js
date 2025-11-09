@@ -1,3 +1,4 @@
+import { n as __export } from "./chunk-C3Lxiq5Q.js";
 import { v7 } from "uuid";
 import { AIMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { createUIMessageStream, createUIMessageStreamResponse, parsePartialJson } from "ai";
@@ -7,108 +8,313 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import pkg from "pg";
 import { jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
-//#region rolldown:runtime
-var __defProp = Object.defineProperty;
-var __export = (all) => {
-	let target = {};
-	for (var name in all) __defProp(target, name, {
-		get: all[name],
-		enumerable: true
-	});
-	return target;
-};
-
-//#endregion
 //#region src/stream.ts
+const TOOL_CALL_REGEX = /^extract/;
+const isUndefined = (value) => {
+	return typeof value === "undefined";
+};
+const isNull = (value) => {
+	return value === null;
+};
+const isString = (value) => {
+	return typeof value === "string";
+};
 function getSchemaKeys(schema) {
+	if (!schema || !schema.shape) return [];
 	return Object.keys(schema.shape);
 }
-function createLanggraphUIStream({ graph, messages, threadId, messageSchema, state }) {
-	return createUIMessageStream({ execute: async ({ writer }) => {
-		const stream = await graph.stream({
+var Handler = class {
+	writer;
+	messageSchema;
+	constructor(writer, messageSchema) {
+		this.writer = writer;
+		this.messageSchema = messageSchema;
+	}
+};
+var StructuredMessageToolHandler = class extends Handler {
+	messagePartIds = {};
+	schemaKeys;
+	toolArgsBuffer = "";
+	toolValues = {};
+	currentToolName;
+	constructor(writer, messageSchema) {
+		super(writer, messageSchema);
+		this.schemaKeys = messageSchema ? getSchemaKeys(messageSchema).filter((key) => typeof key === "string") : [];
+	}
+	async handle(chunk) {
+		if (!this.messageSchema) return;
+		if (chunk[0] !== "messages" && !(Array.isArray(chunk[0]) && chunk[1] === "messages")) return;
+		const [message, metadata] = Array.isArray(chunk[0]) ? chunk[2] : chunk[1];
+		if (!metadata.tags?.includes("notify")) return;
+		if (!message || !("tool_call_chunks" in message) || typeof message.tool_call_chunks !== "object" || !Array.isArray(message.tool_call_chunks)) return;
+		if (message.tool_call_chunks.length === 0) return;
+		for (const chunk$1 of message.tool_call_chunks) {
+			if (isString(chunk$1.name)) this.currentToolName = chunk$1.name;
+			if (!this.currentToolName?.match(/^extract/)) continue;
+			const toolArgs = chunk$1.args;
+			this.toolArgsBuffer += toolArgs;
+			await this.writeToolCall();
+		}
+	}
+	async writeToolCall() {
+		const parsed = (await parsePartialJson(this.toolArgsBuffer)).value;
+		if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) Object.entries(parsed).forEach(([key, value]) => {
+			if (this.schemaKeys.includes(key) && !isUndefined(value) && !isNull(value)) {
+				if (this.toolValues[key] !== value) {
+					this.toolValues[key] = JSON.stringify(value);
+					const messagePartId = this.messagePartIds[key] || crypto.randomUUID();
+					this.messagePartIds[key] = messagePartId;
+					const structuredMessagePart = {
+						type: `data-message-${key}`,
+						id: messagePartId,
+						data: value
+					};
+					this.writer.write(structuredMessagePart);
+				}
+			}
+		});
+	}
+};
+var OtherToolHandler = class extends Handler {
+	currentToolName;
+	toolCallStates = /* @__PURE__ */ new Map();
+	async handle(chunk) {
+		if (chunk[0] !== "messages" && !(Array.isArray(chunk[0]) && chunk[1] === "messages")) return;
+		const [message, metadata] = Array.isArray(chunk[0]) ? chunk[2] : chunk[1];
+		if (!metadata.tags?.includes("notify")) return;
+		if (!message || !("tool_call_chunks" in message) || typeof message.tool_call_chunks !== "object" || !Array.isArray(message.tool_call_chunks)) return;
+		for (const chunk$1 of message.tool_call_chunks) {
+			if (isString(chunk$1.name)) this.currentToolName = chunk$1.name;
+			if (this.currentToolName?.match(TOOL_CALL_REGEX)) continue;
+			const toolName = this.currentToolName;
+			if (!toolName) continue;
+			let toolState = this.toolCallStates.get(toolName);
+			const toolCallId = toolState?.id || crypto.randomUUID();
+			if (!toolState) {
+				toolState = {
+					id: toolCallId,
+					name: toolName,
+					argsBuffer: ""
+				};
+				this.toolCallStates.set(toolName, toolState);
+				this.writer.write({
+					type: "tool-input-start",
+					toolCallId,
+					toolName
+				});
+			}
+			toolState.argsBuffer += chunk$1.args || "";
+			const parsedInput = (await parsePartialJson(toolState.argsBuffer)).value;
+			if (parsedInput) this.writer.write({
+				type: "tool-input-available",
+				toolCallId,
+				toolName: toolState.name,
+				input: parsedInput
+			});
+		}
+	}
+	async handleToolEnd(toolName, chunk) {
+		const toolState = this.toolCallStates.get(toolName);
+		if (!toolState || toolState.completed) return;
+		toolState.completed = true;
+		const [type, data] = chunk;
+		this.writer.write({
+			type: "tool-output-available",
+			toolCallId: toolState.id,
+			output: data?.data?.data?.output
+		});
+	}
+	async handleToolError(toolName, error) {
+		const toolState = this.toolCallStates.get(toolName);
+		if (!toolState || toolState.completed) return;
+		toolState.completed = true;
+		this.writer.write({
+			type: "tool-output-error",
+			toolCallId: toolState.id,
+			errorText: String(error)
+		});
+	}
+};
+var ToolCallHandler = class extends Handler {
+	messagePartIds = {};
+	schemaKeys;
+	toolArgsBuffer = "";
+	toolValues = {};
+	currentToolName;
+	handlers;
+	constructor(writer, messageSchema) {
+		super(writer, messageSchema);
+		this.schemaKeys = messageSchema ? getSchemaKeys(messageSchema).filter((key) => typeof key === "string") : [];
+		this.handlers = {
+			structured_messages: new StructuredMessageToolHandler(writer, messageSchema),
+			other_tools: new OtherToolHandler(writer, messageSchema)
+		};
+	}
+	async handle(chunk) {
+		await this.handlers.structured_messages.handle(chunk);
+		await this.handlers.other_tools.handle(chunk);
+	}
+	async handleToolEnd(toolName, chunk) {
+		await this.handlers.other_tools.handleToolEnd(toolName, chunk);
+	}
+	async handleToolError(toolName, error) {
+		await this.handlers.other_tools.handleToolError(toolName, error);
+	}
+};
+var RawMessageHandler = class extends Handler {
+	messageBuffer = "";
+	messagePartId;
+	async handle(chunk) {
+		if (this.messageSchema) return;
+		if (chunk[0] !== "messages" && !(Array.isArray(chunk[0]) && chunk[1] === "messages")) return;
+		const [message, metadata] = Array.isArray(chunk[0]) ? chunk[2] : chunk[1];
+		if (!metadata.tags?.includes("notify")) return;
+		if (isUndefined(this.messagePartId)) this.messagePartId = crypto.randomUUID();
+		const content = typeof message.content === "string" ? message.content : "";
+		this.messageBuffer += content;
+		this.writer.write({
+			type: "data-message-text",
+			id: this.messagePartId,
+			data: this.messageBuffer
+		});
+	}
+};
+var StateHandler = class extends Handler {
+	stateDataParts = {};
+	dataPartIds = {};
+	async handle(chunk) {
+		const updates = Array.isArray(chunk[0]) ? chunk[2] : chunk[1];
+		for (const [nodeName, nodeUpdates] of Object.entries(updates)) {
+			if (!nodeUpdates || typeof nodeUpdates !== "object") continue;
+			Object.entries(nodeUpdates).forEach(([key, value]) => {
+				if (key === "messages") return;
+				if (isUndefined(value) || isNull(value)) return;
+				const keyStr = String(key);
+				const dataPartId = this.dataPartIds[keyStr] || crypto.randomUUID();
+				this.dataPartIds[keyStr] = dataPartId;
+				this.writer.write({
+					type: `data-state-${keyStr}`,
+					id: dataPartId,
+					data: value
+				});
+			});
+		}
+	}
+};
+var CustomHandler = class extends Handler {
+	async handle(chunk) {
+		const data = Array.isArray(chunk[0]) ? chunk[2] : chunk[1];
+		const defaultKeys = ["id", "event"];
+		const eventName = data.event;
+		if (!eventName || !data.id) return;
+		const dataKeys = Object.entries(data).reduce((acc, [key, value]) => {
+			if (typeof key === "string" && !defaultKeys.includes(key)) acc[key] = value;
+			return acc;
+		}, {});
+		this.writer.write({
+			type: kebabCase(`data-custom-${eventName}`),
+			id: data.id,
+			data: dataKeys
+		});
+	}
+};
+var EventsHandler = class extends Handler {
+	toolCallHandler;
+	constructor(writer, messageSchema, toolCallHandler) {
+		super(writer, messageSchema);
+		this.toolCallHandler = toolCallHandler;
+	}
+	async handle(chunk) {
+		if (chunk[0] !== "events") return;
+		const eventsData = chunk[1];
+		const event = eventsData.data.event;
+		const name = eventsData.data.name;
+		const data = eventsData.data.data;
+		if (event === "on_tool_end") await this.toolCallHandler.handleToolEnd(name, chunk);
+		else if (event === "on_tool_error") await this.toolCallHandler.handleToolError(name, data);
+	}
+};
+var Handlers = class {
+	tool_calls;
+	raw_messages;
+	state;
+	custom;
+	events;
+	constructor(writer, messageSchema) {
+		this.tool_calls = new ToolCallHandler(writer, messageSchema);
+		this.raw_messages = new RawMessageHandler(writer, messageSchema);
+		this.state = new StateHandler(writer, messageSchema);
+		this.custom = new CustomHandler(writer, messageSchema);
+		this.events = new EventsHandler(writer, messageSchema, this.tool_calls);
+	}
+	async handle(chunk) {
+		const type = Array.isArray(chunk[0]) ? chunk[1] : chunk[0];
+		if (type === "messages") {
+			await this.tool_calls.handle(chunk);
+			await this.raw_messages.handle(chunk);
+		} else if (type === "updates") await this.state.handle(chunk);
+		else if (type === "custom") await this.custom.handle(chunk);
+		else if (type === "events") await this.events.handle(chunk);
+	}
+};
+var LanggraphStreamHandler = class {
+	handlers;
+	messageSchema;
+	constructor(writer, messageSchema) {
+		this.handlers = new Handlers(writer, messageSchema);
+	}
+	async *adaptStreamEvents(stream) {
+		for await (const event of stream) if (event.event === "on_chain_stream") {
+			const chunk = event.data.chunk;
+			const [modeOrNs, dataOrMode, maybeData] = Array.isArray(chunk) ? chunk : [null, ...chunk];
+			const mode = maybeData !== void 0 ? dataOrMode : modeOrNs;
+			const data = maybeData !== void 0 ? maybeData : dataOrMode;
+			if (mode === "messages" || mode === "updates" || mode === "custom") yield [mode, data];
+		} else if (event.event.startsWith("on_")) yield ["events", {
+			event: "events",
+			data: event
+		}];
+	}
+	async stream({ graph, messages, threadId, state, messageSchema }) {
+		this.messageSchema = messageSchema;
+		const graphState = {
 			messages,
 			...state
-		}, {
+		};
+		const stream = graph.streamEvents(graphState, {
+			version: "v2",
 			streamMode: [
-				"messages",
 				"updates",
-				"custom"
+				"custom",
+				"messages"
 			],
 			context: { graphName: graph.name },
 			configurable: { thread_id: threadId }
 		});
-		const stateDataPartIds = {};
-		const messagePartIds = messageSchema ? {} : { text: crypto.randomUUID() };
-		let messageBuffer = "";
-		for await (const chunk of stream) {
-			const chunkArray = chunk;
-			let kind;
-			let data;
-			if (chunkArray.length === 2) [kind, data] = chunkArray;
-			else if (chunkArray.length === 3) [, kind, data] = chunkArray;
-			else continue;
-			if (kind === "messages") {
-				const [message, metadata] = data;
-				if (message?.content && metadata?.tags?.includes("notify")) {
-					let content = typeof message.content === "string" ? message.content : "";
-					messageBuffer += content;
-					if (messageSchema) {
-						let cleanedBuffer = messageBuffer;
-						if (cleanedBuffer.includes("```json")) cleanedBuffer = cleanedBuffer.replace(/```json/g, "").trim();
-						if (cleanedBuffer.includes("```")) cleanedBuffer = cleanedBuffer.split("```")[0];
-						cleanedBuffer = cleanedBuffer.trim();
-						const parsed = (await parsePartialJson(cleanedBuffer)).value;
-						if (parsed) Object.entries(parsed).forEach(([key, value]) => {
-							if (value !== void 0) {
-								const partId = messagePartIds[key] || crypto.randomUUID();
-								messagePartIds[key] = partId;
-								const structuredMessagePart = {
-									type: `data-message-${key}`,
-									id: partId,
-									data: value
-								};
-								writer.write(structuredMessagePart);
-							}
-						});
-					} else writer.write({
-						type: "data-message-text",
-						id: messagePartIds.text,
-						data: messageBuffer
-					});
-				}
-			} else if (kind === "updates") {
-				const updates = data;
-				for (const [nodeName, nodeUpdates] of Object.entries(updates)) {
-					if (!nodeUpdates || typeof nodeUpdates !== "object") continue;
-					Object.keys(nodeUpdates).forEach((key) => {
-						const value = nodeUpdates[key];
-						if (value === void 0 || value === null) return;
-						if (key === "messages") return;
-						const keyStr = String(key);
-						const dataPartId = stateDataPartIds[keyStr] || crypto.randomUUID();
-						stateDataPartIds[keyStr] = dataPartId;
-						writer.write({
-							type: `data-state-${keyStr}`,
-							id: dataPartId,
-							data: value
-						});
-					});
-				}
-			} else if (kind === "custom") {
-				const customData = data;
-				const defaultKeys = ["id", "event"];
-				const eventName = customData.event;
-				if (!eventName || !customData.id) continue;
-				const dataKeys = Object.entries(customData).reduce((acc, [key, value]) => {
-					if (typeof key === "string" && !defaultKeys.includes(key)) acc[key] = value;
-					return acc;
-				}, {});
-				writer.write({
-					type: kebabCase(`data-custom-${eventName}`),
-					id: customData.id,
-					data: dataKeys
-				});
-			}
+		const eventsStream = this.adaptStreamEvents(stream);
+		for await (const chunk of eventsStream) await this.handlers.handle(chunk);
+	}
+};
+function createLanggraphUIStream({ graph, messages, threadId, messageSchema, state }) {
+	return createUIMessageStream({ execute: async ({ writer }) => {
+		try {
+			await new LanggraphStreamHandler(writer, messageSchema).stream({
+				graph,
+				messages,
+				threadId,
+				state,
+				messageSchema
+			});
+		} catch (error) {
+			console.error("==========================================");
+			console.error("STREAM ERROR - FAILING LOUDLY:");
+			console.error("==========================================");
+			console.error("Error details:", error);
+			console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace");
+			console.error("Graph name:", graph.name);
+			console.error("Thread ID:", threadId);
+			console.error("==========================================");
+			throw error;
 		}
 	} });
 }
