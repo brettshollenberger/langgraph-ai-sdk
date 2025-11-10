@@ -57,9 +57,9 @@ export type LanggraphMessage<T extends LanggraphDataBase<any, any>> = {
   parts: MessagePart<T>[];
 };
 
-export type LanggraphUIMessage<T extends LanggraphDataBase<any, any>> = {
+export type LanggraphUIMessage<T extends LanggraphDataBase<any, any>> = Simplify<{
   id: string;
   role: 'system' | 'user' | 'assistant';
   type: string;
   state: 'streaming' | 'thinking';
-} & Simplify<InferMessage<T>>
+} & InferMessage<T>>
