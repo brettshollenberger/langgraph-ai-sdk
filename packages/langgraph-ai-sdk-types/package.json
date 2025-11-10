@@ -1,14 +1,24 @@
 {
   "name": "langgraph-ai-sdk-types",
-  "version": "1.0.0",
+  "version": "1.0.5",
   "description": "Shared types for LangGraph AI SDK",
-  "main": "index.js",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "type": "module",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
-      "import": "./src/index.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.d.ts",
+      "default": "./dist/index.d.ts"
     }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "pnpm build"
   },
   "keywords": [
     "langgraph",

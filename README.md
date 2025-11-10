@@ -262,7 +262,7 @@ export const brainstormAgent = async (
   // Add tools to the agent, these will be streamed to the frontend
   const tools = [SaveAnswersTool(state, config)];
 
-  // Use structured output for the response format
+  // Add tag: notify to ensure we stream messages to the client
   const llm = getLLM().withConfig({ tags: ["notify"] });
 
   const agent = await createAgent({

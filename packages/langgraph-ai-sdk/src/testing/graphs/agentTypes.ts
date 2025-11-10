@@ -7,7 +7,6 @@ import type { LanggraphData } from '../../types';
  * Schema for structured questions with intro, examples, and conclusion
  */
 export const questionSchema = z.object({
-  type: z.literal("structuredQuestion"),
   text: z.string().describe('A simple intro to the question'),
   examples: z.array(z.string()).optional().describe(`OPTIONAL: List of examples to help the user understand what we're asking.`),
   conclusion: z.string().optional().describe(`OPTIONAL: Conclusion text to include after examples`),
@@ -34,13 +33,6 @@ export const agentOutputSchema = z.discriminatedUnion("type", [
 ]);
 
 export type AgentOutputType = z.infer<typeof agentOutputSchema>;
-
-/**
- * Brainstorm topics
- */
-export const brainstormTopics = ["idea", "audience", "solution", "socialProof", "lookAndFeel"] as const;
-export type BrainstormTopic = typeof brainstormTopics[number];
-export type Brainstorm = Partial<Record<BrainstormTopic, string>>;
 
 /**
  * State annotation for the brainstorm agent
