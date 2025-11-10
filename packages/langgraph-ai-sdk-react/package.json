@@ -7,7 +7,9 @@
   "exports": {
     ".": {
       "types": "./src/index.ts",
-      "import": "./src/index.ts"
+      "browser": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
     }
   },
   "keywords": [
@@ -19,8 +21,8 @@
   "author": "",
   "license": "ISC",
   "peerDependencies": {
-    "@ai-sdk/react": "^2.0.0",
-    "ai": "^5.0.0",
+    "@ai-sdk/react": "^2.0.59",
+    "ai": "^5.0.59",
     "react": "^18.0.0 || ^19.0.0"
   },
   "dependencies": {

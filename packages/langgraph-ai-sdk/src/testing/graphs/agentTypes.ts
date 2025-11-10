@@ -23,16 +23,12 @@ export const finishBrainstormingSchema = z.object({
 });
 
 export type FinishBrainstorming = z.infer<typeof finishBrainstormingSchema>;
-
 /**
- * Union schema for all agent output types
+ * Brainstorm topics
  */
-export const agentOutputSchema = z.discriminatedUnion("type", [
-  questionSchema,
-  finishBrainstormingSchema,
-]);
-
-export type AgentOutputType = z.infer<typeof agentOutputSchema>;
+export const brainstormTopics = ["idea", "audience", "solution", "socialProof", "lookAndFeel"] as const;
+export type BrainstormTopic = typeof brainstormTopics[number];
+export type Brainstorm = Partial<Record<BrainstormTopic, string>>;
 
 /**
  * State annotation for the brainstorm agent
