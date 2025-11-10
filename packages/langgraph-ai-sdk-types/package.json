@@ -1,6 +1,6 @@
 {
   "name": "langgraph-ai-sdk-types",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "description": "Shared types for LangGraph AI SDK",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -29,15 +29,18 @@
   "author": "",
   "license": "ISC",
   "peerDependencies": {
+    "@langchain/core": "^1.0.0",
     "ai": "^5.0.0",
-    "zod": "^3.0.0",
-    "@langchain/core": "^1.0.0"
+    "zod": "^3.0.0"
   },
   "devDependencies": {
+    "@langchain/core": "^1.0.0",
     "@types/node": "^22.10.5",
-    "typescript": "^5.9.3",
-    "zod": "^3.24.1",
     "ai": "^5.0.0",
-    "@langchain/core": "^1.0.0"
+    "typescript": "^5.9.3",
+    "zod": "^3.24.1"
+  },
+  "dependencies": {
+    "type-fest": "^5.1.0"
   }
 }

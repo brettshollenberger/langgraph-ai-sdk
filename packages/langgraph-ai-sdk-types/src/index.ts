@@ -1,5 +1,6 @@
 import type { UIMessage } from 'ai';
 import { type BaseMessage } from '@langchain/core/messages'
+import { type Simplify } from 'type-fest'
 import { z } from 'zod';
 
 export type InvalidStateError = {
@@ -61,4 +62,4 @@ export type LanggraphUIMessage<T extends LanggraphDataBase<any, any>> = {
   role: 'system' | 'user' | 'assistant';
   type: string;
   state: 'streaming' | 'thinking';
-} & InferMessage<T>
+} & Simplify<InferMessage<T>>

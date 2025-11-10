@@ -1,6 +1,6 @@
 {
   "name": "langgraph-ai-sdk-react",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "description": "React hooks for LangGraph AI SDK",
   "main": "index.js",
   "type": "module",
@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "langgraph-ai-sdk-types": "workspace:*",
+    "type-fest": "^5.1.0",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
