@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { useLanggraph } from '../useLanggraph';
-import type { LanggraphDataBase } from 'langgraph-ai-sdk-types';
+import type { LanggraphData } from 'langgraph-ai-sdk-types';
 
 // Define test types matching the sample graph
 type TestState = {
@@ -17,7 +17,7 @@ type TestMessage = {
   content: string;
 };
 
-type TestLanggraphData = LanggraphDataBase<TestState, TestMessage>;
+type TestLanggraphData = LanggraphData<TestState, TestMessage>;
 
 describe('useLanggraph', () => {
   const mockFetch = vi.fn();

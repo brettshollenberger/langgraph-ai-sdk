@@ -1,5 +1,5 @@
 import * as ai0 from "ai";
-import { InferState, LanggraphAISDKUIMessage, LanggraphDataBase, LanggraphMessage, LanggraphUIMessage, LanggraphUIMessage as LanggraphUIMessage$1, MessagePart, StatePart } from "langgraph-ai-sdk-types";
+import { InferState, LanggraphAISDKUIMessage, LanggraphData, LanggraphMessage, LanggraphUIMessage, LanggraphUIMessage as LanggraphUIMessage$1, MessagePart, StatePart } from "langgraph-ai-sdk-types";
 
 //#region src/useLanggraph.d.ts
 interface CustomEvent {
@@ -7,7 +7,7 @@ interface CustomEvent {
   type: string;
   data: any;
 }
-declare function useLanggraph<TLanggraphData extends LanggraphDataBase<any, any>>({
+declare function useLanggraph<TLanggraphData extends LanggraphData<any, any>>({
   api,
   headers,
   getInitialThreadId

@@ -11,8 +11,9 @@ import type { CompiledStateGraph } from '@langchain/langgraph';
 import type { StreamEvent } from "@langchain/core/tracers/log_stream";
 import { BaseMessage } from '@langchain/core/messages';
 import type { 
-  LanggraphDataBase,
+  LanggraphData,
   LanggraphUIMessage,
+  SimpleLanggraphUIMessage,
   InferState, 
   InferMessage,
   InferMessageSchema,
@@ -69,7 +70,7 @@ export function getSchemaKeys<T extends z.ZodObject<any>>(
   return Object.keys(schema.shape) as Array<keyof z.infer<T>>;
 }
 export interface LanggraphBridgeConfig<
-  TGraphData extends LanggraphDataBase<any, any>,
+  TGraphData extends LanggraphData<any, any>,
 > {
   graph: CompiledStateGraph<InferState<TGraphData>, any>;
   messages: BaseMessage[];
@@ -78,7 +79,7 @@ export interface LanggraphBridgeConfig<
   state?: Partial<InferState<TGraphData>>;
 }
 
-abstract class Handler<TGraphData extends LanggraphDataBase<any, any>> {
+abstract class Handler<TGraphData extends LanggraphData<any, any>> {
   protected writer: UIMessageStreamWriter<LanggraphUIMessage<TGraphData>>;
   protected messageSchema?: InferMessageSchema<TGraphData>;
 
@@ -89,7 +90,7 @@ abstract class Handler<TGraphData extends LanggraphDataBase<any, any>> {
 
   abstract handle(chunk: StreamChunk): Promise<void>;
 }
-class StructuredMessageToolHandler<TGraphData extends LanggraphDataBase<any, any>> extends Handler<TGraphData> {
+class StructuredMessageToolHandler<TGraphData extends LanggraphData<any, any>> extends Handler<TGraphData> {
   messagePartIds: Record<string, string> = {};
   schemaKeys: string[];
   toolArgsBuffer: string = '';
@@ -167,7 +168,7 @@ class StructuredMessageToolHandler<TGraphData extends LanggraphDataBase<any, any
   }
 }
 
-class OtherToolHandler<TGraphData extends LanggraphDataBase<any, any>> extends Handler<TGraphData> {
+class OtherToolHandler<TGraphData extends LanggraphData<any, any>> extends Handler<TGraphData> {
   currentToolName: string | undefined;
   toolCallStates: Map<string, {
     id: string;
@@ -257,7 +258,7 @@ class OtherToolHandler<TGraphData extends LanggraphDataBase<any, any>> extends H
     } as unknown as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
   }
 }
-class ToolCallHandler<TGraphData extends LanggraphDataBase<any, any>> extends Handler<TGraphData> {
+class ToolCallHandler<TGraphData extends LanggraphData<any, any>> extends Handler<TGraphData> {
   messagePartIds: Record<string, string> = {};
   schemaKeys: string[];
   toolArgsBuffer: string = '';
@@ -290,7 +291,7 @@ class ToolCallHandler<TGraphData extends LanggraphDataBase<any, any>> extends Ha
     await this.handlers.other_tools.handleToolError(toolName, error);
   }
 }
-class RawMessageHandler<TGraphData extends LanggraphDataBase<any, any>> extends Handler<TGraphData> {
+class RawMessageHandler<TGraphData extends LanggraphData<any, any>> extends Handler<TGraphData> {
   messageBuffer: string = '';
   messagePartId: string | undefined;
   
@@ -318,7 +319,7 @@ class RawMessageHandler<TGraphData extends LanggraphDataBase<any, any>> extends 
   }
 }
 
-class StateHandler<TGraphData extends LanggraphDataBase<any, any>> extends Handler<TGraphData> {
+class StateHandler<TGraphData extends LanggraphData<any, any>> extends Handler<TGraphData> {
   stateDataParts: Record<string, string> = {};
   dataPartIds: Record<string, string> = {};
 
@@ -350,7 +351,7 @@ class StateHandler<TGraphData extends LanggraphDataBase<any, any>> extends Handl
   }
 }
 
-class CustomHandler<TGraphData extends LanggraphDataBase<any, any>> extends Handler<TGraphData> {
+class CustomHandler<TGraphData extends LanggraphData<any, any>> extends Handler<TGraphData> {
   async handle(chunk: StreamChunk): Promise<void> {
     const data = Array.isArray(chunk[0]) ? chunk[2] : chunk[1];
     const defaultKeys = ['id', 'event'];
@@ -372,7 +373,7 @@ class CustomHandler<TGraphData extends LanggraphDataBase<any, any>> extends Hand
   }
 }
 
-class EventsHandler<TGraphData extends LanggraphDataBase<any, any>> extends Handler<TGraphData> {
+class EventsHandler<TGraphData extends LanggraphData<any, any>> extends Handler<TGraphData> {
   toolCallHandler: ToolCallHandler<TGraphData>;
 
   constructor(writer: UIMessageStreamWriter<LanggraphUIMessage<TGraphData>>, messageSchema: InferMessageSchema<TGraphData> | undefined, toolCallHandler: ToolCallHandler<TGraphData>) {
@@ -396,7 +397,7 @@ class EventsHandler<TGraphData extends LanggraphDataBase<any, any>> extends Hand
   }
 }
 
-class Handlers<TGraphData extends LanggraphDataBase<any, any>> {
+class Handlers<TGraphData extends LanggraphData<any, any>> {
   tool_calls: ToolCallHandler<TGraphData>;
   raw_messages: Handler<TGraphData>;
   state: Handler<TGraphData>;
@@ -426,7 +427,7 @@ class Handlers<TGraphData extends LanggraphDataBase<any, any>> {
     }
   }
 }
-class LanggraphStreamHandler<TGraphData extends LanggraphDataBase<any, any>> {
+class LanggraphStreamHandler<TGraphData extends LanggraphData<any, any>> {
   handlers: Handlers<TGraphData>;
   messageSchema?: InferMessageSchema<TGraphData>;
 
@@ -434,7 +435,7 @@ class LanggraphStreamHandler<TGraphData extends LanggraphDataBase<any, any>> {
     this.handlers = new Handlers<TGraphData>(writer, messageSchema);
   }
 
-  async *adaptStreamEvents<TGraphData extends LanggraphDataBase<any, any>>(
+  async *adaptStreamEvents(
     stream: AsyncIterable<StreamEvent>
   ): AsyncGenerator<StreamChunk> {
     for await (const event of stream) {
@@ -472,7 +473,7 @@ class LanggraphStreamHandler<TGraphData extends LanggraphDataBase<any, any>> {
     const graphState = { messages, ...state }
     const stream = graph.streamEvents(graphState, {
       version: "v2",
-      streamMode: ["updates", "custom", "messages"],
+      streamMode: ["messages", "updates", "custom"],
       context: { graphName: graph.name },
       configurable: { thread_id: threadId }
     });
@@ -486,7 +487,7 @@ class LanggraphStreamHandler<TGraphData extends LanggraphDataBase<any, any>> {
 }
 
 export function createLanggraphUIStream<
-  TGraphData extends LanggraphDataBase<any, any>,
+  TGraphData extends LanggraphData<any, any>,
 >({
   graph,
   messages,
@@ -515,7 +516,7 @@ export function createLanggraphUIStream<
 }
 
 export function createLanggraphStreamResponse<
-  TGraphData extends LanggraphDataBase<any, any>,
+  TGraphData extends LanggraphData<any, any>,
 >(
   options: LanggraphBridgeConfig<TGraphData>
 ): Response {
@@ -524,7 +525,7 @@ export function createLanggraphStreamResponse<
 }
 
 export async function loadThreadHistory<
-  TGraphData extends LanggraphDataBase<any, any>,
+  TGraphData extends LanggraphData<any, any>,
 >(
   graph: CompiledStateGraph<InferState<TGraphData>, any>,
   threadId: string,

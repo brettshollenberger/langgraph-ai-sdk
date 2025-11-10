@@ -30,16 +30,29 @@ DATABASE_URL="postgresql://user:password@localhost:5432/your_database" pnpm lang
 
 This will create both the threads table and LangGraph's checkpoint tables.
 
-2. Setup a PostgresSaver to preserve Langgraph state:
+2. Initialize the library with your database connection:
 
 ```typescript
+import { Pool } from "pg";
+import { initializeLanggraph } from "langgraph-ai-sdk";
 import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
 
+// Create a single pool for both checkpointer and ops
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL || "postgresql://localhost/mydb",
+});
+
+// Initialize the library (required for ops functions like ensureThread)
+initializeLanggraph({ pool });
+
+// Use the same pool for the LangGraph checkpointer
 const checkpointer = new PostgresSaver(pool);
 await checkpointer.setup();
 
-export { checkpointer };
+export { checkpointer, pool };
 ```
+
+**Important:** You must call `initializeLanggraph({ pool })` before using any API functions. This ensures a single database connection is used throughout your application.
 
 3. Define your graph:
 
@@ -135,35 +148,41 @@ registerGraph<GraphData>("answerQuestion", { graph });
 
 ```typescript
 import { Hono } from "hono";
-import {
-  streamLanggraph,
-  fetchLanggraphHistory,
-} from "@langgraph-ai-sdk/server";
+import { streamLanggraph, fetchLanggraphHistory } from "langgraph-ai-sdk";
 
 const app = new Hono();
 
 app.use("*", myAuthMiddleware);
 
-app.post(
-  "/api/chat",
-  streamLanggraph<GraphData>({
-    graphName: "answerQuestion",
-    messageSchema: structuredMessageSchema,
-  })
-); // Use the registered graph name
+// Custom POST endpoint with parsed data
+app.post("/api/chat", async (c) => {
+  const { messages, threadId, state } = await c.req.json();
 
-app.get(
-  "/api/chat",
-  fetchLanggraphHistory<GraphData>({
-    graphName: "answerQuestion",
-  })
-); // Add a get route to fetch graph history
+  return streamLanggraph<GraphData>({
+    graph,
+    messageSchema: structuredMessageSchema,
+    messages,
+    threadId,
+    state,
+  });
+});
+
+// Custom GET endpoint
+app.get("/api/chat", async (c) => {
+  const threadId = c.req.query("threadId") || "";
+
+  return fetchLanggraphHistory<GraphData>({
+    graph,
+    messageSchema: structuredMessageSchema,
+    threadId,
+  });
+});
 ```
 
 8. On your client, the provided hooks will expose the graph state, tool calls, and messages to your UI:
 
 ```typescript
-import { useLanggraph } from "@langgraph-ai-sdk/client";
+import { useLanggraph } from "langgraph-ai-sdk-react";
 import { type LanggraphData } from "./your-shared-types";
 
 function App() {
