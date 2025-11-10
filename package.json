@@ -8,7 +8,12 @@
     "test": "pnpm -r test",
     "test:watch": "pnpm -r test:watch",
     "typecheck": "tsc --noEmit",
-    "langgraph:db:migrate": "pnpm --filter langgraph-ai-sdk db:migrate"
+    "langgraph:db:migrate": "pnpm --filter langgraph-ai-sdk db:migrate",
+    "version": "pnpm -r exec npm version",
+    "publish:all": "pnpm -r --filter './packages/*' publish --access public",
+    "release:patch": "pnpm -r exec npm version patch && pnpm build && pnpm publish:all",
+    "release:minor": "pnpm -r exec npm version minor && pnpm build && pnpm publish:all",
+    "release:major": "pnpm -r exec npm version major && pnpm build && pnpm publish:all"
   },
   "workspaces": [
     "packages/*",

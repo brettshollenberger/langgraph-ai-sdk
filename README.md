@@ -348,7 +348,7 @@ pnpm test
 ## Releasing
 
 ```bash
-pnpm version patch|minor|major
-pnpm build
-pnpm publish
+pnpm release:patch
+pnpm release:minor
+pnpm release:major
 ```
