@@ -236,8 +236,8 @@ export function useLanggraph<
   return {
     ...chat,
     sendMessage,
-    messages,
-    state,
+    messages: messages as LanggraphUIMessage<TLanggraphData>[],
+    state: state as TState,
     tools,
     events: customEvents,
     threadId: hasSubmitted ? threadId : undefined,

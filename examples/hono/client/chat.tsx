@@ -60,12 +60,6 @@ function ChatContent({ endpoint }: { endpoint: EndpointKey }) {
       }
     });
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
   useEffect(() => {
     if (threadId && typeof window !== 'undefined') {
       const url = new URL(window.location.href);
@@ -74,6 +68,12 @@ function ChatContent({ endpoint }: { endpoint: EndpointKey }) {
       window.history.pushState({}, '', url.toString());
     }
   }, [threadId]);;
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   useEffect(() => {
     scrollToBottom();
