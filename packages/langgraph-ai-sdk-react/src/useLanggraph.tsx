@@ -2,11 +2,12 @@ import { useRef, useEffectEvent } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { useState, useEffect, useMemo } from 'react';
 import type { 
-  LanggraphDataBase, 
+  LanggraphData, 
   InferState, 
   InferMessage, 
   LanggraphAISDKUIMessage,
   LanggraphUIMessage,
+  SimpleLanggraphUIMessage,
 } from 'langgraph-ai-sdk-types';
 import { DefaultChatTransport } from 'ai';
 import { v7 as uuidv7 } from 'uuid';
@@ -26,7 +27,7 @@ interface ToolCall {
 }
 
 export function useLanggraph<
-  TLanggraphData extends LanggraphDataBase<any, any>
+  TLanggraphData extends LanggraphData<any, any>
 >({
   api = '/api/chat',
   headers = {},
@@ -233,7 +234,7 @@ export function useLanggraph<
   return {
     ...chat,
     sendMessage,
-    messages: messages as LanggraphUIMessage<TLanggraphData>[],
+    messages: messages as SimpleLanggraphUIMessage<TLanggraphData>[],
     state: state as TState,
     tools,
     events: customEvents,

@@ -1,10 +1,15 @@
 import { eq } from 'drizzle-orm';
-import { db } from '../db/index.ts';
+import { getDb } from './config.ts';
 import { threads as threadsTable } from '../db/schema.ts';
 
+/**
+ * Ensure a thread exists in the database
+ * Creates a new thread if it doesn't already exist
+ */
 export async function ensureThread(threadId: string) {
+  const db = getDb();
   const existing = await db.select().from(threadsTable).where(eq(threadsTable.threadId, threadId)).limit(1);
-  
+
   if (existing.length === 0) {
     await db.insert(threadsTable).values({
       threadId,
@@ -17,6 +22,6 @@ export async function ensureThread(threadId: string) {
       interrupts: {},
     });
   }
-  
+
   return threadId;
 }

@@ -2,10 +2,10 @@ import { v7 as uuidv7 } from 'uuid';
 import type { BaseMessage } from '@langchain/core/messages';
 import { HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
 import { createLanggraphStreamResponse, loadThreadHistory } from './stream';
-import { getGraph } from './registry';
 import { ensureThread } from './ops';
 import type { UIMessage } from 'ai';
-import type { LanggraphDataBase, InferMessageSchema } from 'langgraph-ai-sdk-types';
+import type { LanggraphData, InferMessageSchema } from 'langgraph-ai-sdk-types';
+import { CompiledStateGraph } from '@langchain/langgraph';
 
 function convertUIMessagesToLanggraph(messages: UIMessage[]): BaseMessage[] {
   return messages.map((msg) => {
@@ -25,81 +25,88 @@ function convertUIMessagesToLanggraph(messages: UIMessage[]): BaseMessage[] {
   });
 }
 
-export function streamLanggraph<TGraphData extends LanggraphDataBase<any, any>>({ graphName, messageSchema }: { graphName: string, messageSchema?: InferMessageSchema<TGraphData> }) {
-  return async (req: Request): Promise<Response> => {
-    const body = await req.json();
-    const uiMessages: UIMessage[] = body.messages;
-    const state = body.state || {};
-    let threadId: string = body.threadId;
-    
-    if (!threadId) {
-      threadId = uuidv7();
-      await ensureThread(threadId);
-    }
-    
-    const graph = getGraph<TGraphData>(graphName);
-    
-    if (!graph) {
-      return new Response(
-        JSON.stringify({ error: `Graph '${graphName}' not found` }),
-        { status: 404, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-    
-    const langGraphMessages = convertUIMessagesToLanggraph(uiMessages);
-    const newMessage = langGraphMessages.at(-1);
+/**
+ * Core function that works with parsed data - framework agnostic
+ * Use this when you've already parsed the request body (e.g., in Hono, Express, etc.)
+ */
+export async function streamLanggraph<TGraphData extends LanggraphData<any, any>>({
+  graph,
+  messageSchema,
+  messages,
+  state = {},
+  threadId,
+}: {
+  graph: CompiledStateGraph<any, any>;
+  messageSchema?: InferMessageSchema<TGraphData>;
+  messages: UIMessage[];
+  state?: any;
+  threadId?: string;
+}): Promise<Response> {
+  let finalThreadId = threadId;
 
-    if (!newMessage) {
-      return new Response(
-        JSON.stringify({ error: 'No messages provided' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-    
-    const response = createLanggraphStreamResponse<TGraphData>({
-      graph,
-      messages: [newMessage],
-      threadId,
-      state,
-      messageSchema,
-    });
-    
-    response.headers.set('X-Thread-ID', threadId);
-    
-    return response;
-  };
+  if (!finalThreadId) {
+    finalThreadId = uuidv7();
+    await ensureThread(finalThreadId);
+  }
+
+  const langGraphMessages = convertUIMessagesToLanggraph(messages);
+  const newMessage = langGraphMessages.at(-1);
+
+  if (!newMessage) {
+    return new Response(
+      JSON.stringify({ error: 'No messages provided' }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
+  const response = createLanggraphStreamResponse<TGraphData>({
+    graph,
+    messages: [newMessage],
+    threadId: finalThreadId,
+    state,
+    messageSchema,
+  });
+
+  response.headers.set('X-Thread-ID', finalThreadId);
+
+  return response;
 }
 
-export function fetchLanggraphHistory<TGraphData extends LanggraphDataBase<any, any>>({ graphName, messageSchema }: { graphName: string, messageSchema?: InferMessageSchema<TGraphData> }) {
-  return async (req: Request): Promise<Response> => {
-    const url = new URL(req.url);
-    const threadId = url.searchParams.get('threadId');
-    
-    if (!threadId) {
-      return new Response(
-        JSON.stringify({ error: 'threadId required' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-    
-    const graph = getGraph<TGraphData>(graphName);
-    
-    if (!graph) {
-      return new Response(
-        JSON.stringify({ error: `Graph '${graphName}' not found` }),
-        { status: 404, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-    
-    const { messages, state } = await loadThreadHistory<TGraphData>(
-      graph,
-      threadId,
-      messageSchema
-    );
-    
+/**
+ * Core function that works with parsed data - framework agnostic
+ * Use this when you've already extracted the threadId from the request (e.g., in Hono, Express, etc.)
+ */
+export async function fetchLanggraphHistory<TGraphData extends LanggraphData<any, any>>({
+  graph,
+  messageSchema,
+  threadId,
+}: {
+  graph: CompiledStateGraph<any, any>;
+  messageSchema?: InferMessageSchema<TGraphData>;
+  threadId: string;
+}): Promise<Response> {
+  if (!threadId) {
     return new Response(
-      JSON.stringify({ messages, state }),
-      { headers: { 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: 'threadId required' }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } }
     );
-  };
+  }
+
+  if (!graph) {
+    return new Response(
+      JSON.stringify({ error: `Graph not found` }),
+      { status: 404, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
+  const { messages, state } = await loadThreadHistory<TGraphData>(
+    graph,
+    threadId,
+    messageSchema
+  );
+
+  return new Response(
+    JSON.stringify({ messages, state }),
+    { headers: { 'Content-Type': 'application/json' } }
+  );
 }

@@ -1,4 +1,4 @@
-import { registerGraph, streamLanggraph, fetchLanggraphHistory } from 'langgraph-ai-sdk';
+import { initializeLanggraph, streamLanggraph, fetchLanggraphHistory } from 'langgraph-ai-sdk';
 import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
 import { createSampleAgent, questionSchema, type AgentLanggraphData } from 'langgraph-ai-sdk/testing';
 import pkg from 'pg';
@@ -8,11 +8,11 @@ const connectionString = process.env.DATABASE_URL || 'postgresql://localhost/lan
 const pool = new Pool({
   connectionString
 });
+initializeLanggraph({ pool });
 const checkpointer = new PostgresSaver(pool);
 
 // Create and register the agent graph
 export const agentGraph = createSampleAgent(checkpointer, 'agent');
-registerGraph<AgentLanggraphData>('agent', agentGraph);
 
 function authMiddleware(handler: (req: Request) => Promise<Response>) {
   return async (req: Request): Promise<Response> => {
@@ -30,15 +30,27 @@ function authMiddleware(handler: (req: Request) => Promise<Response>) {
 }
 
 export const POST = authMiddleware(async (req: Request): Promise<Response> => {
+  const body = await req.json();
+  const messages = body.messages;
+  const threadId = body.threadId;
+  const state = body.state;
+
   return streamLanggraph<AgentLanggraphData>({
-    graphName: 'agent',
-    messageSchema: questionSchema
-  })(req);
+    graph: agentGraph,
+    messageSchema: questionSchema,
+    messages,
+    threadId,
+    state
+  });
 });
 
 export const GET = authMiddleware((req: Request): Promise<Response> => {
+  const url = new URL(req.url);
+  const threadId = url.searchParams.get('threadId');
+
   return fetchLanggraphHistory<AgentLanggraphData>({
-    graphName: 'agent',
-    messageSchema: questionSchema
-  })(req);
+    graph: agentGraph,
+    messageSchema: questionSchema,
+    threadId
+  });
 });
