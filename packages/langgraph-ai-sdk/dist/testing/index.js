@@ -58725,9 +58725,15 @@ const finishBrainstormingSchema = z.object({
 	finishBrainstorming: z.literal(true).describe("Call to signal that the user has finished brainstorming")
 });
 /**
-* Union schema for all agent output types
+* Brainstorm topics
 */
-const agentOutputSchema = z.discriminatedUnion("type", [questionSchema, finishBrainstormingSchema]);
+const brainstormTopics = [
+	"idea",
+	"audience",
+	"solution",
+	"socialProof",
+	"lookAndFeel"
+];
 /**
 * State annotation for the brainstorm agent
 */
@@ -58785,7 +58791,7 @@ const TopicDescriptions = {
 	lookAndFeel: `The look and feel of the landing page.`
 };
 const sortedTopics = (topics) => {
-	return topics.sort((a, b) => brainstormTopics$1.indexOf(a) - brainstormTopics$1.indexOf(b));
+	return topics.sort((a, b) => brainstormTopics.indexOf(a) - brainstormTopics.indexOf(b));
 };
 const remainingTopics = (topics) => {
 	return sortedTopics(topics).map((topic) => `${topic}: ${TopicDescriptions[topic]}`).join("\n\n");
@@ -58872,7 +58878,7 @@ const getPrompt = async (state, config) => {
 };
 const SaveAnswersTool = (state, config) => {
 	const saveAnswersInputSchema = z.object({ answers: z.array(z.object({
-		topic: z.enum(brainstormTopics$1),
+		topic: z.enum(brainstormTopics),
 		answer: z.string()
 	})) });
 	async function saveAnswers(args) {
@@ -58940,4 +58946,4 @@ function createSampleAgent(checkpointer, graphName = "sample") {
 }
 
 //#endregion
-export { BrainstormStateAnnotation, ErrorReporters, NodeMiddleware, NodeMiddlewareFactory, SampleGraphAnnotation, agentOutputSchema, brainstormAgent, configureResponses, configureResponses$1 as configureTestResponses, coreLLMConfig, createSampleAgent, createSampleGraph, finishBrainstormingSchema, getCoreLLM, getLLM, getNodeContext, getTestLLM, hasConfiguredResponses, nameProjectNode, questionSchema, resetLLMConfig, resetLLMConfig$1 as resetTestConfig, responseNode, structuredMessageSchema, withContext, withErrorHandling, withNotifications };
+export { BrainstormStateAnnotation, ErrorReporters, NodeMiddleware, NodeMiddlewareFactory, SampleGraphAnnotation, brainstormAgent, brainstormTopics, configureResponses, configureResponses$1 as configureTestResponses, coreLLMConfig, createSampleAgent, createSampleGraph, finishBrainstormingSchema, getCoreLLM, getLLM, getNodeContext, getTestLLM, hasConfiguredResponses, nameProjectNode, questionSchema, resetLLMConfig, resetLLMConfig$1 as resetTestConfig, responseNode, structuredMessageSchema, withContext, withErrorHandling, withNotifications };
