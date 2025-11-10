@@ -5,7 +5,6 @@ import { createUIMessageStream, createUIMessageStreamResponse, parsePartialJson 
 import { kebabCase } from "change-case";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
-import pkg from "pg";
 import { jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 //#region src/stream.ts
@@ -284,9 +283,9 @@ var LanggraphStreamHandler = class {
 		const stream = graph.streamEvents(graphState, {
 			version: "v2",
 			streamMode: [
+				"messages",
 				"updates",
-				"custom",
-				"messages"
+				"custom"
 			],
 			context: { graphName: graph.name },
 			configurable: { thread_id: threadId }
@@ -367,16 +366,6 @@ async function loadThreadHistory(graph, threadId, messageSchema) {
 }
 
 //#endregion
-//#region src/registry.ts
-const graphRegistry = /* @__PURE__ */ new Map();
-function registerGraph(name, graph) {
-	graphRegistry.set(name, graph);
-}
-function getGraph(name) {
-	return graphRegistry.get(name);
-}
-
-//#endregion
 //#region db/schema.ts
 var schema_exports = /* @__PURE__ */ __export({ threads: () => threads });
 const threads = pgTable("threads", {
@@ -391,14 +380,59 @@ const threads = pgTable("threads", {
 });
 
 //#endregion
-//#region db/index.ts
-const { Pool } = pkg;
-const pool = new Pool({ connectionString: process.env.DATABASE_URL || "postgresql://localhost/langgraph_backend_test" });
-const db = drizzle(pool, { schema: schema_exports });
+//#region src/config.ts
+const config = {
+	db: null,
+	pool: null
+};
+/**
+* Initialize the library with your database connection
+* This should be called once at app startup before using any API functions
+*
+* @example
+* ```typescript
+* import { Pool } from 'pg';
+* import { initializeLanggraph } from 'langgraph-ai-sdk';
+*
+* const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+* initializeLanggraph({ pool });
+* ```
+*/
+function initializeLanggraph({ pool }) {
+	config.pool = pool;
+	config.db = drizzle(pool, { schema: schema_exports });
+}
+/**
+* Get the configured database instance
+* Throws an error if the library hasn't been initialized
+*/
+function getDb() {
+	if (!config.db) throw new Error("Database not initialized. Call initializeLanggraph({ pool }) before using any API functions.");
+	return config.db;
+}
+/**
+* Get the configured pool instance
+* Throws an error if the library hasn't been initialized
+*/
+function getPool() {
+	if (!config.pool) throw new Error("Database not initialized. Call initializeLanggraph({ pool }) before using any API functions.");
+	return config.pool;
+}
+/**
+* Check if the library has been initialized
+*/
+function isInitialized() {
+	return config.db !== null && config.pool !== null;
+}
 
 //#endregion
 //#region src/ops.ts
+/**
+* Ensure a thread exists in the database
+* Creates a new thread if it doesn't already exist
+*/
 async function ensureThread(threadId) {
+	const db = getDb();
 	if ((await db.select().from(threads).where(eq(threads.threadId, threadId)).limit(1)).length === 0) await db.insert(threads).values({
 		threadId,
 		createdAt: /* @__PURE__ */ new Date(),
@@ -426,56 +460,50 @@ function convertUIMessagesToLanggraph(messages) {
 		}
 	});
 }
-function streamLanggraph({ graphName, messageSchema }) {
-	return async (req) => {
-		const body = await req.json();
-		const uiMessages = body.messages;
-		const state = body.state || {};
-		let threadId = body.threadId;
-		if (!threadId) {
-			threadId = v7();
-			await ensureThread(threadId);
-		}
-		const graph = getGraph(graphName);
-		if (!graph) return new Response(JSON.stringify({ error: `Graph '${graphName}' not found` }), {
-			status: 404,
-			headers: { "Content-Type": "application/json" }
-		});
-		const newMessage = convertUIMessagesToLanggraph(uiMessages).at(-1);
-		if (!newMessage) return new Response(JSON.stringify({ error: "No messages provided" }), {
-			status: 400,
-			headers: { "Content-Type": "application/json" }
-		});
-		const response = createLanggraphStreamResponse({
-			graph,
-			messages: [newMessage],
-			threadId,
-			state,
-			messageSchema
-		});
-		response.headers.set("X-Thread-ID", threadId);
-		return response;
-	};
+/**
+* Core function that works with parsed data - framework agnostic
+* Use this when you've already parsed the request body (e.g., in Hono, Express, etc.)
+*/
+async function streamLanggraph({ graph, messageSchema, messages, state = {}, threadId }) {
+	let finalThreadId = threadId;
+	if (!finalThreadId) {
+		finalThreadId = v7();
+		await ensureThread(finalThreadId);
+	}
+	const newMessage = convertUIMessagesToLanggraph(messages).at(-1);
+	if (!newMessage) return new Response(JSON.stringify({ error: "No messages provided" }), {
+		status: 400,
+		headers: { "Content-Type": "application/json" }
+	});
+	const response = createLanggraphStreamResponse({
+		graph,
+		messages: [newMessage],
+		threadId: finalThreadId,
+		state,
+		messageSchema
+	});
+	response.headers.set("X-Thread-ID", finalThreadId);
+	return response;
 }
-function fetchLanggraphHistory({ graphName, messageSchema }) {
-	return async (req) => {
-		const threadId = new URL(req.url).searchParams.get("threadId");
-		if (!threadId) return new Response(JSON.stringify({ error: "threadId required" }), {
-			status: 400,
-			headers: { "Content-Type": "application/json" }
-		});
-		const graph = getGraph(graphName);
-		if (!graph) return new Response(JSON.stringify({ error: `Graph '${graphName}' not found` }), {
-			status: 404,
-			headers: { "Content-Type": "application/json" }
-		});
-		const { messages, state } = await loadThreadHistory(graph, threadId, messageSchema);
-		return new Response(JSON.stringify({
-			messages,
-			state
-		}), { headers: { "Content-Type": "application/json" } });
-	};
+/**
+* Core function that works with parsed data - framework agnostic
+* Use this when you've already extracted the threadId from the request (e.g., in Hono, Express, etc.)
+*/
+async function fetchLanggraphHistory({ graph, messageSchema, threadId }) {
+	if (!threadId) return new Response(JSON.stringify({ error: "threadId required" }), {
+		status: 400,
+		headers: { "Content-Type": "application/json" }
+	});
+	if (!graph) return new Response(JSON.stringify({ error: `Graph not found` }), {
+		status: 404,
+		headers: { "Content-Type": "application/json" }
+	});
+	const { messages, state } = await loadThreadHistory(graph, threadId, messageSchema);
+	return new Response(JSON.stringify({
+		messages,
+		state
+	}), { headers: { "Content-Type": "application/json" } });
 }
 
 //#endregion
-export { createLanggraphStreamResponse, createLanggraphUIStream, fetchLanggraphHistory, getGraph, getSchemaKeys, loadThreadHistory, registerGraph, streamLanggraph };
+export { createLanggraphStreamResponse, createLanggraphUIStream, fetchLanggraphHistory, getDb, getPool, getSchemaKeys, initializeLanggraph, isInitialized, loadThreadHistory, streamLanggraph };

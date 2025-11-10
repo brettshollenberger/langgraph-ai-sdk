@@ -1,5 +1,5 @@
 import * as ai0 from "ai";
-import { InferState, LanggraphAISDKUIMessage, LanggraphData, LanggraphMessage, LanggraphUIMessage, LanggraphUIMessage as LanggraphUIMessage$1, MessagePart, StatePart } from "langgraph-ai-sdk-types";
+import { InferState, LanggraphAISDKUIMessage, LanggraphData, LanggraphMessage, LanggraphUIMessage, MessagePart, SimpleLanggraphUIMessage, StatePart } from "langgraph-ai-sdk-types";
 
 //#region src/useLanggraph.d.ts
 interface CustomEvent {
@@ -35,7 +35,7 @@ declare function useLanggraph<TLanggraphData extends LanggraphData<any, any>>({
     parts?: never;
     messageId?: string;
   } | undefined, options?: ai0.ChatRequestOptions | undefined) => void;
-  messages: LanggraphUIMessage$1<TLanggraphData>[];
+  messages: SimpleLanggraphUIMessage<TLanggraphData>[];
   state: InferState<TLanggraphData>;
   tools: {
     type: "tool";
