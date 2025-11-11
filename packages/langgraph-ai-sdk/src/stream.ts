@@ -13,7 +13,6 @@ import { BaseMessage } from '@langchain/core/messages';
 import type { 
   LanggraphData,
   LanggraphUIMessage,
-  SimpleLanggraphUIMessage,
   InferState, 
   InferMessage,
   InferMessageSchema,

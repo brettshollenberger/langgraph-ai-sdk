@@ -56,9 +56,18 @@ export type LanggraphMessage<T extends LanggraphData<any, any>> = {
   parts: MessagePart<T>[];
 };
 
-export type LanggraphUIMessage<T extends LanggraphData<any, any>> = Simplify<{
-  id: string;
-  role: 'system' | 'user' | 'assistant';
-  type: string;
-  state: 'streaming' | 'thinking';
-} & InferMessage<T>>
+export type LanggraphUIMessage<T extends LanggraphData<any, any>> = UIMessage<
+  unknown,
+  LanggraphDataParts<T>
+>
+
+export type SimpleLanggraphUIMessage<T extends LanggraphData<any, any>> = Simplify<
+  {
+    id: string;
+    role: 'system' | 'user' | 'assistant';
+    state?: 'streaming' | 'thinking';
+  } & (
+    | { type: 'text'; text: string }
+    | { type: string } & InferMessage<T>
+  )
+>

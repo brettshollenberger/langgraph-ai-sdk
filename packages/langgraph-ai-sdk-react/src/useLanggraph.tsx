@@ -40,13 +40,15 @@ export function useLanggraph<
   type TState = InferState<TLanggraphData>
   type TMessage = InferMessage<TLanggraphData>
 
-  const threadIdRef = useRef<string>(getInitialThreadId?.() ?? uuidv7());
+  const initialThreadVal = getInitialThreadId?.();
+  const threadIdRef = useRef<string>(initialThreadVal ?? uuidv7());
   const threadId = threadIdRef.current;
   const [error, setError] = useState<string | null>(null);
   const [serverState, setServerState] = useState<Partial<TState>>({});
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const headersRef = useRef(headers);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const isNewThread = useRef(!initialThreadVal);
 
   const chat = useChat<LanggraphAISDKUIMessage<TLanggraphData>>({
     transport: new DefaultChatTransport({
@@ -68,7 +70,7 @@ export function useLanggraph<
   };
 
   const loadHistory = useEffectEvent(async () => {
-    if (!threadId) {
+    if (isNewThread.current) { // If it is a new thread, don't load history
       setIsLoadingHistory(false);
       return;
     }
@@ -142,7 +144,7 @@ export function useLanggraph<
     return [];
   }, [chat.messages]);
 
-  const messages: LanggraphUIMessage<TLanggraphData>[] = useMemo(() => {
+  const messages: SimpleLanggraphUIMessage<TLanggraphData>[] = useMemo(() => {
     return chat.messages.map(msg => {
       if (msg.role !== 'assistant') {
         const textPart = msg.parts.find(p => p.type === 'text');
@@ -153,7 +155,7 @@ export function useLanggraph<
           role: msg.role,
           type: 'text',
           text
-        } as LanggraphUIMessage<TLanggraphData>;
+        } satisfies SimpleLanggraphUIMessage<TLanggraphData>;
       }
 
       // Handle text-only assistant messages
@@ -167,7 +169,7 @@ export function useLanggraph<
           role: msg.role,
           type: 'text',
           text
-        } as LanggraphUIMessage<TLanggraphData>;
+        } satisfies SimpleLanggraphUIMessage<TLanggraphData>;
       }
 
       const messageParts = msg.parts
@@ -200,8 +202,8 @@ export function useLanggraph<
         role: msg.role,
         type: messageType,
         ...userSpecifiedOutputType
-      } as LanggraphUIMessage<TLanggraphData>
-    }) as LanggraphUIMessage<TLanggraphData>[];
+      } satisfies SimpleLanggraphUIMessage<TLanggraphData>
+    }) satisfies SimpleLanggraphUIMessage<TLanggraphData>[];
   }, [chat.messages]);
 
   const tools = useMemo(() => {
@@ -234,8 +236,8 @@ export function useLanggraph<
   return {
     ...chat,
     sendMessage,
-    messages: messages as SimpleLanggraphUIMessage<TLanggraphData>[],
-    state: state as TState,
+    messages,
+    state,
     tools,
     events: customEvents,
     threadId: hasSubmitted ? threadId : undefined,
