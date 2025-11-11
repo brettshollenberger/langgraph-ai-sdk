@@ -36,7 +36,7 @@ declare function useLanggraph<TLanggraphData extends LanggraphData<any, any>>({
     messageId?: string;
   } | undefined, options?: ai0.ChatRequestOptions | undefined) => void;
   messages: SimpleLanggraphUIMessage<TLanggraphData>[];
-  state: InferState<TLanggraphData>;
+  state: Partial<InferState<TLanggraphData>>;
   tools: {
     type: "tool";
     toolCallId: string;

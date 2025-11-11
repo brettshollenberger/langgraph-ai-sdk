@@ -1,9 +1,9 @@
 import { n as LanggraphData } from "../types-BEZu6l5V.js";
-import * as _langchain_core_messages15 from "@langchain/core/messages";
+import * as _langchain_core_messages3 from "@langchain/core/messages";
 import { BaseMessage } from "@langchain/core/messages";
 import { FakeStreamingChatModel } from "@langchain/core/utils/testing";
 import { z } from "zod";
-import * as _langchain_langgraph11 from "@langchain/langgraph";
+import * as _langchain_langgraph3 from "@langchain/langgraph";
 import { LangGraphRunnableConfig } from "@langchain/langgraph";
 import * as langchain0 from "langchain";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
@@ -265,9 +265,9 @@ type StructuredMessage = z.infer<typeof structuredMessageSchema>;
 /**
  * Graph state annotation for the sample graph
  */
-declare const SampleGraphAnnotation: _langchain_langgraph11.AnnotationRoot<{
-  messages: _langchain_langgraph11.BinaryOperatorAggregate<BaseMessage<_langchain_core_messages15.MessageStructure, _langchain_core_messages15.MessageType>[], BaseMessage<_langchain_core_messages15.MessageStructure, _langchain_core_messages15.MessageType>[]>;
-  projectName: _langchain_langgraph11.BinaryOperatorAggregate<string | undefined, string | undefined>;
+declare const SampleGraphAnnotation: _langchain_langgraph3.AnnotationRoot<{
+  messages: _langchain_langgraph3.BinaryOperatorAggregate<BaseMessage<_langchain_core_messages3.MessageStructure, _langchain_core_messages3.MessageType>[], BaseMessage<_langchain_core_messages3.MessageStructure, _langchain_core_messages3.MessageType>[]>;
+  projectName: _langchain_langgraph3.BinaryOperatorAggregate<string | undefined, string | undefined>;
 }>;
 type SampleStateType = typeof SampleGraphAnnotation.State;
 /**
@@ -280,18 +280,18 @@ type GraphLanggraphData = LanggraphData<SampleStateType, typeof structuredMessag
  * Node that generates a project name based on the user's message
  * Only runs if projectName is not already set in state
  */
-declare const nameProjectNode: NodeFunction<_langchain_langgraph11.StateType<{
-  messages: _langchain_langgraph11.BinaryOperatorAggregate<langchain0.BaseMessage<_langchain_core_messages15.MessageStructure, _langchain_core_messages15.MessageType>[], langchain0.BaseMessage<_langchain_core_messages15.MessageStructure, _langchain_core_messages15.MessageType>[]>;
-  projectName: _langchain_langgraph11.BinaryOperatorAggregate<string | undefined, string | undefined>;
+declare const nameProjectNode: NodeFunction<_langchain_langgraph3.StateType<{
+  messages: _langchain_langgraph3.BinaryOperatorAggregate<langchain0.BaseMessage<_langchain_core_messages3.MessageStructure, _langchain_core_messages3.MessageType>[], langchain0.BaseMessage<_langchain_core_messages3.MessageStructure, _langchain_core_messages3.MessageType>[]>;
+  projectName: _langchain_langgraph3.BinaryOperatorAggregate<string | undefined, string | undefined>;
 }>>;
 /**
  * Node that generates a response to the user's message
  * Uses the messageSchema to return either simple or structured messages
  * Tagged with 'notify' for streaming support
  */
-declare const responseNode: NodeFunction<_langchain_langgraph11.StateType<{
-  messages: _langchain_langgraph11.BinaryOperatorAggregate<langchain0.BaseMessage<_langchain_core_messages15.MessageStructure, _langchain_core_messages15.MessageType>[], langchain0.BaseMessage<_langchain_core_messages15.MessageStructure, _langchain_core_messages15.MessageType>[]>;
-  projectName: _langchain_langgraph11.BinaryOperatorAggregate<string | undefined, string | undefined>;
+declare const responseNode: NodeFunction<_langchain_langgraph3.StateType<{
+  messages: _langchain_langgraph3.BinaryOperatorAggregate<langchain0.BaseMessage<_langchain_core_messages3.MessageStructure, _langchain_core_messages3.MessageType>[], langchain0.BaseMessage<_langchain_core_messages3.MessageStructure, _langchain_core_messages3.MessageType>[]>;
+  projectName: _langchain_langgraph3.BinaryOperatorAggregate<string | undefined, string | undefined>;
 }>>;
 /**
  * Creates a compiled sample graph with the given checkpointer
@@ -302,26 +302,26 @@ declare const responseNode: NodeFunction<_langchain_langgraph11.StateType<{
  * @param graphName - Name to identify the graph (default: 'sample')
  * @returns Compiled LangGraph
  */
-declare function createSampleGraph(checkpointer?: any, graphName?: string): _langchain_langgraph11.CompiledStateGraph<{
-  messages: langchain0.BaseMessage<_langchain_core_messages15.MessageStructure, _langchain_core_messages15.MessageType>[];
+declare function createSampleGraph(checkpointer?: any, graphName?: string): _langchain_langgraph3.CompiledStateGraph<{
+  messages: langchain0.BaseMessage<_langchain_core_messages3.MessageStructure, _langchain_core_messages3.MessageType>[];
   projectName: string | undefined;
 }, {
-  messages?: langchain0.BaseMessage<_langchain_core_messages15.MessageStructure, _langchain_core_messages15.MessageType>[] | undefined;
+  messages?: langchain0.BaseMessage<_langchain_core_messages3.MessageStructure, _langchain_core_messages3.MessageType>[] | undefined;
   projectName?: string | undefined;
 }, "__start__" | "nameProjectNode" | "responseNode", {
-  messages: _langchain_langgraph11.BinaryOperatorAggregate<langchain0.BaseMessage<_langchain_core_messages15.MessageStructure, _langchain_core_messages15.MessageType>[], langchain0.BaseMessage<_langchain_core_messages15.MessageStructure, _langchain_core_messages15.MessageType>[]>;
-  projectName: _langchain_langgraph11.BinaryOperatorAggregate<string | undefined, string | undefined>;
+  messages: _langchain_langgraph3.BinaryOperatorAggregate<langchain0.BaseMessage<_langchain_core_messages3.MessageStructure, _langchain_core_messages3.MessageType>[], langchain0.BaseMessage<_langchain_core_messages3.MessageStructure, _langchain_core_messages3.MessageType>[]>;
+  projectName: _langchain_langgraph3.BinaryOperatorAggregate<string | undefined, string | undefined>;
 }, {
-  messages: _langchain_langgraph11.BinaryOperatorAggregate<langchain0.BaseMessage<_langchain_core_messages15.MessageStructure, _langchain_core_messages15.MessageType>[], langchain0.BaseMessage<_langchain_core_messages15.MessageStructure, _langchain_core_messages15.MessageType>[]>;
-  projectName: _langchain_langgraph11.BinaryOperatorAggregate<string | undefined, string | undefined>;
-}, _langchain_langgraph11.StateDefinition, {
-  nameProjectNode: Partial<_langchain_langgraph11.StateType<{
-    messages: _langchain_langgraph11.BinaryOperatorAggregate<langchain0.BaseMessage<_langchain_core_messages15.MessageStructure, _langchain_core_messages15.MessageType>[], langchain0.BaseMessage<_langchain_core_messages15.MessageStructure, _langchain_core_messages15.MessageType>[]>;
-    projectName: _langchain_langgraph11.BinaryOperatorAggregate<string | undefined, string | undefined>;
+  messages: _langchain_langgraph3.BinaryOperatorAggregate<langchain0.BaseMessage<_langchain_core_messages3.MessageStructure, _langchain_core_messages3.MessageType>[], langchain0.BaseMessage<_langchain_core_messages3.MessageStructure, _langchain_core_messages3.MessageType>[]>;
+  projectName: _langchain_langgraph3.BinaryOperatorAggregate<string | undefined, string | undefined>;
+}, _langchain_langgraph3.StateDefinition, {
+  nameProjectNode: Partial<_langchain_langgraph3.StateType<{
+    messages: _langchain_langgraph3.BinaryOperatorAggregate<langchain0.BaseMessage<_langchain_core_messages3.MessageStructure, _langchain_core_messages3.MessageType>[], langchain0.BaseMessage<_langchain_core_messages3.MessageStructure, _langchain_core_messages3.MessageType>[]>;
+    projectName: _langchain_langgraph3.BinaryOperatorAggregate<string | undefined, string | undefined>;
   }>>;
-  responseNode: Partial<_langchain_langgraph11.StateType<{
-    messages: _langchain_langgraph11.BinaryOperatorAggregate<langchain0.BaseMessage<_langchain_core_messages15.MessageStructure, _langchain_core_messages15.MessageType>[], langchain0.BaseMessage<_langchain_core_messages15.MessageStructure, _langchain_core_messages15.MessageType>[]>;
-    projectName: _langchain_langgraph11.BinaryOperatorAggregate<string | undefined, string | undefined>;
+  responseNode: Partial<_langchain_langgraph3.StateType<{
+    messages: _langchain_langgraph3.BinaryOperatorAggregate<langchain0.BaseMessage<_langchain_core_messages3.MessageStructure, _langchain_core_messages3.MessageType>[], langchain0.BaseMessage<_langchain_core_messages3.MessageStructure, _langchain_core_messages3.MessageType>[]>;
+    projectName: _langchain_langgraph3.BinaryOperatorAggregate<string | undefined, string | undefined>;
   }>>;
 }, unknown, unknown>;
 //#endregion
@@ -366,10 +366,10 @@ type Brainstorm = Partial<Record<BrainstormTopic, string>>;
 /**
  * State annotation for the brainstorm agent
  */
-declare const BrainstormStateAnnotation: _langchain_langgraph11.AnnotationRoot<{
-  messages: _langchain_langgraph11.BinaryOperatorAggregate<BaseMessage<_langchain_core_messages15.MessageStructure, _langchain_core_messages15.MessageType>[], BaseMessage<_langchain_core_messages15.MessageStructure, _langchain_core_messages15.MessageType>[]>;
-  brainstorm: _langchain_langgraph11.BinaryOperatorAggregate<Partial<Record<"idea" | "audience" | "solution" | "socialProof" | "lookAndFeel", string>>, Partial<Record<"idea" | "audience" | "solution" | "socialProof" | "lookAndFeel", string>>>;
-  remainingTopics: _langchain_langgraph11.BinaryOperatorAggregate<("idea" | "audience" | "solution" | "socialProof" | "lookAndFeel")[], ("idea" | "audience" | "solution" | "socialProof" | "lookAndFeel")[]>;
+declare const BrainstormStateAnnotation: _langchain_langgraph3.AnnotationRoot<{
+  messages: _langchain_langgraph3.BinaryOperatorAggregate<BaseMessage<_langchain_core_messages3.MessageStructure, _langchain_core_messages3.MessageType>[], BaseMessage<_langchain_core_messages3.MessageStructure, _langchain_core_messages3.MessageType>[]>;
+  brainstorm: _langchain_langgraph3.BinaryOperatorAggregate<Partial<Record<"idea" | "audience" | "solution" | "socialProof" | "lookAndFeel", string>>, Partial<Record<"idea" | "audience" | "solution" | "socialProof" | "lookAndFeel", string>>>;
+  remainingTopics: _langchain_langgraph3.BinaryOperatorAggregate<("idea" | "audience" | "solution" | "socialProof" | "lookAndFeel")[], ("idea" | "audience" | "solution" | "socialProof" | "lookAndFeel")[]>;
 }>;
 type AgentStateType = typeof BrainstormStateAnnotation.State;
 /**
@@ -391,23 +391,23 @@ declare const brainstormAgent: (state: BrainstormGraphState, config?: LangGraphR
  * Simple test graph for the new brainstorm agent
  * Usage: Load this in LangGraph Studio to test the agent
  */
-declare function createSampleAgent(checkpointer?: any, graphName?: string): _langchain_langgraph11.CompiledStateGraph<{
-  messages: BaseMessage<_langchain_core_messages15.MessageStructure, _langchain_core_messages15.MessageType>[];
+declare function createSampleAgent(checkpointer?: any, graphName?: string): _langchain_langgraph3.CompiledStateGraph<{
+  messages: BaseMessage<_langchain_core_messages3.MessageStructure, _langchain_core_messages3.MessageType>[];
   brainstorm: Partial<Record<"idea" | "audience" | "solution" | "socialProof" | "lookAndFeel", string>>;
   remainingTopics: ("idea" | "audience" | "solution" | "socialProof" | "lookAndFeel")[];
 }, {
-  messages?: BaseMessage<_langchain_core_messages15.MessageStructure, _langchain_core_messages15.MessageType>[] | undefined;
+  messages?: BaseMessage<_langchain_core_messages3.MessageStructure, _langchain_core_messages3.MessageType>[] | undefined;
   brainstorm?: Partial<Record<"idea" | "audience" | "solution" | "socialProof" | "lookAndFeel", string>> | undefined;
   remainingTopics?: ("idea" | "audience" | "solution" | "socialProof" | "lookAndFeel")[] | undefined;
 }, "__start__" | "agent", {
-  messages: _langchain_langgraph11.BinaryOperatorAggregate<BaseMessage<_langchain_core_messages15.MessageStructure, _langchain_core_messages15.MessageType>[], BaseMessage<_langchain_core_messages15.MessageStructure, _langchain_core_messages15.MessageType>[]>;
-  brainstorm: _langchain_langgraph11.BinaryOperatorAggregate<Partial<Record<"idea" | "audience" | "solution" | "socialProof" | "lookAndFeel", string>>, Partial<Record<"idea" | "audience" | "solution" | "socialProof" | "lookAndFeel", string>>>;
-  remainingTopics: _langchain_langgraph11.BinaryOperatorAggregate<("idea" | "audience" | "solution" | "socialProof" | "lookAndFeel")[], ("idea" | "audience" | "solution" | "socialProof" | "lookAndFeel")[]>;
+  messages: _langchain_langgraph3.BinaryOperatorAggregate<BaseMessage<_langchain_core_messages3.MessageStructure, _langchain_core_messages3.MessageType>[], BaseMessage<_langchain_core_messages3.MessageStructure, _langchain_core_messages3.MessageType>[]>;
+  brainstorm: _langchain_langgraph3.BinaryOperatorAggregate<Partial<Record<"idea" | "audience" | "solution" | "socialProof" | "lookAndFeel", string>>, Partial<Record<"idea" | "audience" | "solution" | "socialProof" | "lookAndFeel", string>>>;
+  remainingTopics: _langchain_langgraph3.BinaryOperatorAggregate<("idea" | "audience" | "solution" | "socialProof" | "lookAndFeel")[], ("idea" | "audience" | "solution" | "socialProof" | "lookAndFeel")[]>;
 }, {
-  messages: _langchain_langgraph11.BinaryOperatorAggregate<BaseMessage<_langchain_core_messages15.MessageStructure, _langchain_core_messages15.MessageType>[], BaseMessage<_langchain_core_messages15.MessageStructure, _langchain_core_messages15.MessageType>[]>;
-  brainstorm: _langchain_langgraph11.BinaryOperatorAggregate<Partial<Record<"idea" | "audience" | "solution" | "socialProof" | "lookAndFeel", string>>, Partial<Record<"idea" | "audience" | "solution" | "socialProof" | "lookAndFeel", string>>>;
-  remainingTopics: _langchain_langgraph11.BinaryOperatorAggregate<("idea" | "audience" | "solution" | "socialProof" | "lookAndFeel")[], ("idea" | "audience" | "solution" | "socialProof" | "lookAndFeel")[]>;
-}, _langchain_langgraph11.StateDefinition, {
+  messages: _langchain_langgraph3.BinaryOperatorAggregate<BaseMessage<_langchain_core_messages3.MessageStructure, _langchain_core_messages3.MessageType>[], BaseMessage<_langchain_core_messages3.MessageStructure, _langchain_core_messages3.MessageType>[]>;
+  brainstorm: _langchain_langgraph3.BinaryOperatorAggregate<Partial<Record<"idea" | "audience" | "solution" | "socialProof" | "lookAndFeel", string>>, Partial<Record<"idea" | "audience" | "solution" | "socialProof" | "lookAndFeel", string>>>;
+  remainingTopics: _langchain_langgraph3.BinaryOperatorAggregate<("idea" | "audience" | "solution" | "socialProof" | "lookAndFeel")[], ("idea" | "audience" | "solution" | "socialProof" | "lookAndFeel")[]>;
+}, _langchain_langgraph3.StateDefinition, {
   agent: Partial<BrainstormGraphState>;
 }, unknown, unknown>;
 //#endregion

@@ -5,7 +5,7 @@ import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as drizzle_orm_pg_core0 from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { CompiledStateGraph } from "@langchain/langgraph";
-import { InferMessage, InferMessageSchema as InferMessageSchema$1, InferState, LanggraphData as LanggraphData$1, LanggraphUIMessage as LanggraphUIMessage$1 } from "langgraph-ai-sdk-types";
+import { InferMessageSchema as InferMessageSchema$1, InferState, LanggraphData as LanggraphData$1, LanggraphUIMessage as LanggraphUIMessage$1 } from "langgraph-ai-sdk-types";
 import { Pool } from "pg";
 
 //#region src/api.d.ts
@@ -41,7 +41,7 @@ declare function fetchLanggraphHistory<TGraphData extends LanggraphData$1<any, a
 }): Promise<Response>;
 //#endregion
 //#region src/stream.d.ts
-declare function getSchemaKeys<T$1 extends z.ZodObject<any>>(schema: T$1 | undefined): Array<keyof z.infer<T$1>>;
+declare function getSchemaKeys<T extends z.ZodObject<any>>(schema: T | undefined): Array<keyof z.infer<T>>;
 interface LanggraphBridgeConfig<TGraphData extends LanggraphData$1<any, any>> {
   graph: CompiledStateGraph<InferState<TGraphData>, any>;
   messages: BaseMessage[];
@@ -55,12 +55,7 @@ declare function createLanggraphUIStream<TGraphData extends LanggraphData$1<any,
   threadId,
   messageSchema,
   state
-}: LanggraphBridgeConfig<TGraphData>): ReadableStream<InferUIMessageChunk<{
-  id: string;
-  role: "system" | "user" | "assistant";
-  type: string;
-  state: "streaming" | "thinking";
-} & InferMessage<TGraphData> extends infer T ? { [KeyType in keyof T]: T[KeyType] } : never>>;
+}: LanggraphBridgeConfig<TGraphData>): ReadableStream<InferUIMessageChunk<LanggraphUIMessage$1<TGraphData>>>;
 declare function createLanggraphStreamResponse<TGraphData extends LanggraphData$1<any, any>>(options: LanggraphBridgeConfig<TGraphData>): Response;
 declare function loadThreadHistory<TGraphData extends LanggraphData$1<any, any>>(graph: CompiledStateGraph<InferState<TGraphData>, any>, threadId: string, messageSchema?: InferMessageSchema$1<TGraphData>): Promise<{
   messages: LanggraphUIMessage$1<TGraphData>[];

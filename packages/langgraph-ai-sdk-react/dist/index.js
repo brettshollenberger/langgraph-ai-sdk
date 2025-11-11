@@ -5,12 +5,14 @@ import { v7 } from "uuid";
 
 //#region src/useLanggraph.tsx
 function useLanggraph({ api = "/api/chat", headers = {}, getInitialThreadId }) {
-	const threadId = useRef(getInitialThreadId?.() ?? v7()).current;
+	const initialThreadVal = getInitialThreadId?.();
+	const threadId = useRef(initialThreadVal ?? v7()).current;
 	const [error, setError] = useState(null);
 	const [serverState, setServerState] = useState({});
 	const [hasSubmitted, setHasSubmitted] = useState(false);
 	const headersRef = useRef(headers);
 	const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+	const isNewThread = useRef(!initialThreadVal);
 	const chat = useChat({
 		transport: new DefaultChatTransport({
 			api,
@@ -26,7 +28,7 @@ function useLanggraph({ api = "/api/chat", headers = {}, getInitialThreadId }) {
 		chat.sendMessage(...args);
 	};
 	const loadHistory = useEffectEvent(async () => {
-		if (!threadId) {
+		if (isNewThread.current) {
 			setIsLoadingHistory(false);
 			return;
 		}
