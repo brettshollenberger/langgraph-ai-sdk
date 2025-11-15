@@ -364,6 +364,14 @@ We'd love to hear from you! Please open an issue or submit a PR if you'd like to
 pnpm test
 ```
 
+## Local Development
+
+```bash
+pnpm run dev:watch # watch for changes and rebuild
+cd examples/hono
+pnpm run dev # run the hono server to test changes in the UI
+```
+
 ## Releasing
 
 ```bash

@@ -88,7 +88,7 @@ export function getSchemaKeys<T extends z.ZodObject<any> | readonly z.ZodObject<
 export interface LanggraphBridgeConfig<
   TGraphData extends LanggraphData<any, any>,
 > {
-  graph: CompiledStateGraph<InferState<TGraphData>, any>;
+  graph: CompiledStateGraph<InferState<TGraphData>, any, any, any, any, any, any, any>;
   messages: BaseMessage[];
   threadId: string;
   messageSchema?: InferMessageSchema<TGraphData>;
@@ -487,13 +487,6 @@ class LanggraphStreamHandler<TGraphData extends LanggraphData<any, any>> {
     // Must use streamEvents to get events output (including tool_call_end)
     // so we can detect lifecycle events properly
     const graphState = { messages, ...state }
-    console.log(`here is my graph state biiiinch`)
-    console.log(`here is my graph state biiiinch`)
-    console.log(`here is my graph state biiiinch`)
-    console.log(`here is my graph state biiiinch`)
-    console.log(`here is my graph state biiiinch`)
-    console.log(`here is my graph state biiiinch`)
-    console.log(graphState)
     const stream = graph.streamEvents(graphState, {
       version: "v2",
       streamMode: ["messages", "updates", "custom"],

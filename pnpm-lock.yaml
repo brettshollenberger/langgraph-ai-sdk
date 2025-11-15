@@ -68,6 +68,9 @@ importers:
       langgraph-ai-sdk-react:
         specifier: workspace:*
         version: link:../../packages/langgraph-ai-sdk-react
+      langgraph-ai-sdk-types:
+        specifier: workspace:*
+        version: link:../../packages/langgraph-ai-sdk-types
       pg:
         specifier: ^8.16.3
         version: 8.16.3

@@ -286,13 +286,6 @@ var LanggraphStreamHandler = class {
 			messages,
 			...state
 		};
-		console.log(`here is my graph state biiiinch`);
-		console.log(`here is my graph state biiiinch`);
-		console.log(`here is my graph state biiiinch`);
-		console.log(`here is my graph state biiiinch`);
-		console.log(`here is my graph state biiiinch`);
-		console.log(`here is my graph state biiiinch`);
-		console.log(graphState);
 		const stream = graph.streamEvents(graphState, {
 			version: "v2",
 			streamMode: [

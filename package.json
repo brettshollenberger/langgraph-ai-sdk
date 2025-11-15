@@ -5,6 +5,8 @@
   "private": true,
   "scripts": {
     "build": "pnpm -r build",
+    "dev": "pnpm -r --parallel --filter='./packages/*' run dev",
+    "dev:watch": "pnpm -r --parallel --filter='./packages/*' run dev",
     "test": "pnpm -r test",
     "test:watch": "pnpm -r test:watch",
     "typecheck": "tsc --noEmit",
