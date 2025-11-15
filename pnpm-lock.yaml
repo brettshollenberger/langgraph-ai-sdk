@@ -11,6 +11,9 @@ importers:
       '@types/node':
         specifier: ^22.10.5
         version: 22.18.13
+      husky:
+        specifier: ^9.1.7
+        version: 9.1.7
       tsdown:
         specifier: ^0.15.12
         version: 0.15.12(typescript@5.9.3)
@@ -129,6 +132,9 @@ importers:
       uuid:
         specifier: ^13.0.0
         version: 13.0.0
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
     devDependencies:
       '@langchain/anthropic':
         specifier: ^0.3.0
@@ -190,9 +196,6 @@ importers:
       xml-formatter:
         specifier: ^3.6.7
         version: 3.6.7
-      zod:
-        specifier: ^3.24.1
-        version: 3.25.76
 
   packages/langgraph-ai-sdk-react:
     dependencies:
@@ -208,7 +211,7 @@ importers:
     devDependencies:
       '@ai-sdk/react':
         specifier: ^2.0.86
-        version: 2.0.86(react@19.2.0)(zod@4.1.12)
+        version: 2.0.86(react@19.2.0)(zod@3.25.76)
       '@testing-library/jest-dom':
         specifier: ^6.0.0
         version: 6.9.1
@@ -226,7 +229,7 @@ importers:
         version: 19.2.2(@types/react@19.2.2)
       ai:
         specifier: ^5.0.0
-        version: 5.0.86(zod@4.1.12)
+        version: 5.0.86(zod@3.25.76)
       happy-dom:
         specifier: ^16.7.0
         version: 16.8.1
@@ -245,6 +248,9 @@ importers:
       vitest:
         specifier: ^4.0.0
         version: 4.0.6(@types/debug@4.1.12)(@types/node@22.18.13)(happy-dom@16.8.1)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
 
   packages/langgraph-ai-sdk-types:
     dependencies:
@@ -1526,6 +1532,11 @@ packages:
     resolution: {integrity: sha512-aTbGAZDUtRt7gRmU+li7rt5WbJeemULZHLNrycJ1dRBU80Giut6NvzG8h5u1TW1zGHXkPGpEtoEKhPKogIRKdA==}
     engines: {node: '>=4.0.0'}
 
+  husky@9.1.7:
+    resolution: {integrity: sha512-5gs5ytaNjBrh5Ow3zrvdUUY+0VxIuWVL4i9irt6friV+BqdCfmV11CQTWMiBYWHbXhco+J1kHfTOUkePhCDvMA==}
+    engines: {node: '>=18'}
+    hasBin: true
+
   iconv-lite@0.4.24:
     resolution: {integrity: sha512-v3MXnZAcvnywkTUEZomIActle7RXXeedOR31wwl7VlyoXO4Qi9arvSenNQWne1TcRwhCL1HwLI21bEqdpj8/rA==}
     engines: {node: '>=0.10.0'}
@@ -2471,9 +2482,6 @@ packages:
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
-  zod@4.1.12:
-    resolution: {integrity: sha512-JInaHOamG8pt5+Ey8kGmdcAcg3OL9reK8ltczgHTAwNhMys/6ThXHityHxVV2p3fkw/c+MAvBHFVYHFZDmjMCQ==}
-
   zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
 
@@ -2488,13 +2496,6 @@ snapshots:
       '@vercel/oidc': 3.0.3
       zod: 3.25.76
 
-  '@ai-sdk/gateway@2.0.5(zod@4.1.12)':
-    dependencies:
-      '@ai-sdk/provider': 2.0.0
-      '@ai-sdk/provider-utils': 3.0.15(zod@4.1.12)
-      '@vercel/oidc': 3.0.3
-      zod: 4.1.12
-
   '@ai-sdk/provider-utils@3.0.15(zod@3.25.76)':
     dependencies:
       '@ai-sdk/provider': 2.0.0
@@ -2502,26 +2503,19 @@ snapshots:
       eventsource-parser: 3.0.6
       zod: 3.25.76
 
-  '@ai-sdk/provider-utils@3.0.15(zod@4.1.12)':
-    dependencies:
-      '@ai-sdk/provider': 2.0.0
-      '@standard-schema/spec': 1.0.0
-      eventsource-parser: 3.0.6
-      zod: 4.1.12
-
   '@ai-sdk/provider@2.0.0':
     dependencies:
       json-schema: 0.4.0
 
-  '@ai-sdk/react@2.0.86(react@19.2.0)(zod@4.1.12)':
+  '@ai-sdk/react@2.0.86(react@19.2.0)(zod@3.25.76)':
     dependencies:
-      '@ai-sdk/provider-utils': 3.0.15(zod@4.1.12)
-      ai: 5.0.86(zod@4.1.12)
+      '@ai-sdk/provider-utils': 3.0.15(zod@3.25.76)
+      ai: 5.0.86(zod@3.25.76)
       react: 19.2.0
       swr: 2.3.6(react@19.2.0)
       throttleit: 2.1.0
     optionalDependencies:
-      zod: 4.1.12
+      zod: 3.25.76
 
   '@anthropic-ai/sdk@0.65.0(zod@3.25.76)':
     dependencies:
@@ -3170,14 +3164,6 @@ snapshots:
       '@opentelemetry/api': 1.9.0
       zod: 3.25.76
 
-  ai@5.0.86(zod@4.1.12):
-    dependencies:
-      '@ai-sdk/gateway': 2.0.5(zod@4.1.12)
-      '@ai-sdk/provider': 2.0.0
-      '@ai-sdk/provider-utils': 3.0.15(zod@4.1.12)
-      '@opentelemetry/api': 1.9.0
-      zod: 4.1.12
-
   ansi-regex@5.0.1: {}
 
   ansi-styles@4.3.0:
@@ -3579,6 +3565,8 @@ snapshots:
       debug: 4.4.3
     transitivePeerDependencies:
       - supports-color
+
+  husky@9.1.7: {}
 
   iconv-lite@0.4.24:
     dependencies:
@@ -4655,7 +4643,5 @@ snapshots:
     optional: true
 
   zod@3.25.76: {}
-
-  zod@4.1.12: {}
 
   zwitch@2.0.4: {}
