@@ -17,6 +17,7 @@ class StructuredOutputAwareFakeModel extends FakeStreamingChatModel {
   private includeRaw: boolean = false;
   private streamingChunks: any[] = [];
 
+  // @ts-ignore
   override withStructuredOutput(schema: any, config?: any): this {
     this.useStructuredOutput = true;
     this.structuredSchema = schema;
@@ -156,6 +157,9 @@ class StructuredOutputAwareFakeModel extends FakeStreamingChatModel {
       // Extract parsed result from tool_calls
       if (response && response.tool_calls && response.tool_calls.length > 0) {
         const toolCall = response.tool_calls[0];
+        if (!toolCall) {
+          return response;
+        }
         const parsed = toolCall.args;
         if (this.includeRaw) {
           return { raw: response, parsed };
@@ -203,7 +207,7 @@ export const testLLMConfig: LLMAppConfig = {
 class TestLLMManager implements ILLMManager {
     responses: { [graphName: string]: { [nodeName: string]: string[] } } = {};
 
-    get(...args: Parameters<ILLMManager['get']>): StructuredOutputAwareFakeModel {
+    get(...args: Parameters<ILLMManager['get']>): any {
       const nodeContext = getNodeContext();
       const graphName = nodeContext?.graphName;
       const nodeName = nodeContext?.name;

@@ -1,7 +1,9 @@
+import { z } from 'zod';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { useLanggraph } from '../useLanggraph';
 import type { LanggraphData } from 'langgraph-ai-sdk-types';
+import { Simplify } from 'type-fest';
 
 // Define test types matching the sample graph
 type TestState = {
@@ -9,15 +11,23 @@ type TestState = {
   projectName?: string;
 };
 
-type TestMessage = {
-  intro: string;
-  examples: string[];
-  conclusion: string;
-} | {
-  content: string;
-};
 
-type TestLanggraphData = LanggraphData<TestState, TestMessage>;
+const testMessageSchema = z.object({
+  type: z.literal('intro'),
+  intro: z.string(),
+  examples: z.array(z.string()),
+  conclusion: z.string(),
+});
+
+const testBasicMessageSchema = z.object({
+  type: z.literal('response'),
+  content: z.string(),
+});
+type TestMessage = z.infer<typeof testMessageSchema>;
+type TestBasicMessage = z.infer<typeof testBasicMessageSchema>;
+export const agentOutputSchemas = [testMessageSchema, testBasicMessageSchema] as const;
+
+type TestLanggraphData = LanggraphData<TestState, typeof agentOutputSchemas[number]>;
 
 describe('useLanggraph', () => {
   const mockFetch = vi.fn();

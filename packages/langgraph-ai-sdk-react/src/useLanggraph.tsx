@@ -198,7 +198,7 @@ export function useLanggraph<
       }, {} as Record<keyof TMessage, string>);
 
       // Determine the message type from the structured data
-      const messageType = messageParts.length > 0 
+      const messageType = messageParts.length > 0 && messageParts[0]
         ? messageParts[0].type.replace('data-message-', '')
         : 'structured';
       const state = Object.keys(userSpecifiedOutputType).filter((k) => k !== "type").length > 0 ? "streaming" : "thinking";

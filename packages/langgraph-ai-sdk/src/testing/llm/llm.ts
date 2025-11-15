@@ -47,7 +47,7 @@ export function getLLM(
   }
 
   if (isTestEnvironment && hasConfiguredResponses(graphName, nodeName)) {
-    return getTestLLM(llmSkill, llmSpeed, llmCost);
+    return getTestLLM(llmSkill, llmSpeed, llmCost) as any;
   }
 
   return getCoreLLM(llmSkill, llmSpeed, llmCost);

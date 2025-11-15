@@ -191,7 +191,7 @@ const getPrompt = async (state: BrainstormGraphState, config?: LangGraphRunnable
 
 // ===== TOOLS =====
 
-const SaveAnswersTool = (state: BrainstormGraphState, config?: LangGraphRunnableConfig): Tool => {
+const SaveAnswersTool = (state: BrainstormGraphState, config?: LangGraphRunnableConfig) => {
     const saveAnswersInputSchema = z.object({
         answers: z.array(z.object({
             topic: z.enum(brainstormTopics),

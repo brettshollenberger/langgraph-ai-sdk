@@ -38,11 +38,15 @@ type EventsStreamEvent = {
 
 const TOOL_CALL_REGEX = /^extract/;
 
-type StreamChunk = 
+type StreamChunk =
   | ['messages', StreamMessageOutput]
+  | [string[], 'messages', StreamMessageOutput]
   | ['updates', Record<string, any>]
+  | [string[], 'updates', Record<string, any>]
   | ['custom', any]
-  | ['events', EventsStreamEvent];
+  | [string[], 'custom', any]
+  | ['events', EventsStreamEvent]
+  | [string[], 'events', EventsStreamEvent];
 interface ToolCallChunk {
   id: string;
   index: number;

@@ -1,12 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { createLanggraphUIStream } from '../stream';
-import { 
-  createSampleGraph, 
+import {
+  createSampleGraph,
   createSampleAgent,
-  structuredMessageSchema, 
+  structuredMessageSchema,
   questionSchema,
+  agentOutputSchema,
   type AgentLanggraphData,
-  type GraphLanggraphData 
+  type GraphLanggraphData
 } from '../testing';
 import { HumanMessage } from '@langchain/core/messages';
 import { MemorySaver } from "@langchain/langgraph-checkpoint";
@@ -301,7 +302,7 @@ describe('End-to-End Streaming Tests', () => {
         graph: agent,
         messages: [new HumanMessage('Execute full flow')],
         threadId,
-        messageSchema: questionSchema,
+        messageSchema: agentOutputSchema,
       });
 
       const allChunks: any[] = [];

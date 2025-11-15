@@ -139,9 +139,39 @@ export type GraphData = LanggraphData<
   ExtractGraphState<typeof graph>,
   typeof structuredMessageSchema
 >;
+```
 
-// Register the graph with the server
-registerGraph<GraphData>("answerQuestion", { graph });
+You can also use MULTIPLE schemas, if your agent may emit different types of structured messages:
+
+```typescript
+const messageWithExamples = z.object({
+  type: z.literal("intro"),
+  intro: z.string(),
+  examples: z.array(z.string()),
+  conclusion: z.string(),
+});
+
+const marketingTemplateSchema = z.object({
+  type: z.literal("marketingTemplate"),
+  headline: z.string().describe("Compelling headline that grabs attention"),
+  subheadline: z
+    .string()
+    .optional()
+    .describe("Supporting subheadline that expands on the main headline"),
+  valueProposition: z
+    .string()
+    .describe("Clear statement of what makes this business unique"),
+  bulletPoints: z
+    .array(z.string())
+    .optional()
+    .describe("3-5 key benefits or features to highlight"),
+});
+
+const messageSchemas = [messageWithExamples, marketingTemplateSchema] as const;
+export type GraphData = LanggraphData<
+  ExtractGraphState<typeof graph>,
+  (typeof messageSchemas)[number] // Union of all schemas, your frontend will automatically handle the type inference
+>;
 ```
 
 7. Create any type of server you want, and use the provided functions to stream and fetch history:
