@@ -1,9 +1,7 @@
 import { n as __export } from "./chunk-C3Lxiq5Q.js";
-import { v7 } from "uuid";
 import { AIMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { createUIMessageStream, createUIMessageStreamResponse, parsePartialJson } from "ai";
 import { kebabCase } from "change-case";
-import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
@@ -19,8 +17,14 @@ const isString = (value) => {
 	return typeof value === "string";
 };
 function getSchemaKeys(schema) {
-	if (!schema || !schema.shape) return [];
-	return Object.keys(schema.shape);
+	if (!schema) return [];
+	if (Array.isArray(schema)) {
+		const allKeys = /* @__PURE__ */ new Set();
+		for (const s of schema) if (s && "shape" in s && s.shape) Object.keys(s.shape).forEach((key) => allKeys.add(key));
+		return Array.from(allKeys);
+	}
+	if ("shape" in schema && schema.shape) return Object.keys(schema.shape);
+	return [];
 }
 var Handler = class {
 	writer;
@@ -38,7 +42,7 @@ var StructuredMessageToolHandler = class extends Handler {
 	currentToolName;
 	constructor(writer, messageSchema) {
 		super(writer, messageSchema);
-		this.schemaKeys = messageSchema ? getSchemaKeys(messageSchema).filter((key) => typeof key === "string") : [];
+		this.schemaKeys = messageSchema ? getSchemaKeys(messageSchema) : [];
 	}
 	async handle(chunk) {
 		if (!this.messageSchema) return;
@@ -143,7 +147,7 @@ var ToolCallHandler = class extends Handler {
 	handlers;
 	constructor(writer, messageSchema) {
 		super(writer, messageSchema);
-		this.schemaKeys = messageSchema ? getSchemaKeys(messageSchema).filter((key) => typeof key === "string") : [];
+		this.schemaKeys = messageSchema ? getSchemaKeys(messageSchema) : [];
 		this.handlers = {
 			structured_messages: new StructuredMessageToolHandler(writer, messageSchema),
 			other_tools: new OtherToolHandler(writer, messageSchema)
@@ -366,6 +370,61 @@ async function loadThreadHistory(graph, threadId, messageSchema) {
 }
 
 //#endregion
+//#region src/api.ts
+function convertUIMessagesToLanggraph(messages) {
+	return messages.map((msg) => {
+		const textPart = msg.parts.find((p) => p.type === "text");
+		const text$1 = textPart?.type === "text" ? textPart.text : "";
+		switch (msg.role) {
+			case "user": return new HumanMessage(text$1);
+			case "system": return new SystemMessage(text$1);
+			case "assistant": return new AIMessage(text$1);
+			default: throw new Error(`Unknown role: ${msg.role}`);
+		}
+	});
+}
+/**
+* Core function that works with parsed data - framework agnostic
+* Use this when you've already parsed the request body (e.g., in Hono, Express, etc.)
+*/
+async function streamLanggraph({ graph, messageSchema, messages, state = {}, threadId }) {
+	let finalThreadId = threadId;
+	const newMessage = convertUIMessagesToLanggraph(messages).at(-1);
+	if (!newMessage) return new Response(JSON.stringify({ error: "No messages provided" }), {
+		status: 400,
+		headers: { "Content-Type": "application/json" }
+	});
+	const response = createLanggraphStreamResponse({
+		graph,
+		messages: [newMessage],
+		threadId: finalThreadId,
+		state,
+		messageSchema
+	});
+	response.headers.set("X-Thread-ID", finalThreadId);
+	return response;
+}
+/**
+* Core function that works with parsed data - framework agnostic
+* Use this when you've already extracted the threadId from the request (e.g., in Hono, Express, etc.)
+*/
+async function fetchLanggraphHistory({ graph, messageSchema, threadId }) {
+	if (!threadId) return new Response(JSON.stringify({ error: "threadId required" }), {
+		status: 400,
+		headers: { "Content-Type": "application/json" }
+	});
+	if (!graph) return new Response(JSON.stringify({ error: `Graph not found` }), {
+		status: 404,
+		headers: { "Content-Type": "application/json" }
+	});
+	const { messages, state } = await loadThreadHistory(graph, threadId, messageSchema);
+	return new Response(JSON.stringify({
+		messages,
+		state
+	}), { headers: { "Content-Type": "application/json" } });
+}
+
+//#endregion
 //#region db/schema.ts
 var schema_exports = /* @__PURE__ */ __export({ threads: () => threads });
 const threads = pgTable("threads", {
@@ -423,86 +482,6 @@ function getPool() {
 */
 function isInitialized() {
 	return config.db !== null && config.pool !== null;
-}
-
-//#endregion
-//#region src/ops.ts
-/**
-* Ensure a thread exists in the database
-* Creates a new thread if it doesn't already exist
-*/
-async function ensureThread(threadId) {
-	const db = getDb();
-	if ((await db.select().from(threads).where(eq(threads.threadId, threadId)).limit(1)).length === 0) await db.insert(threads).values({
-		threadId,
-		createdAt: /* @__PURE__ */ new Date(),
-		updatedAt: /* @__PURE__ */ new Date(),
-		metadata: {},
-		status: "idle",
-		config: {},
-		values: null,
-		interrupts: {}
-	});
-	return threadId;
-}
-
-//#endregion
-//#region src/api.ts
-function convertUIMessagesToLanggraph(messages) {
-	return messages.map((msg) => {
-		const textPart = msg.parts.find((p) => p.type === "text");
-		const text$1 = textPart?.type === "text" ? textPart.text : "";
-		switch (msg.role) {
-			case "user": return new HumanMessage(text$1);
-			case "system": return new SystemMessage(text$1);
-			case "assistant": return new AIMessage(text$1);
-			default: throw new Error(`Unknown role: ${msg.role}`);
-		}
-	});
-}
-/**
-* Core function that works with parsed data - framework agnostic
-* Use this when you've already parsed the request body (e.g., in Hono, Express, etc.)
-*/
-async function streamLanggraph({ graph, messageSchema, messages, state = {}, threadId }) {
-	let finalThreadId = threadId;
-	if (!finalThreadId) {
-		finalThreadId = v7();
-		await ensureThread(finalThreadId);
-	}
-	const newMessage = convertUIMessagesToLanggraph(messages).at(-1);
-	if (!newMessage) return new Response(JSON.stringify({ error: "No messages provided" }), {
-		status: 400,
-		headers: { "Content-Type": "application/json" }
-	});
-	const response = createLanggraphStreamResponse({
-		graph,
-		messages: [newMessage],
-		threadId: finalThreadId,
-		state,
-		messageSchema
-	});
-	response.headers.set("X-Thread-ID", finalThreadId);
-	return response;
-}
-/**
-* Core function that works with parsed data - framework agnostic
-* Use this when you've already extracted the threadId from the request (e.g., in Hono, Express, etc.)
-*/
-async function fetchLanggraphHistory({ graph, messageSchema, threadId }) {
-	if (!threadId) return new Response(JSON.stringify({ error: "threadId required" }), {
-		status: 400,
-		headers: { "Content-Type": "application/json" }
-	});
-	if (!graph) return new Response(JSON.stringify({ error: `Graph not found` }), {
-		status: 404,
-		headers: { "Content-Type": "application/json" }
-	});
-	const { messages, state } = await loadThreadHistory(graph, threadId, messageSchema);
-	return new Response(JSON.stringify({
-		messages,
-		state
-	}), { headers: { "Content-Type": "application/json" } });
 }
 
 //#endregion

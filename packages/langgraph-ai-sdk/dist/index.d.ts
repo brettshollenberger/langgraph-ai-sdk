@@ -20,7 +20,7 @@ declare function streamLanggraph<TGraphData extends LanggraphData$1<any, any>>({
   state,
   threadId
 }: {
-  graph: CompiledStateGraph<any, any>;
+  graph: CompiledStateGraph<any, any, any, any, any, any, any, any>;
   messageSchema?: InferMessageSchema$1<TGraphData>;
   messages: UIMessage[];
   state?: any;
@@ -35,15 +35,15 @@ declare function fetchLanggraphHistory<TGraphData extends LanggraphData$1<any, a
   messageSchema,
   threadId
 }: {
-  graph: CompiledStateGraph<any, any>;
+  graph: CompiledStateGraph<any, any, any, any, any, any, any, any>;
   messageSchema?: InferMessageSchema$1<TGraphData>;
   threadId: string;
 }): Promise<Response>;
 //#endregion
 //#region src/stream.d.ts
-declare function getSchemaKeys<T extends z.ZodObject<any>>(schema: T | undefined): Array<keyof z.infer<T>>;
+declare function getSchemaKeys<T extends z.ZodObject<any> | readonly z.ZodObject<any>[]>(schema: T | undefined): string[];
 interface LanggraphBridgeConfig<TGraphData extends LanggraphData$1<any, any>> {
-  graph: CompiledStateGraph<InferState<TGraphData>, any>;
+  graph: CompiledStateGraph<InferState<TGraphData>, any, any, any, any, any, any, any>;
   messages: BaseMessage[];
   threadId: string;
   messageSchema?: InferMessageSchema$1<TGraphData>;

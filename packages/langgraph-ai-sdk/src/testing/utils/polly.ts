@@ -119,7 +119,7 @@ class PollyManager {
         const { server } = PollyManager.polly!;
         PollyManager.AI_PROVIDERS.forEach(providerRegex => {
             server
-                .any(providerRegex)
+                .any(providerRegex as any)
                 .configure({ 
                     matchRequestsBy: {
                         method: true,
@@ -133,6 +133,7 @@ class PollyManager {
     }
 
     private static configureHeaders() {
+        if (!PollyManager.polly) return;
         const { server } = PollyManager.polly;
         server
             .any()
@@ -215,7 +216,7 @@ export function mockApiResponse(pattern: string | RegExp, response: any) {
     }
     
     polly.server
-        .any(pattern)
+        .any(pattern as any)
         .intercept((req: any, res: any) => {
             res.status(response.status || 200);
             res.json(response.body || response);

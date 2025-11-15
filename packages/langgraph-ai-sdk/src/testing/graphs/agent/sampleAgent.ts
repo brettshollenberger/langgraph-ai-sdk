@@ -3,20 +3,22 @@ import { StateGraph, END, START } from "@langchain/langgraph";
 import { AIMessage, type BaseMessage } from "@langchain/core/messages";
 import { createAgent } from "langchain";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
-import { getLLM } from '../llm/llm';
+import { getLLM } from '../../llm/llm';
 import { tool, Tool } from "@langchain/core/tools";
-import { toJSON, renderPrompt, chatHistoryPrompt, structuredOutputPrompt, isHumanMessage } from '../prompts';
+import { toJSON, renderPrompt, chatHistoryPrompt, structuredOutputPrompt, isHumanMessage } from '../../prompts';
 import { writeFile, readFile } from 'fs/promises';
-import { NodeMiddleware } from "../node";
+import { NodeMiddleware } from "../../node";
 import {
   brainstormTopics,
   BrainstormStateAnnotation,
   questionSchema,
+  marketingTemplateSchema,
   agentOutputSchema,
   type BrainstormTopic,
   type Brainstorm,
   type AgentStateType,
-} from './agentTypes';
+  type UserContext,
+} from './types';
 
 async function wipeJSON(filePath: string = './brainstorm-answers.json'): Promise<void> {
     try {
@@ -76,6 +78,7 @@ type BrainstormGraphState = {
     messages: BaseMessage[];
     brainstorm: Brainstorm;
     remainingTopics: BrainstormTopic[];
+    userContext: UserContext;
 }
 
 const sortedTopics = (topics: BrainstormTopic[]) => {
@@ -97,6 +100,8 @@ const getPrompt = async (state: BrainstormGraphState, config?: LangGraphRunnable
     }
 
     const chatHistory = await chatHistoryPrompt({ messages: state.messages });
+    const hasUserContext = state.userContext && Object.keys(state.userContext).length > 0;
+    console.log(lastHumanMessage)
 
     return renderPrompt(
         `
@@ -110,12 +115,17 @@ const getPrompt = async (state: BrainstormGraphState, config?: LangGraphRunnable
                 2. You have a reputation to uphold. You won't accept a bad business idea, but will help the user find a better angle.
                 3. If the user is struggling, you can find creative angles to answer a question.
                 4. You do not save an answer unless the user has given you a GREAT response. Continue refining UNTIL the user has given you a GREAT response in their own words.
+                ${hasUserContext ? '5. IMPORTANT: Tailor your questions and feedback based on the user context provided below.' : ''}
             </rules>
 
             <task>
                 Help the user brainstorm marketing copy for their landing page.
                 Guide them through each question until you have enough context to generate effective marketing copy.
             </task>
+
+            ${hasUserContext ? `<user_context>
+                ${toJSON({ values: state.userContext })}
+            </user_context>` : ''}
 
             <collected_data>
                 ${toJSON({ values: collectedData(state) })}
@@ -135,7 +145,7 @@ const getPrompt = async (state: BrainstormGraphState, config?: LangGraphRunnable
                 1. If the user has answered any topics with a GREAT response, call the save_answers tool
                 2. If they haven't, continue helping them refine their answer until they give you a GREAT response.
                 3. Then, if:
-                   - The user has answered all topics, output finishBrainstorming
+                   - The user has answered ALL topics, generate a marketingTemplate with compelling landing page copy
                    - OTHERWISE, ask the next question, following the output_format_rules
             </workflow>
 
@@ -160,10 +170,16 @@ const getPrompt = async (state: BrainstormGraphState, config?: LangGraphRunnable
                   "conclusion": "Restate what you're asking for" // Optional
                 }
 
-                When the user has finished brainstorming, output:
+                When the user has answered ALL brainstorming topics, generate marketing copy:
                 {
-                  "type": "finishBrainstorming",
-                  "finishBrainstorming": true
+                  "type": "marketingTemplate",
+                  "headline": "Compelling, benefit-focused headline",
+                  "subheadline": "Supporting detail that expands the promise", // Optional
+                  "valueProposition": "Clear unique value statement",
+                  "bulletPoints": ["Benefit 1", "Benefit 2", "Benefit 3"], // Optional, 3-5 items
+                  "callToAction": "Strong action-oriented CTA",
+                  "tone": "professional|friendly|urgent|authoritative|playful",
+                  "socialProofSnippet": "Brief testimonial or proof element" // Optional
                 }
 
                 You MUST output valid JSON in one of these formats. NO other text.
@@ -176,7 +192,7 @@ const getPrompt = async (state: BrainstormGraphState, config?: LangGraphRunnable
 
 // ===== TOOLS =====
 
-const SaveAnswersTool = (state: BrainstormGraphState, config?: LangGraphRunnableConfig): Tool => {
+const SaveAnswersTool = (state: BrainstormGraphState, config?: LangGraphRunnableConfig) => {
     const saveAnswersInputSchema = z.object({
         answers: z.array(z.object({
             topic: z.enum(brainstormTopics),
@@ -232,7 +248,7 @@ export const brainstormAgent = async (
           model: llm,
           tools,
           systemPrompt: prompt,
-          responseFormat: questionSchema,
+          responseFormat: agentOutputSchema,
       });
 
       const updatedState = await agent.invoke(state as any, config);

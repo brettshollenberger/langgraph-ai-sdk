@@ -9,7 +9,5 @@
  * Can be used in both tests and examples
  */
 
-export * from './types';
-export * from './sampleGraph';
-export * from "./sampleAgent";
-export * from "./agentTypes";
+export * from './graph';
+export * from './agent';

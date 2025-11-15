@@ -17,6 +17,7 @@
     "src"
   ],
   "scripts": {
+    "typecheck": "tsc --noEmit",
     "build": "tsc",
     "prepublishOnly": "pnpm build"
   },

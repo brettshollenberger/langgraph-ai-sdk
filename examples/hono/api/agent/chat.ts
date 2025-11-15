@@ -1,6 +1,6 @@
 import { initializeLanggraph, streamLanggraph, fetchLanggraphHistory } from 'langgraph-ai-sdk';
 import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
-import { createSampleAgent, questionSchema, type AgentLanggraphData } from 'langgraph-ai-sdk/testing';
+import { createSampleAgent, agentOutputSchema, type AgentLanggraphData } from 'langgraph-ai-sdk/testing';
 import pkg from 'pg';
 
 const { Pool } = pkg;
@@ -37,7 +37,7 @@ export const POST = authMiddleware(async (req: Request): Promise<Response> => {
 
   return streamLanggraph<AgentLanggraphData>({
     graph: agentGraph,
-    messageSchema: questionSchema,
+    messageSchema: agentOutputSchema,
     messages,
     threadId,
     state
@@ -50,7 +50,7 @@ export const GET = authMiddleware((req: Request): Promise<Response> => {
 
   return fetchLanggraphHistory<AgentLanggraphData>({
     graph: agentGraph,
-    messageSchema: questionSchema,
+    messageSchema: agentOutputSchema,
     threadId
   });
 });

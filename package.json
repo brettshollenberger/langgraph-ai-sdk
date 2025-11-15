@@ -5,6 +5,9 @@
   "private": true,
   "scripts": {
     "build": "pnpm -r build",
+    "typecheck:packages": "pnpm -r --filter './packages/*' typecheck",
+    "dev": "pnpm -r --parallel --filter='./packages/*' run dev",
+    "dev:watch": "pnpm -r --parallel --filter='./packages/*' run dev",
     "test": "pnpm -r test",
     "test:watch": "pnpm -r test:watch",
     "typecheck": "tsc --noEmit",
@@ -13,7 +16,8 @@
     "publish:all": "pnpm -r --filter './packages/*' publish --access public --no-git-checks",
     "release:patch": "node scripts/version.mjs patch && pnpm build && pnpm publish:all",
     "release:minor": "node scripts/version.mjs minor && pnpm build && pnpm publish:all",
-    "release:major": "node scripts/version.mjs major && pnpm build && pnpm publish:all"
+    "release:major": "node scripts/version.mjs major && pnpm build && pnpm publish:all",
+    "prepare": "husky"
   },
   "workspaces": [
     "packages/*",
@@ -21,6 +25,7 @@
   ],
   "devDependencies": {
     "@types/node": "^22.10.5",
+    "husky": "^9.1.7",
     "tsdown": "^0.15.12",
     "type-fest": "^5.1.0",
     "typescript": "^5.9.3",

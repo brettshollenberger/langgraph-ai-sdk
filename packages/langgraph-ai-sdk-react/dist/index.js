@@ -23,9 +23,11 @@ function useLanggraph({ api = "/api/chat", headers = {}, getInitialThreadId }) {
 			setError(error$1.message);
 		}
 	});
-	const sendMessage = (...args) => {
+	const sendMessage = (message, additionalState) => {
 		if (!hasSubmitted) setHasSubmitted(true);
-		chat.sendMessage(...args);
+		const options = additionalState ? { body: { state: additionalState } } : void 0;
+		const messageParam = typeof message === "string" ? { text: message } : message;
+		chat.sendMessage(messageParam, options);
 	};
 	const loadHistory = useEffectEvent(async () => {
 		if (isNewThread.current) {
@@ -110,7 +112,7 @@ function useLanggraph({ api = "/api/chat", headers = {}, getInitialThreadId }) {
 				acc[key] = part.data;
 				return acc;
 			}, {});
-			const messageType = messageParts.length > 0 ? messageParts[0].type.replace("data-message-", "") : "structured";
+			const messageType = messageParts.length > 0 && messageParts[0] ? messageParts[0].type.replace("data-message-", "") : "structured";
 			const state$1 = Object.keys(userSpecifiedOutputType).filter((k) => k !== "type").length > 0 ? "streaming" : "thinking";
 			return {
 				id: msg.id,

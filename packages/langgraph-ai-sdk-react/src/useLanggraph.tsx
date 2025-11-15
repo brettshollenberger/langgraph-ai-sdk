@@ -1,13 +1,14 @@
 import { useRef, useEffectEvent } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { useState, useEffect, useMemo } from 'react';
-import type { 
-  LanggraphData, 
-  InferState, 
-  InferMessage, 
+import type {
+  LanggraphData,
+  InferState,
+  InferMessage,
   LanggraphAISDKUIMessage,
   LanggraphUIMessage,
   SimpleLanggraphUIMessage,
+  _SimpleLanggraphUIMessage,
 } from 'langgraph-ai-sdk-types';
 import { DefaultChatTransport } from 'ai';
 import { v7 as uuidv7 } from 'uuid';
@@ -61,12 +62,24 @@ export function useLanggraph<
     },
   });
 
-  const sendMessage = (...args: Parameters<typeof chat.sendMessage>) => {
+  const sendMessage = (
+    message: string | Parameters<typeof chat.sendMessage>[0],
+    additionalState?: Partial<TState>
+  ) => {
     if (!hasSubmitted) {
       setHasSubmitted(true);
     }
 
-    chat.sendMessage(...args);
+    const options = additionalState
+      ? { body: { state: additionalState } }
+      : undefined;
+
+    // Convert string to { text: string } format
+    const messageParam = typeof message === 'string'
+      ? { text: message }
+      : message;
+
+    chat.sendMessage(messageParam, options as any);
   };
 
   const loadHistory = useEffectEvent(async () => {
@@ -155,12 +168,12 @@ export function useLanggraph<
           role: msg.role,
           type: 'text',
           text
-        } satisfies SimpleLanggraphUIMessage<TLanggraphData>;
+        } satisfies _SimpleLanggraphUIMessage<TLanggraphData>;
       }
 
       // Handle text-only assistant messages
-      const textParts = msg.parts.filter(p => p.type === 'data-message-text');
-      const otherParts = msg.parts.filter(p => p.type !== 'data-message-text' && p.type.startsWith('data-message-'));
+      const textParts = msg.parts.filter(p => (p.type as string) === 'data-message-text');
+      const otherParts = msg.parts.filter(p => (p.type as string) !== 'data-message-text' && (p.type as string).startsWith('data-message-'));
       if (textParts.length > 0 && otherParts.length === 0) {
         const text = textParts.map(p => (p as any).data).join('');
         
@@ -169,7 +182,7 @@ export function useLanggraph<
           role: msg.role,
           type: 'text',
           text
-        } satisfies SimpleLanggraphUIMessage<TLanggraphData>;
+        } satisfies _SimpleLanggraphUIMessage<TLanggraphData>;
       }
 
       const messageParts = msg.parts
@@ -191,7 +204,7 @@ export function useLanggraph<
       }, {} as Record<keyof TMessage, string>);
 
       // Determine the message type from the structured data
-      const messageType = messageParts.length > 0 
+      const messageType = messageParts.length > 0 && messageParts[0]
         ? messageParts[0].type.replace('data-message-', '')
         : 'structured';
       const state = Object.keys(userSpecifiedOutputType).filter((k) => k !== "type").length > 0 ? "streaming" : "thinking";
@@ -202,8 +215,8 @@ export function useLanggraph<
         role: msg.role,
         type: messageType,
         ...userSpecifiedOutputType
-      } satisfies SimpleLanggraphUIMessage<TLanggraphData>
-    }) satisfies SimpleLanggraphUIMessage<TLanggraphData>[];
+      }
+    }) as SimpleLanggraphUIMessage<TLanggraphData>[];
   }, [chat.messages]);
 
   const tools = useMemo(() => {
