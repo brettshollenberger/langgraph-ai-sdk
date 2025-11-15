@@ -36,7 +36,7 @@ export async function streamLanggraph<TGraphData extends LanggraphData<any, any>
   state = {},
   threadId,
 }: {
-  graph: CompiledStateGraph<any, any>;
+  graph: CompiledStateGraph<any, any, any, any, any, any, any, any>;
   messageSchema?: InferMessageSchema<TGraphData>;
   messages: UIMessage[];
   state?: any;
@@ -81,7 +81,7 @@ export async function fetchLanggraphHistory<TGraphData extends LanggraphData<any
   messageSchema,
   threadId,
 }: {
-  graph: CompiledStateGraph<any, any>;
+  graph: CompiledStateGraph<any, any, any, any, any, any, any, any>;
   messageSchema?: InferMessageSchema<TGraphData>;
   threadId: string;
 }): Promise<Response> {
