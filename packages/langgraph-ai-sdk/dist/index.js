@@ -19,8 +19,14 @@ const isString = (value) => {
 	return typeof value === "string";
 };
 function getSchemaKeys(schema) {
-	if (!schema || !schema.shape) return [];
-	return Object.keys(schema.shape);
+	if (!schema) return [];
+	if (Array.isArray(schema)) {
+		const allKeys = /* @__PURE__ */ new Set();
+		for (const s of schema) if (s && "shape" in s && s.shape) Object.keys(s.shape).forEach((key) => allKeys.add(key));
+		return Array.from(allKeys);
+	}
+	if ("shape" in schema && schema.shape) return Object.keys(schema.shape);
+	return [];
 }
 var Handler = class {
 	writer;
@@ -38,7 +44,7 @@ var StructuredMessageToolHandler = class extends Handler {
 	currentToolName;
 	constructor(writer, messageSchema) {
 		super(writer, messageSchema);
-		this.schemaKeys = messageSchema ? getSchemaKeys(messageSchema).filter((key) => typeof key === "string") : [];
+		this.schemaKeys = messageSchema ? getSchemaKeys(messageSchema) : [];
 	}
 	async handle(chunk) {
 		if (!this.messageSchema) return;
@@ -143,7 +149,7 @@ var ToolCallHandler = class extends Handler {
 	handlers;
 	constructor(writer, messageSchema) {
 		super(writer, messageSchema);
-		this.schemaKeys = messageSchema ? getSchemaKeys(messageSchema).filter((key) => typeof key === "string") : [];
+		this.schemaKeys = messageSchema ? getSchemaKeys(messageSchema) : [];
 		this.handlers = {
 			structured_messages: new StructuredMessageToolHandler(writer, messageSchema),
 			other_tools: new OtherToolHandler(writer, messageSchema)
@@ -280,6 +286,13 @@ var LanggraphStreamHandler = class {
 			messages,
 			...state
 		};
+		console.log(`here is my graph state biiiinch`);
+		console.log(`here is my graph state biiiinch`);
+		console.log(`here is my graph state biiiinch`);
+		console.log(`here is my graph state biiiinch`);
+		console.log(`here is my graph state biiiinch`);
+		console.log(`here is my graph state biiiinch`);
+		console.log(graphState);
 		const stream = graph.streamEvents(graphState, {
 			version: "v2",
 			streamMode: [

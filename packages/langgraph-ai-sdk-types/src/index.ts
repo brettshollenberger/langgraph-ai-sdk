@@ -74,6 +74,6 @@ export type SimpleLanggraphUIMessage<T extends LanggraphData<any, any>> = Simpli
     state?: 'streaming' | 'thinking';
   } & (
     | { type: 'text'; text: string }
-    | { type: string } & InferMessage<T>
+    | InferMessage<T>
   )
 >

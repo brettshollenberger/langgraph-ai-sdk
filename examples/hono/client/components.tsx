@@ -1,5 +1,4 @@
-import type { SimpleLanggraphUIMessage } from 'langgraph-ai-sdk-types';
-import type { GraphLanggraphData, AgentLanggraphData } from '../types.ts';
+import type { AppMessage } from '../types.ts';
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 
@@ -17,7 +16,7 @@ export const Message = ({
   message,
   onExampleClick,
 }: {
-  message: SimpleLanggraphUIMessage<GraphLanggraphData | AgentLanggraphData>;
+  message: AppMessage;
   onExampleClick?: (text: string) => void;
 }) => {
   const isUser = message.role === 'user';

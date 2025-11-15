@@ -58104,11 +58104,12 @@ const withPolly = (nodeFunction, options) => {
 const NodeMiddleware = new NodeMiddlewareFactory().addMiddleware("context", withContext).addMiddleware("notifications", withNotifications).addMiddleware("errorHandling", withErrorHandling).addMiddleware("polly", withPolly);
 
 //#endregion
-//#region src/testing/graphs/types.ts
+//#region src/testing/graphs/graph/types.ts
 /**
 * Schema for structured messages with intro, examples, and conclusion
 */
 const structuredMessageSchema = z.object({
+	type: z.literal("structuredMessage"),
 	intro: z.string().describe("Introduction to the response"),
 	bulletPoints: z.array(z.string()).optional().describe("List of bullet points"),
 	conclusion: z.string().optional().describe("Conclusion of the response")
@@ -58128,7 +58129,7 @@ const SampleGraphAnnotation = Annotation.Root({
 });
 
 //#endregion
-//#region src/testing/graphs/sampleGraph.ts
+//#region src/testing/graphs/graph/sampleGraph.ts
 /**
 * Node that generates a project name based on the user's message
 * Only runs if projectName is not already set in state
@@ -58207,6 +58208,79 @@ function createSampleGraph(checkpointer, graphName = "sample") {
 		name: graphName
 	});
 }
+
+//#endregion
+//#region src/testing/graphs/agent/types.ts
+/**
+* Schema for structured questions with intro, examples, and conclusion
+*/
+const questionSchema = z.object({
+	type: z.literal("question"),
+	text: z.string().describe("A simple intro to the question"),
+	examples: z.array(z.string()).optional().describe(`OPTIONAL: List of examples to help the user understand what we're asking.`),
+	conclusion: z.string().optional().describe(`OPTIONAL: Conclusion text to include after examples`)
+});
+/**
+* Schema for marketing template output
+* Generated when the agent has enough context to create landing page copy
+*/
+const marketingTemplateSchema = z.object({
+	type: z.literal("marketingTemplate"),
+	headline: z.string().describe("Compelling headline that grabs attention"),
+	subheadline: z.string().optional().describe("Supporting subheadline that expands on the main headline"),
+	valueProposition: z.string().describe("Clear statement of what makes this business unique"),
+	bulletPoints: z.array(z.string()).optional().describe("3-5 key benefits or features to highlight"),
+	callToAction: z.string().describe("Strong call-to-action text"),
+	tone: z.enum([
+		"professional",
+		"friendly",
+		"urgent",
+		"authoritative",
+		"playful"
+	]).describe("The tone of the copy"),
+	socialProofSnippet: z.string().optional().describe("Brief social proof or testimonial snippet")
+});
+/**
+* Union schema for all agent outputs
+*/
+const agentOutputSchema = [questionSchema, marketingTemplateSchema];
+/**
+* Brainstorm topics
+*/
+const brainstormTopics = [
+	"idea",
+	"audience",
+	"solution",
+	"socialProof",
+	"lookAndFeel"
+];
+/**
+* State annotation for the brainstorm agent
+*/
+const BrainstormStateAnnotation = Annotation.Root({
+	messages: Annotation({
+		default: () => [],
+		reducer: messagesStateReducer
+	}),
+	brainstorm: Annotation({
+		default: () => ({}),
+		reducer: (current, next) => ({
+			...current,
+			...next
+		})
+	}),
+	remainingTopics: Annotation({
+		default: () => [...brainstormTopics],
+		reducer: (current, next) => next
+	}),
+	userContext: Annotation({
+		default: () => ({}),
+		reducer: (current, next) => ({
+			...current,
+			...next
+		})
+	})
+});
 
 //#endregion
 //#region src/testing/prompts/toJSON.ts
@@ -58708,55 +58782,7 @@ const structuredOutputPrompt = async ({ schema, tag = "structured-output" }) => 
 };
 
 //#endregion
-//#region src/testing/graphs/agentTypes.ts
-/**
-* Schema for structured questions with intro, examples, and conclusion
-*/
-const questionSchema = z.object({
-	text: z.string().describe("A simple intro to the question"),
-	examples: z.array(z.string()).optional().describe(`OPTIONAL: List of examples to help the user understand what we're asking.`),
-	conclusion: z.string().optional().describe(`OPTIONAL: Conclusion text to include after examples`)
-});
-/**
-* Schema for finishing brainstorming
-*/
-const finishBrainstormingSchema = z.object({
-	type: z.literal("finishBrainstorming"),
-	finishBrainstorming: z.literal(true).describe("Call to signal that the user has finished brainstorming")
-});
-/**
-* Brainstorm topics
-*/
-const brainstormTopics = [
-	"idea",
-	"audience",
-	"solution",
-	"socialProof",
-	"lookAndFeel"
-];
-/**
-* State annotation for the brainstorm agent
-*/
-const BrainstormStateAnnotation = Annotation.Root({
-	messages: Annotation({
-		default: () => [],
-		reducer: messagesStateReducer
-	}),
-	brainstorm: Annotation({
-		default: () => ({}),
-		reducer: (current, next) => ({
-			...current,
-			...next
-		})
-	}),
-	remainingTopics: Annotation({
-		default: () => [...brainstormTopics],
-		reducer: (current, next) => next
-	})
-});
-
-//#endregion
-//#region src/testing/graphs/sampleAgent.ts
+//#region src/testing/graphs/agent/sampleAgent.ts
 async function readAnswersFromJSON(filePath = "./brainstorm-answers.json") {
 	try {
 		const fileContent = await readFile(filePath, "utf-8");
@@ -58803,6 +58829,7 @@ const getPrompt = async (state, config) => {
 	const lastHumanMessage = state.messages.filter(isHumanMessage).at(-1);
 	if (!lastHumanMessage) throw new Error("No human message found");
 	const chatHistory = await chatHistoryPrompt({ messages: state.messages });
+	const hasUserContext = state.userContext && Object.keys(state.userContext).length > 0;
 	return renderPrompt(`
             <role>
                 You are a highly paid marketing consultant and strategist who specializes in helping businesses develop
@@ -58814,12 +58841,17 @@ const getPrompt = async (state, config) => {
                 2. You have a reputation to uphold. You won't accept a bad business idea, but will help the user find a better angle.
                 3. If the user is struggling, you can find creative angles to answer a question.
                 4. You do not save an answer unless the user has given you a GREAT response. Continue refining UNTIL the user has given you a GREAT response in their own words.
+                ${hasUserContext ? "5. IMPORTANT: Tailor your questions and feedback based on the user context provided below." : ""}
             </rules>
 
             <task>
                 Help the user brainstorm marketing copy for their landing page.
                 Guide them through each question until you have enough context to generate effective marketing copy.
             </task>
+
+            ${hasUserContext ? `<user_context>
+                ${toJSON({ values: state.userContext })}
+            </user_context>` : ""}
 
             <collected_data>
                 ${toJSON({ values: collectedData(state) })}
@@ -58839,7 +58871,7 @@ const getPrompt = async (state, config) => {
                 1. If the user has answered any topics with a GREAT response, call the save_answers tool
                 2. If they haven't, continue helping them refine their answer until they give you a GREAT response.
                 3. Then, if:
-                   - The user has answered all topics, output finishBrainstorming
+                   - The user has answered ALL topics, generate a marketingTemplate with compelling landing page copy
                    - OTHERWISE, ask the next question, following the output_format_rules
             </workflow>
 
@@ -58864,10 +58896,16 @@ const getPrompt = async (state, config) => {
                   "conclusion": "Restate what you're asking for" // Optional
                 }
 
-                When the user has finished brainstorming, output:
+                When the user has answered ALL brainstorming topics, generate marketing copy:
                 {
-                  "type": "finishBrainstorming",
-                  "finishBrainstorming": true
+                  "type": "marketingTemplate",
+                  "headline": "Compelling, benefit-focused headline",
+                  "subheadline": "Supporting detail that expands the promise", // Optional
+                  "valueProposition": "Clear unique value statement",
+                  "bulletPoints": ["Benefit 1", "Benefit 2", "Benefit 3"], // Optional, 3-5 items
+                  "callToAction": "Strong action-oriented CTA",
+                  "tone": "professional|friendly|urgent|authoritative|playful",
+                  "socialProofSnippet": "Brief testimonial or proof element" // Optional
                 }
 
                 You MUST output valid JSON in one of these formats. NO other text.
@@ -58910,7 +58948,7 @@ const brainstormAgent = async (state, config) => {
 			model: getLLM().withConfig({ tags: ["notify"] }),
 			tools,
 			systemPrompt: prompt,
-			responseFormat: questionSchema
+			responseFormat: agentOutputSchema
 		})).invoke(state, config)).structuredResponse;
 		const aiMessage = new AIMessage({
 			content: JSON.stringify(structuredResponse, null, 2),
@@ -58946,4 +58984,4 @@ function createSampleAgent(checkpointer, graphName = "sample") {
 }
 
 //#endregion
-export { BrainstormStateAnnotation, ErrorReporters, NodeMiddleware, NodeMiddlewareFactory, SampleGraphAnnotation, brainstormAgent, brainstormTopics, configureResponses, configureResponses$1 as configureTestResponses, coreLLMConfig, createSampleAgent, createSampleGraph, finishBrainstormingSchema, getCoreLLM, getLLM, getNodeContext, getTestLLM, hasConfiguredResponses, nameProjectNode, questionSchema, resetLLMConfig, resetLLMConfig$1 as resetTestConfig, responseNode, structuredMessageSchema, withContext, withErrorHandling, withNotifications };
+export { BrainstormStateAnnotation, ErrorReporters, NodeMiddleware, NodeMiddlewareFactory, SampleGraphAnnotation, agentOutputSchema, brainstormAgent, brainstormTopics, configureResponses, configureResponses$1 as configureTestResponses, coreLLMConfig, createSampleAgent, createSampleGraph, getCoreLLM, getLLM, getNodeContext, getTestLLM, hasConfiguredResponses, marketingTemplateSchema, nameProjectNode, questionSchema, resetLLMConfig, resetLLMConfig$1 as resetTestConfig, responseNode, structuredMessageSchema, withContext, withErrorHandling, withNotifications };

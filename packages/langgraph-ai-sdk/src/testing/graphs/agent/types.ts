@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { Annotation, messagesStateReducer } from '@langchain/langgraph';
 import type { BaseMessage } from '@langchain/core/messages';
-import type { LanggraphData } from '../../types';
+import type { LanggraphData } from '../../../types';
 
 /**
  * Schema for structured questions with intro, examples, and conclusion

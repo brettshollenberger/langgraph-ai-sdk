@@ -3,11 +3,11 @@ import { StateGraph, END, START } from "@langchain/langgraph";
 import { AIMessage, type BaseMessage } from "@langchain/core/messages";
 import { createAgent } from "langchain";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
-import { getLLM } from '../llm/llm';
+import { getLLM } from '../../llm/llm';
 import { tool, Tool } from "@langchain/core/tools";
-import { toJSON, renderPrompt, chatHistoryPrompt, structuredOutputPrompt, isHumanMessage } from '../prompts';
+import { toJSON, renderPrompt, chatHistoryPrompt, structuredOutputPrompt, isHumanMessage } from '../../prompts';
 import { writeFile, readFile } from 'fs/promises';
-import { NodeMiddleware } from "../node";
+import { NodeMiddleware } from "../../node";
 import {
   brainstormTopics,
   BrainstormStateAnnotation,
@@ -18,7 +18,7 @@ import {
   type Brainstorm,
   type AgentStateType,
   type UserContext,
-} from './agentTypes';
+} from './types';
 
 async function wipeJSON(filePath: string = './brainstorm-answers.json'): Promise<void> {
     try {

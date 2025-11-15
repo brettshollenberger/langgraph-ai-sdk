@@ -16,7 +16,7 @@ declare function useLanggraph<TLanggraphData extends LanggraphData<any, any>>({
   headers?: Record<string, string>;
   getInitialThreadId?: () => string | undefined;
 }): {
-  sendMessage: (message?: (Omit<LanggraphAISDKUIMessage<TLanggraphData>, "id" | "role"> & {
+  sendMessage: (message: Parameters<(message?: (Omit<LanggraphAISDKUIMessage<TLanggraphData>, "id" | "role"> & {
     id?: string | undefined;
     role?: "system" | "user" | "assistant" | undefined;
   } & {
@@ -34,7 +34,7 @@ declare function useLanggraph<TLanggraphData extends LanggraphData<any, any>>({
     metadata?: unknown;
     parts?: never;
     messageId?: string;
-  } | undefined, options?: ai0.ChatRequestOptions | undefined) => void;
+  } | undefined, options?: ai0.ChatRequestOptions) => Promise<void>>[0], additionalState?: Partial<InferState<TLanggraphData>>) => void;
   messages: SimpleLanggraphUIMessage<TLanggraphData>[];
   state: Partial<InferState<TLanggraphData>>;
   tools: {

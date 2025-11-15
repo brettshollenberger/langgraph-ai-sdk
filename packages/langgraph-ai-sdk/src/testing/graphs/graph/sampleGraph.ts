@@ -4,8 +4,8 @@ import { LangGraphRunnableConfig } from '@langchain/langgraph';
 import { structuredMessageSchema, type SampleStateType, SampleGraphAnnotation } from './types';
 import { StructuredOutputParser } from '@langchain/core/output_parsers';
 import { AIMessage } from '@langchain/core/messages';
-import { getLLM } from '../llm/llm';
-import { NodeMiddleware } from '../node';
+import { getLLM } from '../../llm/llm';
+import { NodeMiddleware } from '../../node';
 
 /**
  * Node that generates a project name based on the user's message
