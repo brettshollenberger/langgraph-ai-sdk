@@ -22,19 +22,10 @@ Instead, the Langgraph AI SDK gives you two sets of tools:
 
 ## Getting Started
 
-1. Run Migrations:
-
-```bash
-DATABASE_URL="postgresql://user:password@localhost:5432/your_database" pnpm langgraph:db:migrate
-```
-
-This will create both the threads table and LangGraph's checkpoint tables.
-
-2. Initialize the library with your database connection:
+1. Define a checkpointer (Postgres for production)
 
 ```typescript
 import { Pool } from "pg";
-import { initializeLanggraph } from "langgraph-ai-sdk";
 import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
 
 // Create a single pool for both checkpointer and ops
@@ -42,19 +33,13 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL || "postgresql://localhost/mydb",
 });
 
-// Initialize the library (required for ops functions like ensureThread)
-initializeLanggraph({ pool });
-
-// Use the same pool for the LangGraph checkpointer
 const checkpointer = new PostgresSaver(pool);
 await checkpointer.setup();
 
 export { checkpointer, pool };
 ```
 
-**Important:** You must call `initializeLanggraph({ pool })` before using any API functions. This ensures a single database connection is used throughout your application.
-
-3. Define your graph:
+2. Define your graph:
 
 ```typescript
 import { StateGraph, Annotation } from "@langchain/langgraph";
@@ -80,7 +65,7 @@ const graph = new StateGraph(
   .compile({ checkpointer });
 ```
 
-4. (Optional): Define a structured message type:
+3. (Optional): Define a structured message type (if you want your frontend to handle structured messages):
 
 ```typescript
 import { z } from "zod";
@@ -94,7 +79,7 @@ const structuredMessageSchema = z.object({
 type StructuredMessageType = z.infer<typeof structuredMessageSchema>;
 ```
 
-5. In your node, use `llm.withStructuredOutput` to emit structured output:
+4. In your node, use `llm.withStructuredOutput` to emit structured output:
 
 ```typescript
 const prompt = `
@@ -126,7 +111,7 @@ return {
 };
 ```
 
-6. Tell langgraph-ai-sdk about your state and structured message schemas:
+5. Tell langgraph-ai-sdk about your state and structured message schemas (for intellisense and type safety):
 
 ```typescript
 import {
@@ -174,7 +159,7 @@ export type GraphData = LanggraphData<
 >;
 ```
 
-7. Create any type of server you want, and use the provided functions to stream and fetch history:
+6. BYO server! We'll handle the streaming
 
 ```typescript
 import { Hono } from "hono";
@@ -209,7 +194,7 @@ app.get("/api/chat", async (c) => {
 });
 ```
 
-8. On your client, the provided hooks will expose the graph state, tool calls, and messages to your UI:
+7. On your client, the provided hooks will expose the graph state, tool calls, and messages to your UI:
 
 ```typescript
 import { useLanggraph } from "langgraph-ai-sdk-react";
@@ -265,7 +250,7 @@ function App() {
 }
 ```
 
-9. (Optional): Expose any custom events you want via the Langgraph writer:
+8. (Optional): You can write custom events to the graph state, and get them on the frontend
 
 For example, in your node, you can emit custom events:
 
@@ -292,7 +277,7 @@ const myNode = (state: StateType, config: LangGraphRunnableConfig) => {
 };
 ```
 
-10. (Optional): Expose custom events via the frontend hooks:
+9. (Optional): Expose custom events via the frontend hooks:
 
 ```typescript
 const { events } = useLanggraph<GraphData>(...);

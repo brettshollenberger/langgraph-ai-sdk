@@ -44,11 +44,6 @@ export async function streamLanggraph<TGraphData extends LanggraphData<any, any>
 }): Promise<Response> {
   let finalThreadId = threadId;
 
-  if (!finalThreadId) {
-    finalThreadId = uuidv7();
-    await ensureThread(finalThreadId);
-  }
-
   const langGraphMessages = convertUIMessagesToLanggraph(messages);
   const newMessage = langGraphMessages.at(-1);
 
