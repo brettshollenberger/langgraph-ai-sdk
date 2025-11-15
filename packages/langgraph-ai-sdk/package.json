@@ -1,6 +1,6 @@
 {
   "name": "langgraph-ai-sdk",
-  "version": "1.0.16",
+  "version": "1.0.17",
   "description": "Server utilities for LangGraph AI SDK",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
