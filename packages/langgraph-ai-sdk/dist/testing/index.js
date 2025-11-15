@@ -132,7 +132,9 @@ var StructuredOutputAwareFakeModel = class extends FakeStreamingChatModel {
 		if (this.useStructuredOutput) {
 			const response = await super.invoke(input, options);
 			if (response && response.tool_calls && response.tool_calls.length > 0) {
-				const parsed = response.tool_calls[0].args;
+				const toolCall = response.tool_calls[0];
+				if (!toolCall) return response;
+				const parsed = toolCall.args;
 				if (this.includeRaw) return {
 					raw: response,
 					parsed
@@ -58020,6 +58022,7 @@ var PollyManager = class PollyManager {
 		});
 	}
 	static configureHeaders() {
+		if (!PollyManager.polly) return;
 		const { server } = PollyManager.polly;
 		server.any().on("beforePersist", (req$2, recording) => {
 			const headersToIgnore = [
@@ -58655,10 +58658,10 @@ function formatPromptContent(content) {
 		let processedContent = content.replace(/<file\s+[^>]*>[\s\S]*?<\/file>/g, (match$1) => {
 			const pathMatch = match$1.match(/path="([^"]*)"/);
 			const path$19 = pathMatch ? pathMatch[1] : "";
-			const contentMatch = match$1.match(/<file[^>]*>([\s\S]*?)<\/file>/);
-			let fileContent = contentMatch ? contentMatch[1] : "";
+			let fileContent = match$1.match(/<file[^>]*>([\s\S]*?)<\/file>/)?.[1] ?? "";
 			fileContent = fileContent.replace(/^<!\[CDATA\[([\s\S]*?)\]\]>$/, "$1");
 			const placeholder = `__FILE_PLACEHOLDER_${fileIndex}__`;
+			if (path$19 === void 0) throw new Error("path is undefined");
 			fileElements.set(placeholder, {
 				path: path$19,
 				content: fileContent
@@ -58717,7 +58720,7 @@ function formatEmbeddedJson(content) {
 			const parsed = JSON.parse(json$1);
 			const formatted = JSON.stringify(parsed, null, 2);
 			const lines = content.substring(0, content.indexOf(match$1)).split("\n");
-			const indent$1 = lines[lines.length - 1].match(/^(\s*)/)?.[1] || "";
+			const indent$1 = (lines[lines.length - 1] ?? "").match(/^(\s*)/)?.[1] ?? "";
 			return `>\n${indent$1}  ${formatted.split("\n").map((line, i$8) => i$8 === 0 ? line : indent$1 + "  " + line).join("\n")}\n${indent$1}<`;
 		} catch {
 			return match$1;
@@ -58730,6 +58733,7 @@ function addXmlSpacing(content) {
 	let previousWasClosingTag = false;
 	for (let i$8 = 0; i$8 < lines.length; i$8++) {
 		const line = lines[i$8];
+		if (!line) continue;
 		const trimmedLine = line.trim();
 		const isTopLevel = !line.startsWith("  ");
 		const isOpeningTag = /^<[^\/]/.test(trimmedLine);

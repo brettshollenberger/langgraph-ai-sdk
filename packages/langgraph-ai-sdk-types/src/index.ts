@@ -78,13 +78,23 @@ export type LanggraphUIMessage<T extends LanggraphData<any, any>> = UIMessage<
   LanggraphDataParts<T>
 >
 
-export type SimpleLanggraphUIMessage<T extends LanggraphData<any, any>> = Simplify<
-  {
-    id: string;
-    role: 'system' | 'user' | 'assistant';
-    state?: 'streaming' | 'thinking';
-  } & (
-    | { type: 'text'; text: string }
-    | InferMessage<T>
-  )
->
+// Prettify helper to force type expansion in IntelliSense
+type Prettify<T> = {
+  [K in keyof T]: T[K];
+} & {};
+
+// Internal non-distributive version for use with `satisfies`
+export type _SimpleLanggraphUIMessage<T extends LanggraphData<any, any>> = {
+  id: string;
+  role: 'system' | 'user' | 'assistant';
+  state?: 'streaming' | 'thinking';
+} & (
+  | { type: 'text'; text: string }
+  | InferMessage<T>
+)
+
+// Public distributive version with forced expansion for IntelliSense
+export type SimpleLanggraphUIMessage<T extends LanggraphData<any, any>> =
+  T extends any
+    ? Prettify<_SimpleLanggraphUIMessage<T>>
+    : never;

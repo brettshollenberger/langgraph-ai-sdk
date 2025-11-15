@@ -53,6 +53,7 @@ declare function useLanggraph<TLanggraphData extends LanggraphData<any, any>>({
   isLoadingHistory: boolean;
   id: string;
   setMessages: (messages: LanggraphAISDKUIMessage<TLanggraphData>[] | ((messages: LanggraphAISDKUIMessage<TLanggraphData>[]) => LanggraphAISDKUIMessage<TLanggraphData>[])) => void;
+  status: ai0.ChatStatus;
   regenerate: ({
     messageId,
     ...options
@@ -80,7 +81,6 @@ declare function useLanggraph<TLanggraphData extends LanggraphData<any, any>>({
     output?: never;
     errorText: string;
   }) => Promise<void>;
-  status: ai0.ChatStatus;
   clearError: () => void;
 };
 //#endregion

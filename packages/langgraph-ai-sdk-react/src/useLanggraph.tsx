@@ -1,13 +1,14 @@
 import { useRef, useEffectEvent } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { useState, useEffect, useMemo } from 'react';
-import type { 
-  LanggraphData, 
-  InferState, 
-  InferMessage, 
+import type {
+  LanggraphData,
+  InferState,
+  InferMessage,
   LanggraphAISDKUIMessage,
   LanggraphUIMessage,
   SimpleLanggraphUIMessage,
+  _SimpleLanggraphUIMessage,
 } from 'langgraph-ai-sdk-types';
 import { DefaultChatTransport } from 'ai';
 import { v7 as uuidv7 } from 'uuid';
@@ -162,12 +163,12 @@ export function useLanggraph<
           role: msg.role,
           type: 'text',
           text
-        } satisfies SimpleLanggraphUIMessage<TLanggraphData>;
+        } satisfies _SimpleLanggraphUIMessage<TLanggraphData>;
       }
 
       // Handle text-only assistant messages
-      const textParts = msg.parts.filter(p => p.type === 'data-message-text');
-      const otherParts = msg.parts.filter(p => p.type !== 'data-message-text' && p.type.startsWith('data-message-'));
+      const textParts = msg.parts.filter(p => (p.type as string) === 'data-message-text');
+      const otherParts = msg.parts.filter(p => (p.type as string) !== 'data-message-text' && (p.type as string).startsWith('data-message-'));
       if (textParts.length > 0 && otherParts.length === 0) {
         const text = textParts.map(p => (p as any).data).join('');
         
@@ -176,7 +177,7 @@ export function useLanggraph<
           role: msg.role,
           type: 'text',
           text
-        } satisfies SimpleLanggraphUIMessage<TLanggraphData>;
+        } satisfies _SimpleLanggraphUIMessage<TLanggraphData>;
       }
 
       const messageParts = msg.parts
@@ -209,8 +210,8 @@ export function useLanggraph<
         role: msg.role,
         type: messageType,
         ...userSpecifiedOutputType
-      } satisfies SimpleLanggraphUIMessage<TLanggraphData>
-    }) satisfies SimpleLanggraphUIMessage<TLanggraphData>[];
+      }
+    }) as SimpleLanggraphUIMessage<TLanggraphData>[];
   }, [chat.messages]);
 
   const tools = useMemo(() => {

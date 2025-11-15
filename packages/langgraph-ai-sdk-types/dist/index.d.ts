@@ -1,6 +1,5 @@
 import type { UIMessage } from 'ai';
 import { type BaseMessage } from '@langchain/core/messages';
-import { type Simplify } from 'type-fest';
 import { z } from 'zod';
 export type InvalidStateError = {
     __error: "The graph state is invalid. It must contain a `messages: BaseMessage[]` property.";
@@ -16,15 +15,16 @@ export interface LanggraphData<TGraphState extends ValidGraphState, TMessageSche
 export type InferState<T> = T extends LanggraphData<infer TGraphState, any> ? TGraphState : never;
 export type InferMessageSchema<T> = T extends LanggraphData<any, infer TMessageSchema> ? TMessageSchema : never;
 export type InferMessage<T> = T extends LanggraphData<any, infer TMessageSchema> ? TMessageSchema extends readonly z.ZodSchema[] ? z.infer<TMessageSchema[number]> : TMessageSchema extends z.ZodSchema ? z.infer<TMessageSchema> : string : never;
-export type LanggraphDataParts<T extends LanggraphData<any, any>> = {
-    [K in keyof Omit<InferState<T>, 'messages'> as `state-${K & string}`]: InferState<T>[K];
-} & (InferMessageSchema<T> extends readonly z.ZodSchema[] ? {
-    [K in keyof InferMessage<T> as `message-${K & string}`]: InferMessage<T>[K];
-} : InferMessageSchema<T> extends z.ZodSchema ? {
-    [K in keyof InferMessage<T> as `message-${K & string}`]: InferMessage<T>[K];
-} : {
+type InferZodMessageKeys<TSchema> = {
+    [K in keyof InferMessage<TSchema> as `message-${K & string}`]: InferMessage<TSchema>[K];
+};
+type MessagePartKeys<TSchema> = TSchema extends readonly z.ZodSchema[] ? InferZodMessageKeys<TSchema> : TSchema extends z.ZodSchema ? InferZodMessageKeys<TSchema> : {
     'message-text': string;
-});
+};
+type StatePartKeys<TState> = TState extends ValidGraphState ? {
+    [K in keyof Omit<InferState<TState>, 'messages'> as `state-${K & string}`]: InferState<TState>[K];
+} : never;
+export type LanggraphDataParts<T extends LanggraphData<any, any>> = StatePartKeys<T> & MessagePartKeys<InferMessageSchema<T>>;
 export type LanggraphAISDKUIMessage<T extends LanggraphData<any, any>> = UIMessage<unknown, LanggraphDataParts<T>>;
 export type MessagePart<T extends LanggraphData<any, any>> = InferMessageSchema<T> extends readonly z.ZodSchema[] ? {
     [K in keyof InferMessage<T>]: {
@@ -64,11 +64,16 @@ export type LanggraphMessage<T extends LanggraphData<any, any>> = {
     parts: MessagePart<T>[];
 };
 export type LanggraphUIMessage<T extends LanggraphData<any, any>> = UIMessage<unknown, LanggraphDataParts<T>>;
-export type SimpleLanggraphUIMessage<T extends LanggraphData<any, any>> = Simplify<{
+type Prettify<T> = {
+    [K in keyof T]: T[K];
+} & {};
+export type _SimpleLanggraphUIMessage<T extends LanggraphData<any, any>> = {
     id: string;
     role: 'system' | 'user' | 'assistant';
     state?: 'streaming' | 'thinking';
 } & ({
     type: 'text';
     text: string;
-} | InferMessage<T>)>;
+} | InferMessage<T>);
+export type SimpleLanggraphUIMessage<T extends LanggraphData<any, any>> = T extends any ? Prettify<_SimpleLanggraphUIMessage<T>> : never;
+export {};

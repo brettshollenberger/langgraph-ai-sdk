@@ -20,7 +20,7 @@ declare function streamLanggraph<TGraphData extends LanggraphData$1<any, any>>({
   state,
   threadId
 }: {
-  graph: CompiledStateGraph<any, any>;
+  graph: CompiledStateGraph<any, any, any, any, any, any, any, any>;
   messageSchema?: InferMessageSchema$1<TGraphData>;
   messages: UIMessage[];
   state?: any;
@@ -35,7 +35,7 @@ declare function fetchLanggraphHistory<TGraphData extends LanggraphData$1<any, a
   messageSchema,
   threadId
 }: {
-  graph: CompiledStateGraph<any, any>;
+  graph: CompiledStateGraph<any, any, any, any, any, any, any, any>;
   messageSchema?: InferMessageSchema$1<TGraphData>;
   threadId: string;
 }): Promise<Response>;

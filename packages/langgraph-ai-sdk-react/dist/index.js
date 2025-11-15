@@ -111,7 +111,7 @@ function useLanggraph({ api = "/api/chat", headers = {}, getInitialThreadId }) {
 				acc[key] = part.data;
 				return acc;
 			}, {});
-			const messageType = messageParts.length > 0 ? messageParts[0].type.replace("data-message-", "") : "structured";
+			const messageType = messageParts.length > 0 && messageParts[0] ? messageParts[0].type.replace("data-message-", "") : "structured";
 			const state$1 = Object.keys(userSpecifiedOutputType).filter((k) => k !== "type").length > 0 ? "streaming" : "thinking";
 			return {
 				id: msg.id,
