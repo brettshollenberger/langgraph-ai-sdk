@@ -338,13 +338,13 @@ declare const questionSchema: z.ZodObject<{
   examples: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
   conclusion: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
-  text: string;
   type: "question";
+  text: string;
   examples?: string[] | undefined;
   conclusion?: string | undefined;
 }, {
-  text: string;
   type: "question";
+  text: string;
   examples?: string[] | undefined;
   conclusion?: string | undefined;
 }>;
@@ -391,13 +391,13 @@ declare const agentOutputSchema: readonly [z.ZodObject<{
   examples: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
   conclusion: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
-  text: string;
   type: "question";
+  text: string;
   examples?: string[] | undefined;
   conclusion?: string | undefined;
 }, {
-  text: string;
   type: "question";
+  text: string;
   examples?: string[] | undefined;
   conclusion?: string | undefined;
 }>, z.ZodObject<{
