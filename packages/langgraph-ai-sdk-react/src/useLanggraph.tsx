@@ -61,12 +61,19 @@ export function useLanggraph<
     },
   });
 
-  const sendMessage = (...args: Parameters<typeof chat.sendMessage>) => {
+  const sendMessage = (
+    message: Parameters<typeof chat.sendMessage>[0],
+    additionalState?: Partial<TState>
+  ) => {
     if (!hasSubmitted) {
       setHasSubmitted(true);
     }
 
-    chat.sendMessage(...args);
+    const options = additionalState
+      ? { body: { state: additionalState } }
+      : undefined;
+
+    chat.sendMessage(message, options as any);
   };
 
   const loadHistory = useEffectEvent(async () => {

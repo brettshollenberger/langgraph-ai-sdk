@@ -26,14 +26,18 @@ export type InferMessageSchema<T> = T extends LanggraphData<any, infer TMessageS
 : never
 
 export type InferMessage<T> = T extends LanggraphData<any, infer TMessageSchema>
-  ? TMessageSchema extends z.ZodSchema
+  ? TMessageSchema extends readonly z.ZodSchema[]
+    ? z.infer<TMessageSchema[number]> // Union of all schemas in array
+    : TMessageSchema extends z.ZodSchema
     ? z.infer<TMessageSchema>
     : string
   : never
 
 export type LanggraphDataParts<T extends LanggraphData<any, any>> =
 & { [K in keyof Omit<InferState<T>, 'messages'> as `state-${K & string}`]: InferState<T>[K] }
-& (InferMessageSchema<T> extends z.ZodSchema
+& (InferMessageSchema<T> extends readonly z.ZodSchema[]
+    ? { [K in keyof InferMessage<T> as `message-${K & string}`]: InferMessage<T>[K] }
+    : InferMessageSchema<T> extends z.ZodSchema
     ? { [K in keyof InferMessage<T> as `message-${K & string}`]: InferMessage<T>[K] }
     : { 'message-text': string });
 
@@ -42,8 +46,10 @@ export type LanggraphAISDKUIMessage<T extends LanggraphData<any, any>> = UIMessa
     LanggraphDataParts<T>
 >
 
-export type MessagePart<T extends LanggraphData<any, any>> = 
-  InferMessageSchema<T> extends z.ZodSchema
+export type MessagePart<T extends LanggraphData<any, any>> =
+  InferMessageSchema<T> extends readonly z.ZodSchema[]
+    ? { [K in keyof InferMessage<T>]: { type: K; data: InferMessage<T>[K]; id: string } }[keyof InferMessage<T>] | { type: 'text'; text: string; id: string }
+    : InferMessageSchema<T> extends z.ZodSchema
     ? { [K in keyof InferMessage<T>]: { type: K; data: InferMessage<T>[K]; id: string } }[keyof InferMessage<T>] | { type: 'text'; text: string; id: string }
     : { type: 'text'; text: string; id: string };
 

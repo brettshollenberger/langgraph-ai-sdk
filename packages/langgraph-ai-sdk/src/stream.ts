@@ -62,11 +62,28 @@ const isString = (value: unknown): value is string => {
     return typeof value === 'string';
 }
 
-export function getSchemaKeys<T extends z.ZodObject<any>>(
+export function getSchemaKeys<T extends z.ZodObject<any> | readonly z.ZodObject<any>[]>(
   schema: T | undefined
-): Array<keyof z.infer<T>> {
-  if (!schema || !schema.shape) return [];
-  return Object.keys(schema.shape) as Array<keyof z.infer<T>>;
+): string[] {
+  if (!schema) return [];
+
+  // Handle array of schemas - collect all keys from all schemas
+  if (Array.isArray(schema)) {
+    const allKeys = new Set<string>();
+    for (const s of schema) {
+      if (s && 'shape' in s && s.shape) {
+        Object.keys(s.shape).forEach(key => allKeys.add(key));
+      }
+    }
+    return Array.from(allKeys);
+  }
+
+  // Handle single schema
+  if ('shape' in schema && schema.shape) {
+    return Object.keys(schema.shape);
+  }
+
+  return [];
 }
 export interface LanggraphBridgeConfig<
   TGraphData extends LanggraphData<any, any>,
@@ -98,7 +115,7 @@ class StructuredMessageToolHandler<TGraphData extends LanggraphData<any, any>> e
 
   constructor(writer: UIMessageStreamWriter<LanggraphUIMessage<TGraphData>>, messageSchema?: InferMessageSchema<TGraphData>) {
     super(writer, messageSchema);
-    this.schemaKeys = messageSchema ? getSchemaKeys(messageSchema).filter((key) => typeof key === 'string') : [];
+    this.schemaKeys = messageSchema ? getSchemaKeys(messageSchema as any) : [];
   }
 
   async handle(chunk: StreamChunk): Promise<void> {
@@ -270,7 +287,7 @@ class ToolCallHandler<TGraphData extends LanggraphData<any, any>> extends Handle
 
   constructor(writer: UIMessageStreamWriter<LanggraphUIMessage<TGraphData>>, messageSchema?: InferMessageSchema<TGraphData>) {
     super(writer, messageSchema);
-    this.schemaKeys = messageSchema ? getSchemaKeys(messageSchema).filter((key) => typeof key === 'string') : [];
+    this.schemaKeys = messageSchema ? getSchemaKeys(messageSchema as any) : [];
     this.handlers = {
       structured_messages: new StructuredMessageToolHandler<TGraphData>(writer, messageSchema),
       other_tools: new OtherToolHandler<TGraphData>(writer, messageSchema),
