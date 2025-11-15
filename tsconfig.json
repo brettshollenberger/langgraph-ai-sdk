@@ -20,5 +20,10 @@
     "jsx": "react",
 
     "lib": ["ESNext", "DOM", "DOM.Iterable", "DOM.AsyncIterable"]
-  }
+  },
+  "exclude": [
+    "examples/**/*",
+    "**/node_modules/**/*",
+    "**/dist/**/*"
+  ]
 }

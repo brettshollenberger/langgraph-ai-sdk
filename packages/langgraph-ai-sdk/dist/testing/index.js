@@ -58834,6 +58834,7 @@ const getPrompt = async (state, config) => {
 	if (!lastHumanMessage) throw new Error("No human message found");
 	const chatHistory = await chatHistoryPrompt({ messages: state.messages });
 	const hasUserContext = state.userContext && Object.keys(state.userContext).length > 0;
+	console.log(lastHumanMessage);
 	return renderPrompt(`
             <role>
                 You are a highly paid marketing consultant and strategist who specializes in helping businesses develop

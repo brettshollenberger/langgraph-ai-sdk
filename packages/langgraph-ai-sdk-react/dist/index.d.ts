@@ -16,7 +16,7 @@ declare function useLanggraph<TLanggraphData extends LanggraphData<any, any>>({
   headers?: Record<string, string>;
   getInitialThreadId?: () => string | undefined;
 }): {
-  sendMessage: (message: Parameters<(message?: (Omit<LanggraphAISDKUIMessage<TLanggraphData>, "id" | "role"> & {
+  sendMessage: (message: string | Parameters<(message?: (Omit<LanggraphAISDKUIMessage<TLanggraphData>, "id" | "role"> & {
     id?: string | undefined;
     role?: "system" | "user" | "assistant" | undefined;
   } & {

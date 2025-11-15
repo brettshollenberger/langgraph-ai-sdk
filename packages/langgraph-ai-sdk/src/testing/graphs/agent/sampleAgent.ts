@@ -101,6 +101,7 @@ const getPrompt = async (state: BrainstormGraphState, config?: LangGraphRunnable
 
     const chatHistory = await chatHistoryPrompt({ messages: state.messages });
     const hasUserContext = state.userContext && Object.keys(state.userContext).length > 0;
+    console.log(lastHumanMessage)
 
     return renderPrompt(
         `

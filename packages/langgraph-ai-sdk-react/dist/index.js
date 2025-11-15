@@ -26,7 +26,8 @@ function useLanggraph({ api = "/api/chat", headers = {}, getInitialThreadId }) {
 	const sendMessage = (message, additionalState) => {
 		if (!hasSubmitted) setHasSubmitted(true);
 		const options = additionalState ? { body: { state: additionalState } } : void 0;
-		chat.sendMessage(message, options);
+		const messageParam = typeof message === "string" ? { text: message } : message;
+		chat.sendMessage(messageParam, options);
 	};
 	const loadHistory = useEffectEvent(async () => {
 		if (isNewThread.current) {

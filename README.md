@@ -251,7 +251,13 @@ function App() {
         onChange={(e) => setInput(e.target.value)}
         onSubmit={(e) => {
           e.preventDefault();
-          sendMessage({ text: input });
+          // You can pass not only the message, but
+          // any state data you want to the graph
+          sendMessage(input, {
+            businessType: "b2b",
+            urgencyLevel: "high",
+            experienceLevel: "beginner",
+          });
         }}
       />
     </Wrapper>

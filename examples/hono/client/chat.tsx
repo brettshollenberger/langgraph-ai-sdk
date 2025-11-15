@@ -177,7 +177,7 @@ function ChatContent({ endpoint }: { endpoint: EndpointKey }) {
           e.preventDefault();
           // Send message with user context for agent endpoint
           if (endpoint === 'agent') {
-            sendMessage({ text: input }, {
+            sendMessage(input, {
               userContext: {
                 businessType,
                 urgencyLevel,
@@ -185,7 +185,7 @@ function ChatContent({ endpoint }: { endpoint: EndpointKey }) {
               }
             });
           } else {
-            sendMessage({ text: input });
+            sendMessage(input);
           }
           setInput('');
         }}

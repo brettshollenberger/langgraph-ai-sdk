@@ -63,7 +63,7 @@ export function useLanggraph<
   });
 
   const sendMessage = (
-    message: Parameters<typeof chat.sendMessage>[0],
+    message: string | Parameters<typeof chat.sendMessage>[0],
     additionalState?: Partial<TState>
   ) => {
     if (!hasSubmitted) {
@@ -74,7 +74,12 @@ export function useLanggraph<
       ? { body: { state: additionalState } }
       : undefined;
 
-    chat.sendMessage(message, options as any);
+    // Convert string to { text: string } format
+    const messageParam = typeof message === 'string'
+      ? { text: message }
+      : message;
+
+    chat.sendMessage(messageParam, options as any);
   };
 
   const loadHistory = useEffectEvent(async () => {
