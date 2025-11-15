@@ -487,6 +487,13 @@ class LanggraphStreamHandler<TGraphData extends LanggraphData<any, any>> {
     // Must use streamEvents to get events output (including tool_call_end)
     // so we can detect lifecycle events properly
     const graphState = { messages, ...state }
+    console.log(`here is my graph state biiiinch`)
+    console.log(`here is my graph state biiiinch`)
+    console.log(`here is my graph state biiiinch`)
+    console.log(`here is my graph state biiiinch`)
+    console.log(`here is my graph state biiiinch`)
+    console.log(`here is my graph state biiiinch`)
+    console.log(graphState)
     const stream = graph.streamEvents(graphState, {
       version: "v2",
       streamMode: ["messages", "updates", "custom"],

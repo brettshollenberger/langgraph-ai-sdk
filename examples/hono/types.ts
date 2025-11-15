@@ -20,12 +20,13 @@ export {
  */
 export {
   questionSchema,
-  finishBrainstormingSchema,
+  marketingTemplateSchema,
   agentOutputSchema,
   BrainstormStateAnnotation as AgentStateAnnotation,
   type Question,
-  type FinishBrainstorming,
+  type MarketingTemplate,
   type AgentOutputType,
   type AgentStateType,
   type AgentLanggraphData,
+  type UserContext,
 } from 'langgraph-ai-sdk/testing';
