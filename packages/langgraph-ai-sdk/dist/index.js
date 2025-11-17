@@ -1,5 +1,5 @@
 import { n as __export } from "./chunk-C3Lxiq5Q.js";
-import { n as toStructuredMessage, r as RawJSONParser, t as parseStructuredChunk } from "./toStructuredMessage-CDgYaA27.js";
+import { n as toStructuredMessage, r as RawJSONParser, t as parseStructuredChunk } from "./toStructuredMessage--6Y8rvFN.js";
 import { AIMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { createUIMessageStream, createUIMessageStreamResponse, parsePartialJson } from "ai";
 import { kebabCase } from "change-case";

@@ -40,6 +40,7 @@ var RawJSONParser = class {
 async function toStructuredMessage(result) {
 	if (!result) throw new Error("Handler result must be an AIMessage or an object with messages and structuredResponse properties");
 	if (result instanceof AIMessage) return result;
+	if (isToolCall(result)) return result;
 	return await parseStructuredChunk(result);
 }
 async function parseStructuredChunk(result) {
@@ -50,6 +51,12 @@ async function parseStructuredChunk(result) {
 	});
 	return null;
 }
+const isToolCall = (message) => {
+	if (!message.content || !message.content[0]) return false;
+	let content = message.content[0];
+	if (typeof content !== "object" || !("type" in content)) return false;
+	return content.type === "tool_use";
+};
 
 //#endregion
 export { toStructuredMessage as n, RawJSONParser as r, parseStructuredChunk as t };

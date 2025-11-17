@@ -13,6 +13,10 @@ export async function toStructuredMessage<TSchema extends Record<string, any> = 
     return result;
   }
 
+  if (isToolCall(result)) {
+    return result;
+  }
+
   return await parseStructuredChunk<TSchema>(result);
 }
 
@@ -31,4 +35,15 @@ export async function parseStructuredChunk<TSchema extends Record<string, any> =
   }
   
   return null;
+}
+
+const isToolCall = (message: AIMessageChunk): boolean => {
+  if (!message.content || !message.content[0]) {
+    return false;
+  }
+  let content = message.content[0];
+  if (typeof content !== 'object' || !('type' in content)) {
+    return false;
+  }
+  return content.type === "tool_use";
 }
