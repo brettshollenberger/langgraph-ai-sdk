@@ -1,4 +1,4 @@
-import { AIMessage } from "@langchain/core/messages";
+import { AIMessage, isAIMessage } from "@langchain/core/messages";
 import { parsePartialJson } from "ai";
 
 //#region src/rawJSONParser.ts
@@ -9,7 +9,8 @@ var RawJSONParser = class {
 	async parse(message) {
 		try {
 			let content;
-			if (typeof message.content === "object" && "text" in message.content && typeof message.content.text === "string") content = message.content.text;
+			if (typeof message.content === "string") content = message.content;
+			else if (typeof message.content === "object" && "text" in message.content && typeof message.content.text === "string") content = message.content.text;
 			else if (Array.isArray(message.content) && message.content.length > 0) content = message.content[0].text;
 			else return [false, void 0];
 			this.messageBuffer += content;
@@ -39,12 +40,22 @@ var RawJSONParser = class {
 //#region src/toStructuredMessage.ts
 async function toStructuredMessage(result) {
 	if (!result) throw new Error("Handler result must be an AIMessage or an object with messages and structuredResponse properties");
-	if (result instanceof AIMessage) return result;
+	if (isAIMessage(result)) {
+		if (typeof result.content === "string" && result.content.match("```json")) return parseStructuredChunk(result);
+		return result;
+	}
 	if (isToolCall(result)) return result;
 	return await parseStructuredChunk(result);
 }
 async function parseStructuredChunk(result) {
 	const [success, parsed] = await new RawJSONParser().parse(result);
+	if (isAIMessage(result)) {
+		if (result.response_metadata) result.response_metadata = {
+			...result.response_metadata,
+			...parsed
+		};
+		return result;
+	}
 	if (success && parsed) return new AIMessage({
 		content: JSON.stringify(parsed),
 		response_metadata: parsed
