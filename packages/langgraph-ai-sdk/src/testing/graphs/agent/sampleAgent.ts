@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { StateGraph, END, START } from "@langchain/langgraph";
-import { AIMessage, type BaseMessage } from "@langchain/core/messages";
+import { AIMessage, AIMessageChunk, type BaseMessage } from "@langchain/core/messages";
 import { createAgent, createMiddleware } from "langchain";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
 import { getLLM } from '../../llm/llm';
@@ -8,6 +8,7 @@ import { tool, Tool } from "@langchain/core/tools";
 import { toJSON, renderPrompt, chatHistoryPrompt, structuredOutputPrompt, isHumanMessage } from '../../prompts';
 import { writeFile, readFile } from 'fs/promises';
 import { NodeMiddleware } from "../../node";
+import { RawJSONParser } from "../../../rawJSONParser";
 import {
   brainstormTopics,
   BrainstormStateAnnotation,
@@ -264,19 +265,18 @@ const dynamicPromptMiddleware = createMiddleware({
         if (result instanceof AIMessage) {
             return result;
         }
-        
-        // handler() returned {messages, structuredResponse}
-        const handlerResult = result as { messages?: any[]; structuredResponse?: any };
-        
-        // Find the AIMessage in the messages array
-        const structuredResponse = handlerResult.structuredResponse;
 
-        const aiMessage = new AIMessage({
-            content: JSON.stringify(structuredResponse, null, 2),
-            response_metadata: structuredResponse,
-        });
-        
-        return aiMessage;
+        const parser = new RawJSONParser();
+        const [success, parsed] = await parser.parse(result);
+        if (success && parsed) {
+            const aiMessage = new AIMessage({
+                content: JSON.stringify(parsed),
+                response_metadata: parsed,
+            });
+            return aiMessage;
+        }
+
+        return result;
     },
 })
 
