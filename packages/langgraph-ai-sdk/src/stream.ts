@@ -384,7 +384,7 @@ class RawMessageHandler<TGraphData extends LanggraphData<any, any>> extends Hand
     const notify = metadata.tags?.includes('notify');
     if (!notify) return;
 
-    const [success, parsed] = await this.parser.parse(message);
+    const [success, parsed] = await this.parser.parse(message as any);
     if (!success || !parsed) return;
 
     writeStructuredParts({
