@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { StateGraph, END, START } from "@langchain/langgraph";
 import { AIMessage, type BaseMessage } from "@langchain/core/messages";
-import { createAgent } from "langchain";
+import { createAgent, createMiddleware } from "langchain";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
 import { getLLM } from '../../llm/llm';
 import { tool, Tool } from "@langchain/core/tools";
@@ -82,15 +82,15 @@ type BrainstormGraphState = {
 }
 
 const sortedTopics = (topics: BrainstormTopic[]) => {
-    return topics.sort((a, b) => brainstormTopics.indexOf(a) - brainstormTopics.indexOf(b));
+    return (topics || []).sort((a, b) => brainstormTopics.indexOf(a) - brainstormTopics.indexOf(b));
 }
 
 const remainingTopics = (topics: BrainstormTopic[]) => {
-    return sortedTopics(topics).map(topic => `${topic}: ${TopicDescriptions[topic]}`).join("\n\n");
+    return sortedTopics(topics || []).map(topic => `${topic}: ${TopicDescriptions[topic]}`).join("\n\n");
 }
 
 const collectedData = (state: BrainstormGraphState): Brainstorm => {
-    return Object.entries(state.brainstorm).filter(([_, value]) => value !== undefined && value !== "") as Brainstorm;
+    return Object.entries(state.brainstorm || {}).filter(([_, value]) => value !== undefined && value !== "") as Brainstorm;
 }
 
 const getPrompt = async (state: BrainstormGraphState, config?: LangGraphRunnableConfig) => {
@@ -101,7 +101,6 @@ const getPrompt = async (state: BrainstormGraphState, config?: LangGraphRunnable
 
     const chatHistory = await chatHistoryPrompt({ messages: state.messages });
     const hasUserContext = state.userContext && Object.keys(state.userContext).length > 0;
-    console.log(lastHumanMessage)
 
     return renderPrompt(
         `
@@ -227,6 +226,60 @@ const SaveAnswersTool = (state: BrainstormGraphState, config?: LangGraphRunnable
     });
 }
 
+const responseSchema = z.object({
+    messages: z.array(z.object({
+        role: z.string(),
+        content: z.string()
+    })),
+    structuredResponse: z.object({
+        type: z.string(),
+        text: z.string(),
+        examples: z.array(z.string()).optional(),
+        conclusion: z.string().optional()
+    })
+});
+
+const dynamicPromptMiddleware = createMiddleware({
+    name: "DynamicPromptMiddleware",
+    stateSchema: z.object({
+        messages: z.array(z.any()),
+        brainstorm: z.record(z.string()).optional(),
+        remainingTopics: z.array(z.string()).optional(),
+        userContext: z.record(z.string()).optional()
+    }).passthrough(),
+    wrapModelCall: async (request, handler) => {
+        const state = request.state;
+        const systemPrompt = await getPrompt(state as any, request.runtime);
+
+        const result = await handler({
+            ...request,
+            systemPrompt,
+        });
+        
+        if (!result) { 
+            throw new Error("Handler result must be an AIMessage or an object with messages and structuredResponse properties");
+        }
+
+        // If it's already an AIMessage, return it
+        if (result instanceof AIMessage) {
+            return result;
+        }
+        
+        // handler() returned {messages, structuredResponse}
+        const handlerResult = result as { messages?: any[]; structuredResponse?: any };
+        
+        // Find the AIMessage in the messages array
+        const structuredResponse = handlerResult.structuredResponse;
+
+        const aiMessage = new AIMessage({
+            content: JSON.stringify(structuredResponse, null, 2),
+            response_metadata: structuredResponse,
+        });
+        
+        return aiMessage;
+    },
+})
+
 /**
  * Node that asks a question to the user during brainstorming mode
  */
@@ -235,8 +288,6 @@ export const brainstormAgent = async (
     config?: LangGraphRunnableConfig
   ): Promise<Partial<BrainstormGraphState>> => {
     try {
-      const prompt = await getPrompt(state, config)
-
       // Only use real tools that do something (save_answers)
       const tools = [SaveAnswersTool(state, config)];
 
@@ -244,26 +295,33 @@ export const brainstormAgent = async (
       const llm = getLLM()
         .withConfig({ tags: ['notify'] })
 
+      const systemPrompt = await getPrompt(state as any, config);
       const agent = await createAgent({
           model: llm,
           tools,
-          systemPrompt: prompt,
+          systemPrompt,
+        //   middleware: [dynamicPromptMiddleware],
           responseFormat: agentOutputSchema,
       });
 
       const updatedState = await agent.invoke(state as any, config);
-      const structuredResponse = updatedState.structuredResponse
 
-      const aiMessage = new AIMessage({
-          content: JSON.stringify(structuredResponse, null, 2),
-          response_metadata: structuredResponse,
-      });
       const answers = await readAnswersFromJSON<Brainstorm>();
       const questionsAnswered = Object.keys(answers);
       const remainingTopics = state.remainingTopics.filter(topic => !questionsAnswered.includes(topic));
 
+      const filteredMessages = updatedState.messages.filter((msg: any) => {
+          if (msg.constructor.name === 'ToolMessage') {
+              return false;
+          }
+          if (msg instanceof AIMessage && !(msg.constructor.name === 'AIMessageChunk')) {
+              return true;
+          }
+          return !msg.tool_calls || msg.tool_calls.length === 0;
+      });
+
       return {
-          messages: [...(state.messages || []), aiMessage],
+          messages: filteredMessages,
           remainingTopics,
       };
     } catch (error) {

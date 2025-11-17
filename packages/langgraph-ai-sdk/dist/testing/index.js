@@ -9,7 +9,7 @@ import { v7 } from "uuid";
 import path from "path";
 import { Annotation, END, START, StateGraph, messagesStateReducer } from "@langchain/langgraph";
 import { StructuredOutputParser } from "@langchain/core/output_parsers";
-import { createAgent } from "langchain";
+import { createAgent, createMiddleware } from "langchain";
 import { tool } from "@langchain/core/tools";
 import { readFile, writeFile } from "fs/promises";
 
@@ -58821,20 +58821,20 @@ const TopicDescriptions = {
 	lookAndFeel: `The look and feel of the landing page.`
 };
 const sortedTopics = (topics) => {
-	return topics.sort((a, b) => brainstormTopics.indexOf(a) - brainstormTopics.indexOf(b));
+	return (topics || []).sort((a, b) => brainstormTopics.indexOf(a) - brainstormTopics.indexOf(b));
 };
 const remainingTopics = (topics) => {
-	return sortedTopics(topics).map((topic) => `${topic}: ${TopicDescriptions[topic]}`).join("\n\n");
+	return sortedTopics(topics || []).map((topic) => `${topic}: ${TopicDescriptions[topic]}`).join("\n\n");
 };
 const collectedData = (state) => {
-	return Object.entries(state.brainstorm).filter(([_, value]) => value !== void 0 && value !== "");
+	console.log(`Collected data: ${JSON.stringify(state.brainstorm)}`);
+	return Object.entries(state.brainstorm || {}).filter(([_, value]) => value !== void 0 && value !== "");
 };
 const getPrompt = async (state, config) => {
 	const lastHumanMessage = state.messages.filter(isHumanMessage).at(-1);
 	if (!lastHumanMessage) throw new Error("No human message found");
 	const chatHistory = await chatHistoryPrompt({ messages: state.messages });
 	const hasUserContext = state.userContext && Object.keys(state.userContext).length > 0;
-	console.log(lastHumanMessage);
 	return renderPrompt(`
             <role>
                 You are a highly paid marketing consultant and strategist who specializes in helping businesses develop
@@ -58942,17 +58942,67 @@ const SaveAnswersTool = (state, config) => {
 		schema: saveAnswersInputSchema
 	});
 };
+const responseSchema = z.object({
+	messages: z.array(z.object({
+		role: z.string(),
+		content: z.string()
+	})),
+	structuredResponse: z.object({
+		type: z.string(),
+		text: z.string(),
+		examples: z.array(z.string()).optional(),
+		conclusion: z.string().optional()
+	})
+});
+const dynamicPromptMiddleware = createMiddleware({
+	name: "DynamicPromptMiddleware",
+	stateSchema: z.object({
+		brainstorm: z.object({
+			idea: z.string().optional(),
+			audience: z.string().optional(),
+			solution: z.string().optional(),
+			socialProof: z.string().optional(),
+			lookAndFeel: z.string().optional()
+		}).optional(),
+		remainingTopics: z.array(z.string()).optional(),
+		userContext: z.object({
+			businessType: z.string(),
+			urgencyLevel: z.string(),
+			experienceLevel: z.string()
+		}).optional()
+	}),
+	wrapModelCall: async (request, handler) => {
+		const state = request.state;
+		console.log("Middleware state:", JSON.stringify(state, null, 2));
+		let systemPrompt;
+		try {
+			systemPrompt = await getPrompt(state, request.runtime);
+		} catch (err) {
+			console.error("Error in getPrompt:", err);
+			throw err;
+		}
+		console.log(`reloading system prompt`);
+		const result = await handler({
+			...request,
+			systemPrompt
+		});
+		if (!result) throw new Error("Handler result must be an AIMessage or an object with messages and structuredResponse properties");
+		if (result instanceof AIMessage) return result;
+		const aiMessage = responseSchema.parse(result).messages?.filter((msg) => msg instanceof AIMessage).at(-1);
+		if (!aiMessage) throw new Error("No AIMessage found in handler result");
+		return aiMessage;
+	}
+});
 /**
 * Node that asks a question to the user during brainstorming mode
 */
 const brainstormAgent = async (state, config) => {
 	try {
-		const prompt = await getPrompt(state, config);
 		const tools = [SaveAnswersTool(state, config)];
 		const structuredResponse = (await (await createAgent({
 			model: getLLM().withConfig({ tags: ["notify"] }),
 			tools,
-			systemPrompt: prompt,
+			middleware: [dynamicPromptMiddleware],
 			responseFormat: agentOutputSchema
 		})).invoke(state, config)).structuredResponse;
 		const aiMessage = new AIMessage({

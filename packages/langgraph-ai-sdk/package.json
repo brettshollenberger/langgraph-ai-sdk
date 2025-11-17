@@ -8,10 +8,12 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "development": "./src/index.ts",
       "import": "./dist/index.js"
     },
     "./testing": {
       "types": "./dist/testing/index.d.ts",
+      "development": "./src/testing/index.ts",
       "import": "./dist/testing/index.js"
     }
   },
