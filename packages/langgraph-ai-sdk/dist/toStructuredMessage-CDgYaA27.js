@@ -1,3 +1,4 @@
+import { AIMessage } from "@langchain/core/messages";
 import { parsePartialJson } from "ai";
 
 //#region src/rawJSONParser.ts
@@ -35,4 +36,20 @@ var RawJSONParser = class {
 };
 
 //#endregion
-export { RawJSONParser as t };
+//#region src/toStructuredMessage.ts
+async function toStructuredMessage(result) {
+	if (!result) throw new Error("Handler result must be an AIMessage or an object with messages and structuredResponse properties");
+	if (result instanceof AIMessage) return result;
+	return await parseStructuredChunk(result);
+}
+async function parseStructuredChunk(result) {
+	const [success, parsed] = await new RawJSONParser().parse(result);
+	if (success && parsed) return new AIMessage({
+		content: JSON.stringify(parsed),
+		response_metadata: parsed
+	});
+	return null;
+}
+
+//#endregion
+export { toStructuredMessage as n, RawJSONParser as r, parseStructuredChunk as t };

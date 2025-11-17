@@ -253,4 +253,8 @@ declare class RawJSONParser {
   parse(message: AIMessage | AIMessageChunk): Promise<[boolean, Record<string, any> | undefined]>;
 }
 //#endregion
-export { InferMessageSchema, LanggraphBridgeConfig, LanggraphData, LanggraphUIMessage, RawJSONParser, createLanggraphStreamResponse, createLanggraphUIStream, fetchLanggraphHistory, getDb, getPool, getSchemaKeys, initializeLanggraph, isInitialized, loadThreadHistory, streamLanggraph };
+//#region src/toStructuredMessage.d.ts
+declare function toStructuredMessage<TSchema extends Record<string, any> = Record<string, any>>(result: AIMessage | AIMessageChunk): Promise<AIMessage | null>;
+declare function parseStructuredChunk<TSchema extends Record<string, any> = Record<string, any>>(result: AIMessageChunk): Promise<AIMessage | null>;
+//#endregion
+export { InferMessageSchema, LanggraphBridgeConfig, LanggraphData, LanggraphUIMessage, RawJSONParser, createLanggraphStreamResponse, createLanggraphUIStream, fetchLanggraphHistory, getDb, getPool, getSchemaKeys, initializeLanggraph, isInitialized, loadThreadHistory, parseStructuredChunk, streamLanggraph, toStructuredMessage };

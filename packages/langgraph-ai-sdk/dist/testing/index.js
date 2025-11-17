@@ -1,5 +1,5 @@
 import { i as __toESM, r as __require, t as __commonJS } from "../chunk-C3Lxiq5Q.js";
-import { t as RawJSONParser } from "../rawJSONParser-C1zri1pG.js";
+import { n as toStructuredMessage } from "../toStructuredMessage-CDgYaA27.js";
 import { AIMessage, AIMessageChunk, isAIMessage, isHumanMessage } from "@langchain/core/messages";
 import { kebabCase } from "change-case";
 import { FakeStreamingChatModel } from "@langchain/core/utils/testing";
@@ -58793,22 +58793,6 @@ const structuredOutputPrompt = async ({ schema, tag = "structured-output" }) => 
     </${tag}>
   `);
 };
-
-//#endregion
-//#region src/toStructuredMessage.ts
-async function toStructuredMessage(result) {
-	if (!result) throw new Error("Handler result must be an AIMessage or an object with messages and structuredResponse properties");
-	if (result instanceof AIMessage) return result;
-	return await parseStructuredChunk(result);
-}
-async function parseStructuredChunk(result) {
-	const [success, parsed] = await new RawJSONParser().parse(result);
-	if (success && parsed) return new AIMessage({
-		content: JSON.stringify(parsed),
-		response_metadata: parsed
-	});
-	return null;
-}
 
 //#endregion
 //#region src/testing/graphs/agent/sampleAgent.ts
