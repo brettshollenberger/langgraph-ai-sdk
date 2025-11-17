@@ -1,5 +1,5 @@
 import { Message } from "@langchain/core/messages";
-import { isHumanMessage } from "./message";
+import { isHumanMessage } from "../../message";
 import { renderPrompt } from "./renderPrompt";
 
 /**

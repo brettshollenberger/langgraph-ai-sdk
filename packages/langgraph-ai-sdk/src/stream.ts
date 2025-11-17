@@ -10,6 +10,7 @@ import {
 import type { CompiledStateGraph } from '@langchain/langgraph';
 import type { StreamEvent } from "@langchain/core/tracers/log_stream";
 import { BaseMessage } from '@langchain/core/messages';
+import { RawJSONParser } from './rawJSONParser';
 import type { 
   LanggraphData,
   LanggraphUIMessage,
@@ -64,6 +65,42 @@ const isNull = (value: unknown): value is null => {
 
 const isString = (value: unknown): value is string => {
     return typeof value === 'string';
+}
+
+interface WriteStructuredPartsOptions<TGraphData extends LanggraphData<any, any>> {
+  parsed: Record<string, any>;
+  schemaKeys: string[];
+  toolValues: Record<string, string>;
+  messagePartIds: Record<string, string>;
+  writer: UIMessageStreamWriter<LanggraphUIMessage<TGraphData>>;
+}
+
+function writeStructuredParts<TGraphData extends LanggraphData<any, any>>({
+  parsed,
+  schemaKeys,
+  toolValues,
+  messagePartIds,
+  writer,
+}: WriteStructuredPartsOptions<TGraphData>): void {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return;
+
+  Object.entries(parsed).forEach(([key, value]) => {
+    if (schemaKeys.includes(key) && !isUndefined(value) && !isNull(value)) {
+      const lastValue = toolValues[key];
+      if (lastValue !== value) {
+        toolValues[key] = JSON.stringify(value);
+
+        const messagePartId = messagePartIds[key] || crypto.randomUUID();
+        messagePartIds[key] = messagePartId;
+        const structuredMessagePart = {
+          type: `data-message-${key}`,
+          id: messagePartId,
+          data: value,
+        };
+        writer.write(structuredMessagePart as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+      }
+    }
+  });
 }
 
 export function getSchemaKeys<T extends z.ZodObject<any> | readonly z.ZodObject<any>[]>(
@@ -160,31 +197,16 @@ class StructuredMessageToolHandler<TGraphData extends LanggraphData<any, any>> e
   }
 
   async writeToolCall(): Promise<void> {
-    type TMessage = InferMessage<TGraphData>
-
-    // Parse the accumulated tool call arguments as partial JSON
     const parseResult = await parsePartialJson(this.toolArgsBuffer);
-    const parsed = parseResult.value as Partial<TMessage>;
+    const parsed = parseResult.value as Record<string, any>;
 
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      Object.entries(parsed).forEach(([key, value]) => {
-        if (this.schemaKeys.includes(key) && !isUndefined(value) && !isNull(value)) {
-          const lastValue = this.toolValues[key];
-          if (lastValue !== value) {
-            this.toolValues[key] = JSON.stringify(value); // Track last sent value
-
-            const messagePartId = this.messagePartIds[key] || crypto.randomUUID();
-            this.messagePartIds[key] = messagePartId;
-            const structuredMessagePart = {
-              type: `data-message-${key}`,
-              id: messagePartId,
-              data: value,
-            };
-            this.writer.write(structuredMessagePart as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
-          }
-        }
-      });
-    }
+    writeStructuredParts({
+      parsed,
+      schemaKeys: this.schemaKeys,
+      toolValues: this.toolValues,
+      messagePartIds: this.messagePartIds,
+      writer: this.writer,
+    });
   }
 }
 
@@ -314,10 +336,28 @@ class ToolCallHandler<TGraphData extends LanggraphData<any, any>> extends Handle
 class RawMessageHandler<TGraphData extends LanggraphData<any, any>> extends Handler<TGraphData> {
   messageBuffer: string = '';
   messagePartId: string | undefined;
+  schemaKeys: string[];
+  toolValues: Record<string, string> = {};
+  messagePartIds: Record<string, string> = {};
+  parser: RawJSONParser;
+
+  constructor(writer: UIMessageStreamWriter<LanggraphUIMessage<TGraphData>>, messageSchema?: InferMessageSchema<TGraphData>) {
+    super(writer, messageSchema);
+    this.schemaKeys = messageSchema ? getSchemaKeys(messageSchema as any) : [];
+    this.parser = new RawJSONParser();
+  }
+
+  isRawMessageChunk = (chunk: StreamChunk): boolean => {
+    if (chunk[0] !== 'messages' && !(Array.isArray(chunk[0]) && chunk[1] === 'messages')) return false;
+    return true;
+  }
   
   async handle(chunk: StreamChunk): Promise<void> {
-    if (this.messageSchema) return; // Don't handle raw messages if we have a message schema
-    if (chunk[0] !== 'messages' && !(Array.isArray(chunk[0]) && chunk[1] === 'messages')) return;
+    if (this.messageSchema) {
+      return this.handleRawMessagesAsJSON(chunk);
+    }
+    
+    if (!this.isRawMessageChunk(chunk)) return;
 
     const data = Array.isArray(chunk[0]) ? chunk[2] : chunk[1];
     const [message, metadata] = data as StreamMessageOutput;
@@ -336,6 +376,24 @@ class RawMessageHandler<TGraphData extends LanggraphData<any, any>> extends Hand
       id: this.messagePartId,
       data: this.messageBuffer,
     } as any);
+  }
+
+  async handleRawMessagesAsJSON(chunk: StreamChunk): Promise<void> {
+    const data = Array.isArray(chunk[0]) ? chunk[2] : chunk[1];
+    const [message, metadata] = data as StreamMessageOutput;
+    const notify = metadata.tags?.includes('notify');
+    if (!notify) return;
+
+    const [success, parsed] = await this.parser.parse(message);
+    if (!success || !parsed) return;
+
+    writeStructuredParts({
+      parsed,
+      schemaKeys: this.schemaKeys,
+      toolValues: this.toolValues,
+      messagePartIds: this.messagePartIds,
+      writer: this.writer,
+    });
   }
 }
 

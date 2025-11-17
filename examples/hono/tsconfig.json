@@ -9,6 +9,13 @@
     "esModuleInterop": true,
     "isolatedModules": true,
     "jsx": "react",
-    "lib": ["ESNext", "DOM"]
+    "lib": ["ESNext", "DOM"],
+    "baseUrl": ".",
+    "paths": {
+      "langgraph-ai-sdk": ["../../packages/langgraph-ai-sdk/src/index.ts"],
+      "langgraph-ai-sdk/testing": ["../../packages/langgraph-ai-sdk/src/testing/index.ts"],
+      "langgraph-ai-sdk-types": ["../../packages/langgraph-ai-sdk-types/src/index.ts"],
+      "langgraph-ai-sdk-react": ["../../packages/langgraph-ai-sdk-react/src/index.ts"]
+    }
   }
 }

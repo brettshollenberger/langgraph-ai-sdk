@@ -79,9 +79,11 @@ const structuredMessageSchema = z.object({
 type StructuredMessageType = z.infer<typeof structuredMessageSchema>;
 ```
 
-4. In your node, use `llm.withStructuredOutput` to emit structured output:
+4. In your node, DO NOT use `withStructuredOutput` or `responseFormat` (Langgraph emits these when finished, which makes the streaming choppy). Instead, just tell the model about your response format in the prompt, and we'll handle streaming token-by-token.
 
 ```typescript
+import { toStructuredMessage } from "langgraph-ai-sdk";
+
 const prompt = `
 <task>
     Answer the user's question
@@ -96,18 +98,15 @@ const prompt = `
 </output>`;
 
 // The AI SDK will stream this to the frontend
-const structuredOutput = await llm
-  .withStructuredOutput(structuredMessageSchema)
+const message = await llm // Don't use structured output!
   .withConfig({ tags: ["notify"] }) // Attach tags: ["notify"]!
   .invoke(prompt);
 
+// Helper to convert the message to a structured message
+const structuredMessage = await toStructuredMessage(message);
+
 return {
-  messages: [
-    new AIMessage({
-      content: JSON.stringify(structuredOutput),
-      response_metadata: structuredOutput, // Attach the structured output as metadata
-    }),
-  ],
+  messages: [structuredMessage],
 };
 ```
 
@@ -309,16 +308,15 @@ export const brainstormAgent = async (
     model: llm,
     tools,
     systemPrompt: prompt,
-    responseFormat: questionSchema,
+    // responseFormat: questionSchema, // DO NOT USE structured output with agents! The streaming will be choppy!
   });
 
   const updatedState = await agent.invoke(state as any, config);
-  const structuredResponse = updatedState.structuredResponse;
 
-  const aiMessage = new AIMessage({
-    content: JSON.stringify(structuredResponse, null, 2),
-    response_metadata: structuredResponse,
-  });
+  // Instead, use the toStructuredMessage helper to
+  // convert the last AIMessage to a structured message - you get the
+  // structured message AND the streaming will be smooth on the frontend!
+  const aiMessage = toStructuredMessage(lastAIMessage(updatedState));
 
   return {
     messages: [...(state.messages || []), aiMessage],
