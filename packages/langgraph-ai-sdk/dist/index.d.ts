@@ -1,5 +1,5 @@
-import { n as LanggraphData, r as LanggraphUIMessage, t as InferMessageSchema } from "./types-BEZu6l5V.js";
-import { BaseMessage } from "@langchain/core/messages";
+import { n as LanggraphData, r as LanggraphUIMessage, t as InferMessageSchema } from "./types-B-dK0AsM.js";
+import { AIMessage, AIMessageChunk, BaseMessage } from "@langchain/core/messages";
 import { InferUIMessageChunk, UIMessage } from "ai";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as drizzle_orm_pg_core0 from "drizzle-orm/pg-core";
@@ -245,4 +245,12 @@ declare function getPool(): Pool;
  */
 declare function isInitialized(): boolean;
 //#endregion
-export { InferMessageSchema, LanggraphBridgeConfig, LanggraphData, LanggraphUIMessage, createLanggraphStreamResponse, createLanggraphUIStream, fetchLanggraphHistory, getDb, getPool, getSchemaKeys, initializeLanggraph, isInitialized, loadThreadHistory, streamLanggraph };
+//#region src/rawJSONParser.d.ts
+declare class RawJSONParser {
+  messageBuffer: string;
+  hasSeenJsonStart: boolean;
+  hasSeenJsonEnd: boolean;
+  parse(message: AIMessage | AIMessageChunk): Promise<[boolean, Record<string, any> | undefined]>;
+}
+//#endregion
+export { InferMessageSchema, LanggraphBridgeConfig, LanggraphData, LanggraphUIMessage, RawJSONParser, createLanggraphStreamResponse, createLanggraphUIStream, fetchLanggraphHistory, getDb, getPool, getSchemaKeys, initializeLanggraph, isInitialized, loadThreadHistory, streamLanggraph };

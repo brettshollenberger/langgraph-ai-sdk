@@ -1,4 +1,5 @@
 import { n as __export } from "./chunk-C3Lxiq5Q.js";
+import { t as RawJSONParser } from "./rawJSONParser-C1zri1pG.js";
 import { AIMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { createUIMessageStream, createUIMessageStreamResponse, parsePartialJson } from "ai";
 import { kebabCase } from "change-case";
@@ -16,6 +17,24 @@ const isNull = (value) => {
 const isString = (value) => {
 	return typeof value === "string";
 };
+function writeStructuredParts({ parsed, schemaKeys, toolValues, messagePartIds, writer }) {
+	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return;
+	Object.entries(parsed).forEach(([key, value]) => {
+		if (schemaKeys.includes(key) && !isUndefined(value) && !isNull(value)) {
+			if (toolValues[key] !== value) {
+				toolValues[key] = JSON.stringify(value);
+				const messagePartId = messagePartIds[key] || crypto.randomUUID();
+				messagePartIds[key] = messagePartId;
+				const structuredMessagePart = {
+					type: `data-message-${key}`,
+					id: messagePartId,
+					data: value
+				};
+				writer.write(structuredMessagePart);
+			}
+		}
+	});
+}
 function getSchemaKeys(schema) {
 	if (!schema) return [];
 	if (Array.isArray(schema)) {
@@ -61,20 +80,12 @@ var StructuredMessageToolHandler = class extends Handler {
 	}
 	async writeToolCall() {
 		const parsed = (await parsePartialJson(this.toolArgsBuffer)).value;
-		if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) Object.entries(parsed).forEach(([key, value]) => {
-			if (this.schemaKeys.includes(key) && !isUndefined(value) && !isNull(value)) {
-				if (this.toolValues[key] !== value) {
-					this.toolValues[key] = JSON.stringify(value);
-					const messagePartId = this.messagePartIds[key] || crypto.randomUUID();
-					this.messagePartIds[key] = messagePartId;
-					const structuredMessagePart = {
-						type: `data-message-${key}`,
-						id: messagePartId,
-						data: value
-					};
-					this.writer.write(structuredMessagePart);
-				}
-			}
+		writeStructuredParts({
+			parsed,
+			schemaKeys: this.schemaKeys,
+			toolValues: this.toolValues,
+			messagePartIds: this.messagePartIds,
+			writer: this.writer
 		});
 	}
 };
@@ -167,9 +178,22 @@ var ToolCallHandler = class extends Handler {
 var RawMessageHandler = class extends Handler {
 	messageBuffer = "";
 	messagePartId;
+	schemaKeys;
+	toolValues = {};
+	messagePartIds = {};
+	parser;
+	constructor(writer, messageSchema) {
+		super(writer, messageSchema);
+		this.schemaKeys = messageSchema ? getSchemaKeys(messageSchema) : [];
+		this.parser = new RawJSONParser();
+	}
+	isRawMessageChunk = (chunk) => {
+		if (chunk[0] !== "messages" && !(Array.isArray(chunk[0]) && chunk[1] === "messages")) return false;
+		return true;
+	};
 	async handle(chunk) {
-		if (this.messageSchema) return;
-		if (chunk[0] !== "messages" && !(Array.isArray(chunk[0]) && chunk[1] === "messages")) return;
+		if (this.messageSchema) return this.handleRawMessagesAsJSON(chunk);
+		if (!this.isRawMessageChunk(chunk)) return;
 		const [message, metadata] = Array.isArray(chunk[0]) ? chunk[2] : chunk[1];
 		if (!metadata.tags?.includes("notify")) return;
 		if (isUndefined(this.messagePartId)) this.messagePartId = crypto.randomUUID();
@@ -179,6 +203,19 @@ var RawMessageHandler = class extends Handler {
 			type: "data-message-text",
 			id: this.messagePartId,
 			data: this.messageBuffer
+		});
+	}
+	async handleRawMessagesAsJSON(chunk) {
+		const [message, metadata] = Array.isArray(chunk[0]) ? chunk[2] : chunk[1];
+		if (!metadata.tags?.includes("notify")) return;
+		const [success, parsed] = await this.parser.parse(message);
+		if (!success || !parsed) return;
+		writeStructuredParts({
+			parsed,
+			schemaKeys: this.schemaKeys,
+			toolValues: this.toolValues,
+			messagePartIds: this.messagePartIds,
+			writer: this.writer
 		});
 	}
 };
@@ -485,4 +522,4 @@ function isInitialized() {
 }
 
 //#endregion
-export { createLanggraphStreamResponse, createLanggraphUIStream, fetchLanggraphHistory, getDb, getPool, getSchemaKeys, initializeLanggraph, isInitialized, loadThreadHistory, streamLanggraph };
+export { RawJSONParser, createLanggraphStreamResponse, createLanggraphUIStream, fetchLanggraphHistory, getDb, getPool, getSchemaKeys, initializeLanggraph, isInitialized, loadThreadHistory, streamLanggraph };

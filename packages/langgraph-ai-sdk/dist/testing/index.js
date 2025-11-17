@@ -1,5 +1,6 @@
 import { i as __toESM, r as __require, t as __commonJS } from "../chunk-C3Lxiq5Q.js";
-import { AIMessage, AIMessageChunk, HumanMessage } from "@langchain/core/messages";
+import { t as RawJSONParser } from "../rawJSONParser-C1zri1pG.js";
+import { AIMessage, AIMessageChunk, isAIMessage, isHumanMessage } from "@langchain/core/messages";
 import { kebabCase } from "change-case";
 import { FakeStreamingChatModel } from "@langchain/core/utils/testing";
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -58746,10 +58747,18 @@ function addXmlSpacing(content) {
 }
 
 //#endregion
-//#region src/testing/prompts/message.ts
-function isHumanMessage(msg) {
-	return msg instanceof HumanMessage;
-}
+//#region src/message.ts
+const lastMessage = (record$2, filter) => {
+	if (!record$2.messages || record$2.messages.length === 0) return;
+	const messages = record$2.messages.filter(filter || (() => true));
+	return messages[messages.length - 1];
+};
+const lastAIMessage = (record$2) => {
+	return lastMessage(record$2, isAIMessage);
+};
+const lastHumanMessage = (record$2) => {
+	return lastMessage(record$2, isHumanMessage);
+};
 
 //#endregion
 //#region src/testing/prompts/chatHistory.ts
@@ -58784,6 +58793,22 @@ const structuredOutputPrompt = async ({ schema, tag = "structured-output" }) => 
     </${tag}>
   `);
 };
+
+//#endregion
+//#region src/toStructuredMessage.ts
+async function toStructuredMessage(result) {
+	if (!result) throw new Error("Handler result must be an AIMessage or an object with messages and structuredResponse properties");
+	if (result instanceof AIMessage) return result;
+	return await parseStructuredChunk(result);
+}
+async function parseStructuredChunk(result) {
+	const [success, parsed] = await new RawJSONParser().parse(result);
+	if (success && parsed) return new AIMessage({
+		content: JSON.stringify(parsed),
+		response_metadata: parsed
+	});
+	return null;
+}
 
 //#endregion
 //#region src/testing/graphs/agent/sampleAgent.ts
@@ -58827,12 +58852,11 @@ const remainingTopics = (topics) => {
 	return sortedTopics(topics || []).map((topic) => `${topic}: ${TopicDescriptions[topic]}`).join("\n\n");
 };
 const collectedData = (state) => {
-	console.log(`Collected data: ${JSON.stringify(state.brainstorm)}`);
 	return Object.entries(state.brainstorm || {}).filter(([_, value]) => value !== void 0 && value !== "");
 };
 const getPrompt = async (state, config) => {
-	const lastHumanMessage = state.messages.filter(isHumanMessage).at(-1);
-	if (!lastHumanMessage) throw new Error("No human message found");
+	const message = lastHumanMessage(state);
+	if (!message) throw new Error("No human message found");
 	const chatHistory = await chatHistoryPrompt({ messages: state.messages });
 	const hasUserContext = state.userContext && Object.keys(state.userContext).length > 0;
 	return renderPrompt(`
@@ -58869,7 +58893,7 @@ const getPrompt = async (state, config) => {
             </remaining_topics>
 
             <users_last_message>
-                ${lastHumanMessage.content}
+                ${message?.content}
             </users_last_message>
 
             <workflow>
@@ -58942,7 +58966,7 @@ const SaveAnswersTool = (state, config) => {
 		schema: saveAnswersInputSchema
 	});
 };
-const responseSchema = z.object({
+z.object({
 	messages: z.array(z.object({
 		role: z.string(),
 		content: z.string()
@@ -58957,40 +58981,18 @@ const responseSchema = z.object({
 const dynamicPromptMiddleware = createMiddleware({
 	name: "DynamicPromptMiddleware",
 	stateSchema: z.object({
-		brainstorm: z.object({
-			idea: z.string().optional(),
-			audience: z.string().optional(),
-			solution: z.string().optional(),
-			socialProof: z.string().optional(),
-			lookAndFeel: z.string().optional()
-		}).optional(),
+		messages: z.array(z.any()),
+		brainstorm: z.record(z.string()).optional(),
 		remainingTopics: z.array(z.string()).optional(),
-		userContext: z.object({
-			businessType: z.string(),
-			urgencyLevel: z.string(),
-			experienceLevel: z.string()
-		}).optional()
-	}),
+		userContext: z.record(z.string()).optional()
+	}).passthrough(),
 	wrapModelCall: async (request, handler) => {
 		const state = request.state;
-		console.log("Middleware state:", JSON.stringify(state, null, 2));
-		let systemPrompt;
-		try {
-			systemPrompt = await getPrompt(state, request.runtime);
-		} catch (err) {
-			console.error("Error in getPrompt:", err);
-			throw err;
-		}
-		console.log(`reloading system prompt`);
-		const result = await handler({
+		const systemPrompt = await getPrompt(state, request.runtime);
+		return toStructuredMessage(await handler({
 			...request,
 			systemPrompt
-		});
-		if (!result) throw new Error("Handler result must be an AIMessage or an object with messages and structuredResponse properties");
-		if (result instanceof AIMessage) return result;
-		const aiMessage = responseSchema.parse(result).messages?.filter((msg) => msg instanceof AIMessage).at(-1);
-		if (!aiMessage) throw new Error("No AIMessage found in handler result");
-		return aiMessage;
+		}));
 	}
 });
 /**
@@ -58999,21 +59001,19 @@ const dynamicPromptMiddleware = createMiddleware({
 const brainstormAgent = async (state, config) => {
 	try {
 		const tools = [SaveAnswersTool(state, config)];
-		const structuredResponse = (await (await createAgent({
-			model: getLLM().withConfig({ tags: ["notify"] }),
+		const llm = getLLM().withConfig({ tags: ["notify"] });
+		await getPrompt(state, config);
+		const agentResponse = lastAIMessage(await (await createAgent({
+			model: llm,
 			tools,
-			middleware: [dynamicPromptMiddleware],
-			responseFormat: agentOutputSchema
-		})).invoke(state, config)).structuredResponse;
-		const aiMessage = new AIMessage({
-			content: JSON.stringify(structuredResponse, null, 2),
-			response_metadata: structuredResponse
-		});
+			middleware: [dynamicPromptMiddleware]
+		})).invoke(state, config));
+		if (!agentResponse) throw new Error("Agent response must be an AIMessage");
 		const answers = await readAnswersFromJSON();
 		const questionsAnswered = Object.keys(answers);
 		const remainingTopics$1 = state.remainingTopics.filter((topic) => !questionsAnswered.includes(topic));
 		return {
-			messages: [...state.messages || [], aiMessage],
+			messages: [agentResponse],
 			remainingTopics: remainingTopics$1
 		};
 	} catch (error) {
