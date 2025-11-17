@@ -308,16 +308,15 @@ export const brainstormAgent = async (
     model: llm,
     tools,
     systemPrompt: prompt,
-    responseFormat: questionSchema,
+    // responseFormat: questionSchema, // DO NOT USE structured output with agents! The streaming will be choppy!
   });
 
   const updatedState = await agent.invoke(state as any, config);
-  const structuredResponse = updatedState.structuredResponse;
 
-  const aiMessage = new AIMessage({
-    content: JSON.stringify(structuredResponse, null, 2),
-    response_metadata: structuredResponse,
-  });
+  // Instead, use the toStructuredMessage helper to
+  // convert the last AIMessage to a structured message - you get the
+  // structured message AND the streaming will be smooth on the frontend!
+  const aiMessage = toStructuredMessage(lastAIMessage(updatedState));
 
   return {
     messages: [...(state.messages || []), aiMessage],
