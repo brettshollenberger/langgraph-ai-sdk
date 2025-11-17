@@ -314,10 +314,20 @@ class ToolCallHandler<TGraphData extends LanggraphData<any, any>> extends Handle
 class RawMessageHandler<TGraphData extends LanggraphData<any, any>> extends Handler<TGraphData> {
   messageBuffer: string = '';
   messagePartId: string | undefined;
+  hasSeenJsonStart: boolean = false;
+  hasSeenJsonEnd: boolean = false;
+
+  isRawMessageChunk = (chunk: StreamChunk): boolean => {
+    if (chunk[0] !== 'messages' && !(Array.isArray(chunk[0]) && chunk[1] === 'messages')) return false;
+    return true;
+  }
   
   async handle(chunk: StreamChunk): Promise<void> {
-    if (this.messageSchema) return; // Don't handle raw messages if we have a message schema
-    if (chunk[0] !== 'messages' && !(Array.isArray(chunk[0]) && chunk[1] === 'messages')) return;
+    if (this.messageSchema) {
+      return this.handleRawMessagesAsJSON(chunk);
+    }
+    
+    if (!this.isRawMessageChunk(chunk)) return;
 
     const data = Array.isArray(chunk[0]) ? chunk[2] : chunk[1];
     const [message, metadata] = data as StreamMessageOutput;
@@ -336,6 +346,44 @@ class RawMessageHandler<TGraphData extends LanggraphData<any, any>> extends Hand
       id: this.messagePartId,
       data: this.messageBuffer,
     } as any);
+  }
+
+  async handleRawMessagesAsJSON(chunk: StreamChunk): Promise<void> {
+    const data = Array.isArray(chunk[0]) ? chunk[2] : chunk[1];
+    const [message, metadata] = data as StreamMessageOutput;
+    const notify = metadata.tags?.includes('notify');
+    if (!notify) return;
+
+    let content;
+    if (typeof message.content === 'string') {
+      content = message.content;
+    } else if (Array.isArray(message.content) && message.content.length > 0) {
+      let structuredContent = message.content[0] as { index: number, type: string, text: string };
+      content = structuredContent.text;
+    } else {
+      return;
+    }
+    
+    this.messageBuffer += content;
+    if (this.messageBuffer.includes('```json')) {
+      const indexOfJsonStart = this.messageBuffer.indexOf('```json');
+      this.messageBuffer = this.messageBuffer.substring(indexOfJsonStart + '```json'.length);
+      this.hasSeenJsonStart = true;
+    }
+    if (this.hasSeenJsonStart && this.messageBuffer.includes('```')) {
+      const indexOfJsonEnd = this.messageBuffer.indexOf('```');
+      this.hasSeenJsonEnd = true;
+    }
+    
+    if (this.hasSeenJsonStart && this.hasSeenJsonEnd) {
+      this.hasSeenJsonStart = false;
+      this.hasSeenJsonEnd = false;
+    }
+    const json = await parsePartialJson(this.messageBuffer);
+    debugger;
+    
+    
+    
   }
 }
 

@@ -299,9 +299,8 @@ export const brainstormAgent = async (
       const agent = await createAgent({
           model: llm,
           tools,
-          systemPrompt,
-        //   middleware: [dynamicPromptMiddleware],
-          responseFormat: agentOutputSchema,
+          middleware: [dynamicPromptMiddleware],
+        //   responseFormat: agentOutputSchema,
       });
 
       const updatedState = await agent.invoke(state as any, config);
