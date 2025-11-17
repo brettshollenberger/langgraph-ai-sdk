@@ -1,16 +1,15 @@
 import { parsePartialJson } from 'ai';
-import { BaseMessage } from '@langchain/core/messages';
-
+import { AIMessage, AIMessageChunk } from '@langchain/core/messages';
 export class RawJSONParser {
     messageBuffer: string = '';
     hasSeenJsonStart: boolean = false;
     hasSeenJsonEnd: boolean = false;
 
-    async parse(message: BaseMessage): Promise<[boolean, Record<string, any> | undefined]> {
+    async parse(message: AIMessage | AIMessageChunk): Promise<[boolean, Record<string, any> | undefined]> {
         try {
             let content;
-            if (typeof message.content === 'string') {
-                content = message.content;
+            if (typeof message.content === 'object' && ('text' in message.content) && typeof message.content.text === 'string') {
+                content = message.content.text;
             } else if (Array.isArray(message.content) && message.content.length > 0) {
                 let structuredContent = message.content[0] as { index: number, type: string, text: string };
                 content = structuredContent.text;

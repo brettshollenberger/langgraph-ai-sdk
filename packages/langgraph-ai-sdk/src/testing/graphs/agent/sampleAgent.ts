@@ -1,25 +1,23 @@
 import { z } from "zod";
 import { StateGraph, END, START } from "@langchain/langgraph";
-import { AIMessage, AIMessageChunk, type BaseMessage } from "@langchain/core/messages";
+import { type BaseMessage } from "@langchain/core/messages";
 import { createAgent, createMiddleware } from "langchain";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
 import { getLLM } from '../../llm/llm';
-import { tool, Tool } from "@langchain/core/tools";
-import { toJSON, renderPrompt, chatHistoryPrompt, structuredOutputPrompt, isHumanMessage } from '../../prompts';
+import { tool } from "@langchain/core/tools";
+import { toJSON, renderPrompt, chatHistoryPrompt, structuredOutputPrompt } from '../../prompts';
+import { lastHumanMessage, lastAIMessage } from '../../../message';
 import { writeFile, readFile } from 'fs/promises';
 import { NodeMiddleware } from "../../node";
-import { RawJSONParser } from "../../../rawJSONParser";
 import {
   brainstormTopics,
   BrainstormStateAnnotation,
   questionSchema,
-  marketingTemplateSchema,
-  agentOutputSchema,
   type BrainstormTopic,
   type Brainstorm,
-  type AgentStateType,
   type UserContext,
 } from './types';
+import { toStructuredMessage } from "../../../toStructuredMessage";
 
 async function wipeJSON(filePath: string = './brainstorm-answers.json'): Promise<void> {
     try {
@@ -95,8 +93,8 @@ const collectedData = (state: BrainstormGraphState): Brainstorm => {
 }
 
 const getPrompt = async (state: BrainstormGraphState, config?: LangGraphRunnableConfig) => {
-    const lastHumanMessage = state.messages.filter(isHumanMessage).at(-1);
-    if (!lastHumanMessage) {
+    const message = lastHumanMessage(state);
+    if (!message) {
         throw new Error("No human message found");
     }
 
@@ -138,7 +136,7 @@ const getPrompt = async (state: BrainstormGraphState, config?: LangGraphRunnable
             </remaining_topics>
 
             <users_last_message>
-                ${lastHumanMessage.content}
+                ${message?.content}
             </users_last_message>
 
             <workflow>
@@ -252,31 +250,10 @@ const dynamicPromptMiddleware = createMiddleware({
         const state = request.state;
         const systemPrompt = await getPrompt(state as any, request.runtime);
 
-        const result = await handler({
+        return toStructuredMessage(await handler({
             ...request,
             systemPrompt,
-        });
-        
-        if (!result) { 
-            throw new Error("Handler result must be an AIMessage or an object with messages and structuredResponse properties");
-        }
-
-        // If it's already an AIMessage, return it
-        if (result instanceof AIMessage) {
-            return result;
-        }
-
-        const parser = new RawJSONParser();
-        const [success, parsed] = await parser.parse(result);
-        if (success && parsed) {
-            const aiMessage = new AIMessage({
-                content: JSON.stringify(parsed),
-                response_metadata: parsed,
-            });
-            return aiMessage;
-        }
-
-        return result;
+        }));
     },
 })
 
@@ -304,23 +281,18 @@ export const brainstormAgent = async (
       });
 
       const updatedState = await agent.invoke(state as any, config);
+      const agentResponse = lastAIMessage(updatedState);
+
+      if (!agentResponse) {
+        throw new Error("Agent response must be an AIMessage");
+      }
 
       const answers = await readAnswersFromJSON<Brainstorm>();
       const questionsAnswered = Object.keys(answers);
       const remainingTopics = state.remainingTopics.filter(topic => !questionsAnswered.includes(topic));
 
-      const filteredMessages = updatedState.messages.filter((msg: any) => {
-          if (msg.constructor.name === 'ToolMessage') {
-              return false;
-          }
-          if (msg instanceof AIMessage && !(msg.constructor.name === 'AIMessageChunk')) {
-              return true;
-          }
-          return !msg.tool_calls || msg.tool_calls.length === 0;
-      });
-
       return {
-          messages: filteredMessages,
+          messages: [agentResponse],
           remainingTopics,
       };
     } catch (error) {
