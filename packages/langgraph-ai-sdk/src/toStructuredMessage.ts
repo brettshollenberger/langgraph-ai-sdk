@@ -24,11 +24,12 @@ const isReasoningBlock = (block: ContentBlock): block is ContentBlock.Reasoning 
 };
 
 // Extend BaseContentBlock to make it compatible with AIMessageChunk
-interface StructuredContentBlock<TSchema extends Record<string, any> = Record<string, any>> extends BaseContentBlock {
+interface StructuredContentBlock<TSchema extends Record<string, any> = Record<string, any>> extends ContentBlock {
   readonly type: 'structured';
   index?: number;
   text: string;
   parsed: TSchema;
+  [key: string]: unknown; // Required for BaseContentBlock compatibility
 }
 
 class StructuredMessageParser<TSchema extends Record<string, any> = Record<string, any>> {
@@ -98,7 +99,7 @@ class ContentBlockParser<TSchema extends Record<string, any> = Record<string, an
           text: this.block.text,
           parsed: parsed as TSchema,
           id: this.block.id,
-        };
+        } satisfies StructuredContentBlock<TSchema>;
       }
     }
 
