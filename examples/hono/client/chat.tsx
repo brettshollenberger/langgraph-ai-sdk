@@ -163,7 +163,7 @@ function ChatContent({ endpoint }: { endpoint: EndpointKey }) {
           }}
         />
       ))}
-      {hasToolsRunning && (
+      {(hasToolsRunning || (status === 'streaming' && messages.length > 0)) && (
         <ThinkingIndicator tools={tools} />
       )}
       <div ref={messagesEndRef} />

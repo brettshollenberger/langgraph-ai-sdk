@@ -24,8 +24,8 @@ const BlockRenderer = ({ block }: { block: MessageBlock<any> }) => {
     
     case 'structured':
       const data = block.data;
-      const isQuestion = 'text' in data && 'examples' in data;
-      const isMarketingTemplate = 'headline' in data && 'callToAction' in data;
+      const isQuestion = (data as any).type === "question";
+      const isMarketingTemplate = (data as any).type === "marketing_template"
       
       if (isMarketingTemplate) {
         return (
@@ -123,22 +123,24 @@ const BlockRenderer = ({ block }: { block: MessageBlock<any> }) => {
       
       return (
         <div className="space-y-2">
-          {Object.entries(data).map(([key, value], idx) => (
-            <div key={idx}>
-              <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">{key}</div>
-              {Array.isArray(value) ? (
-                <ul className="list-disc pl-5 text-sm">
-                  {value.map((item: any, i: number) => (
-                    <li key={i}>{String(item)}</li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="prose prose-sm prose-invert max-w-none">
-                  <ReactMarkdown>{String(value)}</ReactMarkdown>
-                </div>
-              )}
-            </div>
-          ))}
+          {Object.entries(data)
+            .filter(([key]) => key !== '_type_')
+            .map(([key, value], idx) => (
+              <div key={idx}>
+                <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">{key}</div>
+                {Array.isArray(value) ? (
+                  <ul className="list-disc pl-5 text-sm">
+                    {value.map((item: any, i: number) => (
+                      <li key={i}>{String(item)}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="prose prose-sm prose-invert max-w-none">
+                    <ReactMarkdown>{String(value)}</ReactMarkdown>
+                  </div>
+                )}
+              </div>
+            ))}
         </div>
       );
     

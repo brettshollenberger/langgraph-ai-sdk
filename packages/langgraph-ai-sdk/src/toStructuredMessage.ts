@@ -245,6 +245,9 @@ export class TextBlockParser {
             const parsed = parseResult.value;
             if (!parsed || typeof parsed !== 'object') return [false, undefined];
 
+            const hasOnlyTypeField = Object.keys(parsed).length === 1 && '_type_' in parsed;
+            if (hasOnlyTypeField) return [false, undefined];
+
             return [true, parsed];
         } catch (e) {
             return [false, undefined];

@@ -107,10 +107,14 @@ export type SimpleLanggraphUIMessage<T extends LanggraphData<any, any>> =
     : never;
 
 export type MessageBlock<T extends LanggraphData<any, any>> = 
-  | TextMessageBlock
-  | StructuredMessageBlock<T>
-  | ToolCallMessageBlock
-  | ReasoningMessageBlock;
+  T extends any
+    ? (
+      | TextMessageBlock
+      | StructuredMessageBlock<T>
+      | ToolCallMessageBlock
+      | ReasoningMessageBlock
+    )
+    : never;
 
 export interface TextMessageBlock {
   type: 'text';
@@ -146,8 +150,11 @@ export interface ReasoningMessageBlock {
   id: string;
 }
 
-export type MessageWithBlocks<T extends LanggraphData<any, any>> = {
-  id: string;
-  role: 'system' | 'user' | 'assistant';
-  blocks: MessageBlock<T>[];
-};
+export type MessageWithBlocks<T extends LanggraphData<any, any>> = 
+  T extends any
+    ? Prettify<{
+        id: string;
+        role: 'system' | 'user' | 'assistant';
+        blocks: MessageBlock<T>[];
+      }>
+    : never;
