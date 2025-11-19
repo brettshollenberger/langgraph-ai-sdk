@@ -2,7 +2,6 @@ import { AIMessage, AIMessageChunk, ContentBlock } from '@langchain/core/message
 import { RawJSONParser } from './rawJSONParser';
 import { isAIMessage } from '@langchain/core/messages';
 import { parsePartialJson } from 'ai';
-
 export interface ParsedBlock {
   type: 'text' | 'tool_call' | 'structured' | 'reasoning' | 'image';
   index: number;
@@ -42,7 +41,6 @@ interface StructuredContentBlock<TSchema extends Record<string, any> = Record<st
   parsed: TSchema;
   [key: string]: unknown; // Required for BaseContentBlock compatibility
 }
-
 class StructuredMessageParser<TSchema extends Record<string, any> = Record<string, any>> {
   message: AIMessage | AIMessageChunk;
 

@@ -94,9 +94,7 @@ function ChatContent({ endpoint }: { endpoint: EndpointKey }) {
     );
   }
 
-  const lastMessage = messages.at(-1);
-  const isThinking = lastMessage?.state === 'thinking';
-  const visibleMessages = messages.filter(msg => msg.state !== 'thinking');
+  const hasToolsRunning = tools.some(t => t.state === 'running');
 
   return (
     <Wrapper>
@@ -155,7 +153,7 @@ function ChatContent({ endpoint }: { endpoint: EndpointKey }) {
         <pre className="text-xs text-green-400">{JSON.stringify(events, null, 2)}</pre>
       </div>
 
-      {visibleMessages.map((message) => (
+      {messages.map((message) => (
         <Message
           key={message.id}
           message={message}
@@ -165,7 +163,7 @@ function ChatContent({ endpoint }: { endpoint: EndpointKey }) {
           }}
         />
       ))}
-      {isThinking && (
+      {hasToolsRunning && (
         <ThinkingIndicator tools={tools} />
       )}
       <div ref={messagesEndRef} />

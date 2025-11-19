@@ -258,7 +258,6 @@ const dynamicPromptMiddleware = createMiddleware({
             systemPrompt,
         });
         const structuredResponse = await toStructuredMessage(rawResponse)
-        debugger;
         return structuredResponse;
     },
 })

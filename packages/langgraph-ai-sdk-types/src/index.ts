@@ -98,3 +98,49 @@ export type SimpleLanggraphUIMessage<T extends LanggraphData<any, any>> =
   T extends any
     ? Prettify<_SimpleLanggraphUIMessage<T>>
     : never;
+
+export type MessageBlock<T extends LanggraphData<any, any>> = 
+  | TextMessageBlock
+  | StructuredMessageBlock<T>
+  | ToolCallMessageBlock
+  | ReasoningMessageBlock;
+
+export interface TextMessageBlock {
+  type: 'text';
+  index: number;
+  text: string;
+  id: string;
+}
+
+export interface StructuredMessageBlock<T extends LanggraphData<any, any>> {
+  type: 'structured';
+  index: number;
+  data: InferMessage<T>;
+  sourceText?: string;
+  id: string;
+}
+
+export interface ToolCallMessageBlock {
+  type: 'tool_call';
+  index: number;
+  toolCallId: string;
+  toolName: string;
+  input: any;
+  output?: any;
+  state: 'running' | 'complete' | 'error';
+  errorText?: string;
+  id: string;
+}
+
+export interface ReasoningMessageBlock {
+  type: 'reasoning';
+  index: number;
+  text: string;
+  id: string;
+}
+
+export type MessageWithBlocks<T extends LanggraphData<any, any>> = {
+  id: string;
+  role: 'system' | 'user' | 'assistant';
+  blocks: MessageBlock<T>[];
+};

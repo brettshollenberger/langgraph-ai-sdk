@@ -67,40 +67,27 @@ const isString = (value: unknown): value is string => {
     return typeof value === 'string';
 }
 
-interface WriteStructuredPartsOptions<TGraphData extends LanggraphData<any, any>> {
+interface WriteStructuredBlockOptions<TGraphData extends LanggraphData<any, any>> {
   parsed: Record<string, any>;
-  schemaKeys: string[];
-  toolValues: Record<string, string>;
-  messagePartIds: Record<string, string>;
+  blockId: string;
+  index: number;
   writer: UIMessageStreamWriter<LanggraphUIMessage<TGraphData>>;
 }
 
-function writeStructuredParts<TGraphData extends LanggraphData<any, any>>({
+function writeStructuredBlock<TGraphData extends LanggraphData<any, any>>({
   parsed,
-  schemaKeys,
-  toolValues,
-  messagePartIds,
+  blockId,
+  index,
   writer,
-}: WriteStructuredPartsOptions<TGraphData>): void {
+}: WriteStructuredBlockOptions<TGraphData>): void {
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return;
 
-  Object.entries(parsed).forEach(([key, value]) => {
-    if (schemaKeys.includes(key) && !isUndefined(value) && !isNull(value)) {
-      const lastValue = toolValues[key];
-      if (lastValue !== value) {
-        toolValues[key] = JSON.stringify(value);
-
-        const messagePartId = messagePartIds[key] || crypto.randomUUID();
-        messagePartIds[key] = messagePartId;
-        const structuredMessagePart = {
-          type: `data-message-${key}`,
-          id: messagePartId,
-          data: value,
-        };
-        writer.write(structuredMessagePart as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
-      }
-    }
-  });
+  writer.write({
+    type: 'content-block-structured',
+    index,
+    id: blockId,
+    data: parsed,
+  } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
 }
 
 export function getSchemaKeys<T extends z.ZodObject<any> | readonly z.ZodObject<any>[]>(
@@ -148,15 +135,12 @@ abstract class Handler<TGraphData extends LanggraphData<any, any>> {
   abstract handle(chunk: StreamChunk): Promise<void>;
 }
 class StructuredMessageToolHandler<TGraphData extends LanggraphData<any, any>> extends Handler<TGraphData> {
-  messagePartIds: Record<string, string> = {};
-  schemaKeys: string[];
+  blockId: string | undefined;
   toolArgsBuffer: string = '';
-  toolValues: Record<string, string> = {};
   currentToolName: string | undefined;
 
   constructor(writer: UIMessageStreamWriter<LanggraphUIMessage<TGraphData>>, messageSchema?: InferMessageSchema<TGraphData>) {
     super(writer, messageSchema);
-    this.schemaKeys = messageSchema ? getSchemaKeys(messageSchema as any) : [];
   }
 
   async handle(chunk: StreamChunk): Promise<void> {
@@ -166,7 +150,6 @@ class StructuredMessageToolHandler<TGraphData extends LanggraphData<any, any>> e
     const data = Array.isArray(chunk[0]) ? chunk[2] : chunk[1];
     const [message, metadata] = data as StreamMessageOutput;
 
-    // Only process messages tagged with 'notify' (from responseNode)
     const notify = metadata.tags?.includes('notify');
     if (!notify) return;
 
@@ -174,7 +157,6 @@ class StructuredMessageToolHandler<TGraphData extends LanggraphData<any, any>> e
       return;
     }
 
-    // Skip if no tool_call_chunks to process
     if (message.tool_call_chunks.length === 0) {
       return;
     }
@@ -184,7 +166,6 @@ class StructuredMessageToolHandler<TGraphData extends LanggraphData<any, any>> e
         this.currentToolName = chunk.name;
       }
 
-      // Only parse structured tool calls (match "extract" or "extract-*")
       if (!this.currentToolName?.match(/^extract/)) {
         continue;
       }
@@ -200,11 +181,14 @@ class StructuredMessageToolHandler<TGraphData extends LanggraphData<any, any>> e
     const parseResult = await parsePartialJson(this.toolArgsBuffer);
     const parsed = parseResult.value as Record<string, any>;
 
-    writeStructuredParts({
+    if (isUndefined(this.blockId)) {
+      this.blockId = crypto.randomUUID();
+    }
+
+    writeStructuredBlock({
       parsed,
-      schemaKeys: this.schemaKeys,
-      toolValues: this.toolValues,
-      messagePartIds: this.messagePartIds,
+      blockId: this.blockId,
+      index: 0,
       writer: this.writer,
     });
   }
@@ -335,15 +319,11 @@ class ToolCallHandler<TGraphData extends LanggraphData<any, any>> extends Handle
 }
 class RawMessageHandler<TGraphData extends LanggraphData<any, any>> extends Handler<TGraphData> {
   messageBuffer: string = '';
-  messagePartId: string | undefined;
-  schemaKeys: string[];
-  toolValues: Record<string, string> = {};
-  messagePartIds: Record<string, string> = {};
+  blockId: string | undefined;
   parser: RawJSONParser;
 
   constructor(writer: UIMessageStreamWriter<LanggraphUIMessage<TGraphData>>, messageSchema?: InferMessageSchema<TGraphData>) {
     super(writer, messageSchema);
-    this.schemaKeys = messageSchema ? getSchemaKeys(messageSchema as any) : [];
     this.parser = new RawJSONParser();
   }
 
@@ -364,17 +344,18 @@ class RawMessageHandler<TGraphData extends LanggraphData<any, any>> extends Hand
     const notify = metadata.tags?.includes('notify');
     if (!notify) return;
 
-    if (isUndefined(this.messagePartId)) {
-      this.messagePartId = crypto.randomUUID();
+    if (isUndefined(this.blockId)) {
+      this.blockId = crypto.randomUUID();
     }
 
     const content = typeof message.content === 'string' ? message.content : '';
     this.messageBuffer += content;
 
     this.writer.write({
-      type: 'data-message-text',
-      id: this.messagePartId,
-      data: this.messageBuffer,
+      type: 'content-block-text',
+      index: 0,
+      id: this.blockId,
+      text: this.messageBuffer,
     } as any);
   }
 
@@ -387,11 +368,14 @@ class RawMessageHandler<TGraphData extends LanggraphData<any, any>> extends Hand
     const [success, parsed] = await this.parser.parse(message as any);
     if (!success || !parsed) return;
 
-    writeStructuredParts({
+    if (isUndefined(this.blockId)) {
+      this.blockId = crypto.randomUUID();
+    }
+
+    writeStructuredBlock({
       parsed,
-      schemaKeys: this.schemaKeys,
-      toolValues: this.toolValues,
-      messagePartIds: this.messagePartIds,
+      blockId: this.blockId,
+      index: 0,
       writer: this.writer,
     });
   }
@@ -644,49 +628,42 @@ export async function loadThreadHistory<
         text: content
       });
     } else {
-      // Check for parsed_blocks in response_metadata (new format)
       const parsedBlocks = msg.response_metadata?.parsed_blocks;
       
       if (parsedBlocks && Array.isArray(parsedBlocks)) {
-        // Use block-based format from response_metadata
         parsedBlocks.forEach((block: any) => {
-          if (block.type === 'structured' && block.parsed && messageSchema) {
-            // Convert structured blocks to data-message-* parts
-            Object.entries(block.parsed).forEach(([key, value]) => {
-              parts.push({
-                type: `data-message-${key}`,
-                id: block.id,
-                data: value
-              });
+          if (block.type === 'structured' && block.parsed) {
+            parts.push({
+              type: 'content-block-structured',
+              index: block.index ?? 0,
+              id: block.id,
+              data: block.parsed,
+              sourceText: block.sourceText
             });
           } else if (block.type === 'text') {
             parts.push({
-              type: 'data-message-text',
+              type: 'content-block-text',
+              index: block.index ?? 0,
               id: block.id,
-              data: block.sourceText
+              text: block.sourceText
+            });
+          } else if (block.type === 'reasoning') {
+            parts.push({
+              type: 'content-block-reasoning',
+              index: block.index ?? 0,
+              id: block.id,
+              text: block.sourceText
             });
           } else if (block.type === 'tool_call') {
-            // Handle tool calls if needed
-          }
-        });
-      } else if (messageSchema) {
-        // Fallback to old format: response_metadata keys directly
-        Object.entries(msg.response_metadata || {}).forEach(([key, value]) => {
-          if (key !== 'parsed_blocks' && key !== 'usage') {
             parts.push({
-              type: `data-message-${key}`,
-              id: crypto.randomUUID(),
-              data: value
+              type: `tool-${block.toolName}`,
+              index: block.index ?? 0,
+              id: block.id,
+              toolCallId: block.toolCallId,
+              toolName: block.toolName,
+              input: block.toolArgs ? JSON.parse(block.toolArgs) : {}
             });
           }
-        });
-      } else {
-        // Fallback: plain text
-        const content = typeof msg.content === 'string' ? msg.content : '';
-        parts.push({
-          type: 'data-message-text',
-          id: crypto.randomUUID(),
-          data: content
         });
       }
     }
