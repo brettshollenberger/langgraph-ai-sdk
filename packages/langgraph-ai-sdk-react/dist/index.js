@@ -79,19 +79,21 @@ function useLanggraph({ api = "/api/chat", headers = {}, getInitialThreadId }) {
 		return [];
 	}, [chat.messages]);
 	const messages = useMemo(() => {
+		console.log(`here are the updates`);
 		return chat.messages.map((msg) => {
+			console.log(msg.role);
 			if (msg.role === "user") {
 				const textPart = msg.parts.find((p) => p.type === "text");
 				const text = textPart && "text" in textPart ? textPart.text : "";
 				return {
 					id: msg.id,
 					role: msg.role,
-					blocks: [{
+					blocks: text ? [{
 						type: "text",
 						index: 0,
 						text,
 						id: crypto.randomUUID()
-					}]
+					}] : []
 				};
 			}
 			const blocksByIndex = /* @__PURE__ */ new Map();
@@ -139,12 +141,12 @@ function useLanggraph({ api = "/api/chat", headers = {}, getInitialThreadId }) {
 		else if (part.type.startsWith("tool-")) return {
 			type: "tool_call",
 			index,
-			toolCallId: part.data.toolCallId,
+			toolCallId: part.data?.toolCallId || part.toolCallId,
 			toolName: part.type.replace("tool-", ""),
-			input: part.data.input,
-			output: part.data.output,
-			state: part.data.errorText ? "error" : part.data.output ? "complete" : "running",
-			errorText: part.data.errorText,
+			input: part.data?.input || part.input,
+			output: part.data?.output || part.output,
+			state: part.data?.errorText || part.errorText ? "error" : part.data?.output || part.output ? "complete" : "running",
+			errorText: part.data?.errorText || part.errorText,
 			id: part.id || crypto.randomUUID()
 		};
 		return {
@@ -174,7 +176,6 @@ function useLanggraph({ api = "/api/chat", headers = {}, getInitialThreadId }) {
 			};
 		});
 	}, [chat.messages]);
-	console.log(chat.messages);
 	return {
 		...chat,
 		sendMessage,

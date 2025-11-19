@@ -54,15 +54,34 @@ declare function useLanggraph<TLanggraphData extends LanggraphData<any, any>>({
   id: string;
   setMessages: (messages: LanggraphAISDKUIMessage<TLanggraphData>[] | ((messages: LanggraphAISDKUIMessage<TLanggraphData>[]) => LanggraphAISDKUIMessage<TLanggraphData>[])) => void;
   status: ai0.ChatStatus;
+  stop: () => Promise<void>;
   regenerate: ({
     messageId,
     ...options
   }?: {
     messageId?: string;
   } & ai0.ChatRequestOptions) => Promise<void>;
-  stop: () => Promise<void>;
   resumeStream: (options?: ai0.ChatRequestOptions) => Promise<void>;
   addToolResult: <TOOL extends string>({
+    state,
+    tool,
+    toolCallId,
+    output,
+    errorText
+  }: {
+    state?: "output-available";
+    tool: TOOL;
+    toolCallId: string;
+    output: unknown;
+    errorText?: never;
+  } | {
+    state: "output-error";
+    tool: TOOL;
+    toolCallId: string;
+    output?: never;
+    errorText: string;
+  }) => Promise<void>;
+  addToolOutput: <TOOL extends string>({
     state,
     tool,
     toolCallId,

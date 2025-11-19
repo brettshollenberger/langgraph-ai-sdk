@@ -182,10 +182,6 @@ const getPrompt = async (state: BrainstormGraphState, config?: LangGraphRunnable
 
                 You MUST output valid JSON in one of these formats. NO other text.
             </output_format_rules>
-
-            Before you output, ensure you write a long, meandering text premable so we
-            can test our output parsing.
-
             ${await structuredOutputPrompt({ schema: questionSchema })}
         `
     );

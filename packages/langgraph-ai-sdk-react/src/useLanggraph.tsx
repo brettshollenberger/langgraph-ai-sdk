@@ -164,7 +164,9 @@ export function useLanggraph<
   }, [chat.messages]);
 
   const messages: MessageWithBlocks<TLanggraphData>[] = useMemo(() => {
+    console.log(`here are the updates`)
     return chat.messages.map(msg => {
+      console.log(msg.role)
       if (msg.role === 'user') {
         const textPart = msg.parts.find(p => p.type === 'text');
         const text = textPart && 'text' in textPart ? textPart.text : '';
@@ -172,12 +174,12 @@ export function useLanggraph<
         return {
           id: msg.id,
           role: msg.role,
-          blocks: [{
+          blocks: text ? [{
             type: 'text' as const,
             index: 0,
             text,
             id: crypto.randomUUID(),
-          }]
+          }] : []
         };
       }
       

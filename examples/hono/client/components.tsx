@@ -18,6 +18,9 @@ const BlockRenderer = <T extends GraphLanggraphData | AgentLanggraphData>({ bloc
   switch (block.type) {
     case 'text': {
       const textBlock = block as TextMessageBlock;
+      if (!textBlock.text || textBlock.text.trim() === '') {
+        return null;
+      }
       return (
         <div className="prose prose-sm prose-invert max-w-none">
           <ReactMarkdown>{textBlock.text}</ReactMarkdown>
@@ -28,6 +31,10 @@ const BlockRenderer = <T extends GraphLanggraphData | AgentLanggraphData>({ bloc
     case 'structured': {
       const structuredBlock = block as StructuredMessageBlock<T>;
       const data = structuredBlock.data;
+      
+      if (!data || Object.keys(data).length === 0) {
+        return null;
+      }
 
       if (data.type === "question") {
         return (
@@ -121,28 +128,7 @@ const BlockRenderer = <T extends GraphLanggraphData | AgentLanggraphData>({ bloc
         );
       }
       
-      return (
-        <div className="space-y-2">
-          {Object.entries(data)
-            .filter(([key]) => key !== '_type_')
-            .map(([key, value], idx) => (
-              <div key={idx}>
-                <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">{key}</div>
-                {Array.isArray(value) ? (
-                  <ul className="list-disc pl-5 text-sm">
-                    {value.map((item: any, i: number) => (
-                      <li key={i}>{String(item)}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="prose prose-sm prose-invert max-w-none">
-                    <ReactMarkdown>{String(value)}</ReactMarkdown>
-                  </div>
-                )}
-              </div>
-            ))}
-        </div>
-      );
+      return null;
     }
     
     case 'tool_call': {

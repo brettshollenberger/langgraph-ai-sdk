@@ -264,70 +264,70 @@ class RawMessageHandler<TGraphData extends LanggraphData<any, any>> extends Hand
     const index = (block as any).index ?? 0;
 
     if (block.type === 'text') {
-      const parser = this.getOrCreateParser(index);
-      parser.append((block as ContentBlock.Text).text);
+      await this.handleTextBlock(block, index);
+    } else if (block.type === 'reasoning') {
+      await this.handleReasoningBlock(block, index);
+    }
+  }
 
-      if (this.messageSchema) {
-        const [isStructured, parsed] = await parser.tryParseStructured();
-        
-        if (parser.hasJsonStart() && !parser.hasEmittedPreamble) {
-          const preamble = parser.getPreamble();
-          if (preamble) {
-            parser.hasEmittedPreamble = true;
-            this.writer.write({
-              type: 'data-content-block-text',
-              id: parser.textId,
-              data: {
-                index: parser.index,
-                text: preamble,
-              },
-            } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
-          }
-        }
-        
-        if (parser.hasJsonStart() && isStructured && parsed) {
-          this.writer.write({
-            type: 'data-content-block-structured',
-            id: parser.structuredId,
-            data: {
-              index: parser.index + 1,
-              data: parsed,
-              sourceText: parser.getContent(),
-            },
-          } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
-        } else if (!parser.hasJsonStart()) {
+  async handleReasoningBlock(block: ContentBlock, index: number): Promise<void> {
+    const parser = this.getOrCreateParser(index);
+    parser.append((block as ContentBlock.Reasoning).text);
+    
+    this.writer.write({
+      type: 'data-content-block-reasoning',
+      id: parser.id,
+      data: {
+        index,
+        text: parser.getContent(),
+      },
+    } as unknown as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+  }
+
+  async handleTextBlock(block: ContentBlock, index: number): Promise<void> {
+    const parser = this.getOrCreateParser(index);
+    parser.append((block as ContentBlock.Text).text);
+
+    if (this.messageSchema) {
+      const [isStructured, parsed] = await parser.tryParseStructured();
+      
+      if (parser.hasJsonStart() && !parser.hasEmittedPreamble) {
+        const preamble = parser.getPreamble();
+        if (preamble) {
+          parser.hasEmittedPreamble = true;
           this.writer.write({
             type: 'data-content-block-text',
             id: parser.textId,
             data: {
               index: parser.index,
-              text: parser.getContent(),
+              text: preamble,
             },
-          } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+          } as unknown as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
         }
-      } else {
-        this.writer.write({
-          type: 'data-content-block-text',
-          id: parser.textId,
-          data: {
-            index: parser.index,
-            text: parser.getContent(),
-          },
-        } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
       }
-    } else if (block.type === 'reasoning') {
-      const parser = this.getOrCreateParser(index);
-      parser.append((block as ContentBlock.Reasoning).text);
       
+      if (parser.hasJsonStart() && isStructured && parsed) {
+        this.writer.write({
+          type: 'data-content-block-structured',
+          id: parser.structuredId,
+          data: {
+            index: parser.index + 1,
+            data: parsed,
+            sourceText: parser.getContent(),
+          },
+        } as unknown as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+      }
+    } else {
       this.writer.write({
-        type: 'data-content-block-reasoning',
-        id: parser.id,
+        type: 'data-content-block-text',
+        id: parser.textId,
         data: {
-          index,
+          index: parser.index,
           text: parser.getContent(),
         },
-      } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+      } as unknown as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
     }
+
   }
 }
 
@@ -578,7 +578,7 @@ export async function loadThreadHistory<
         text: content
       });
     } else {
-      const parsedBlocks = msg.response_metadata?.parsed_blocks;
+      const parsedBlocks = (msg.response_metadata as any)?.parsed_blocks;
       
       if (parsedBlocks && Array.isArray(parsedBlocks)) {
         parsedBlocks.forEach((block: any) => {

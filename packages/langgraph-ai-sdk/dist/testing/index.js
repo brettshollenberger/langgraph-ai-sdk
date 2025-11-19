@@ -1,6 +1,6 @@
 import { i as __toESM, r as __require, t as __commonJS } from "../chunk-C3Lxiq5Q.js";
-import { n as toStructuredMessage } from "../toStructuredMessage-B5CV0Hy0.js";
-import { AIMessage, AIMessageChunk, isAIMessage as isAIMessage$1, isHumanMessage } from "@langchain/core/messages";
+import { n as toStructuredMessage } from "../toStructuredMessage-BeoZpY70.js";
+import { AIMessage, AIMessageChunk, isAIMessage, isHumanMessage } from "@langchain/core/messages";
 import { kebabCase } from "change-case";
 import { FakeStreamingChatModel } from "@langchain/core/utils/testing";
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -58754,7 +58754,7 @@ const lastMessage = (record$2, filter) => {
 	return messages[messages.length - 1];
 };
 const lastAIMessage = (record$2) => {
-	return lastMessage(record$2, isAIMessage$1);
+	return lastMessage(record$2, isAIMessage);
 };
 const lastHumanMessage = (record$2) => {
 	return lastMessage(record$2, isHumanMessage);
@@ -58923,10 +58923,6 @@ const getPrompt = async (state, config) => {
 
                 You MUST output valid JSON in one of these formats. NO other text.
             </output_format_rules>
-
-            Before you output, ensure you write a long, meandering text premable so we
-            can test our output parsing.
-
             ${await structuredOutputPrompt({ schema: questionSchema })}
         `);
 };
@@ -58976,7 +58972,7 @@ const dynamicPromptMiddleware = createMiddleware({
 	wrapModelCall: async (request, handler) => {
 		const state = request.state;
 		const systemPrompt = await getPrompt(state, request.runtime);
-		return toStructuredMessage(await handler({
+		return await toStructuredMessage(await handler({
 			...request,
 			systemPrompt
 		}));
@@ -58995,12 +58991,13 @@ const brainstormAgent = async (state, config) => {
 			tools,
 			middleware: [dynamicPromptMiddleware]
 		})).invoke(state, config));
+		const structuredResult = await toStructuredMessage(agentResponse);
 		if (!agentResponse) throw new Error("Agent response must be an AIMessage");
 		const answers = await readAnswersFromJSON();
 		const questionsAnswered = Object.keys(answers);
 		const remainingTopics$1 = state.remainingTopics.filter((topic) => !questionsAnswered.includes(topic));
 		return {
-			messages: [agentResponse],
+			messages: [structuredResult],
 			remainingTopics: remainingTopics$1
 		};
 	} catch (error) {
