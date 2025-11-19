@@ -9,6 +9,12 @@ import type {
   LanggraphUIMessage,
   SimpleLanggraphUIMessage,
   _SimpleLanggraphUIMessage,
+  MessageWithBlocks,
+  MessageBlock,
+  TextMessageBlock,
+  StructuredMessageBlock,
+  ReasoningMessageBlock,
+  ToolCallMessageBlock,
 } from 'langgraph-ai-sdk-types';
 import { DefaultChatTransport } from 'ai';
 import { v7 as uuidv7 } from 'uuid';
@@ -157,67 +163,100 @@ export function useLanggraph<
     return [];
   }, [chat.messages]);
 
-  const messages: SimpleLanggraphUIMessage<TLanggraphData>[] = useMemo(() => {
+  const messages: MessageWithBlocks<TLanggraphData>[] = useMemo(() => {
     return chat.messages.map(msg => {
-      if (msg.role !== 'assistant') {
+      if (msg.role === 'user') {
         const textPart = msg.parts.find(p => p.type === 'text');
         const text = textPart && 'text' in textPart ? textPart.text : '';
         
         return {
           id: msg.id,
           role: msg.role,
-          type: 'text',
-          text
-        } satisfies _SimpleLanggraphUIMessage<TLanggraphData>;
+          blocks: [{
+            type: 'text' as const,
+            index: 0,
+            text,
+            id: crypto.randomUUID(),
+          }]
+        };
       }
-
-      // Handle text-only assistant messages
-      const textParts = msg.parts.filter(p => (p.type as string) === 'data-message-text');
-      const otherParts = msg.parts.filter(p => (p.type as string) !== 'data-message-text' && (p.type as string).startsWith('data-message-'));
-      if (textParts.length > 0 && otherParts.length === 0) {
-        const text = textParts.map(p => (p as any).data).join('');
-        
-        return {
-          id: msg.id,
-          role: msg.role,
-          type: 'text',
-          text
-        } satisfies _SimpleLanggraphUIMessage<TLanggraphData>;
-      }
-
-      const messageParts = msg.parts
-        .filter(p => typeof p.type === 'string' && p.type.startsWith('data-message-'))
-        .map(p => ({
-          type: p.type,
-          data: (p as any).data,
-          id: (p as any).id
-        }));
-
-      const userSpecifiedOutputType = messageParts.reduce((acc, part) => {
-        if (typeof part.type !== 'string') {
-          return acc;
+      
+      const blocksByIndex = new Map<number, any[]>();
+      
+      msg.parts.forEach(part => {
+        if (part.type.startsWith('data-content-block-')) {
+          const index = (part as any).data?.index ?? 0;
+          if (!blocksByIndex.has(index)) {
+            blocksByIndex.set(index, []);
+          }
+          blocksByIndex.get(index)!.push(part);
+        } else if (part.type.startsWith('tool-')) {
+          const index = (part as any).data?.index ?? 0;
+          if (!blocksByIndex.has(index)) {
+            blocksByIndex.set(index, []);
+          }
+          blocksByIndex.get(index)!.push(part);
         }
-        const key = part.type.replace('data-message-', '')
-        const value = part.data
-        acc[key as keyof TMessage] = value
-        return acc;
-      }, {} as Record<keyof TMessage, string>);
-
-      // Determine the message type from the structured data
-      const messageType = messageParts.length > 0 && messageParts[0]
-        ? messageParts[0].type.replace('data-message-', '')
-        : 'structured';
-      const state = Object.keys(userSpecifiedOutputType).filter((k) => k !== "type").length > 0 ? "streaming" : "thinking";
-
+      });
+      
+      const blocks = Array.from(blocksByIndex.entries())
+        .sort((a, b) => a[0] - b[0])
+        .flatMap(([index, parts]) => {
+          return parts.map(part => convertPartToBlock(part, index));
+        });
+      
       return {
         id: msg.id,
-        state,
         role: msg.role,
-        type: messageType,
-        ...userSpecifiedOutputType
-      }
-    }) as SimpleLanggraphUIMessage<TLanggraphData>[];
+        blocks,
+      } 
+    }) as MessageWithBlocks<TLanggraphData>[];
   }, [chat.messages]);
+
+  function convertPartToBlock(part: any, index: number): MessageBlock<TLanggraphData> {
+    if (part.type === 'data-content-block-text') {
+      return {
+        type: 'text',
+        index,
+        text: part.data.text as string,
+        id: part.id as string,
+      } as MessageBlock<TLanggraphData>;
+    } else if (part.type === 'data-content-block-structured') {
+      return {
+        type: 'structured',
+        index,
+        data: part.data.data,
+        sourceText: part.data.sourceText,
+        id: part.id,
+      } as MessageBlock<TLanggraphData>;
+    } else if (part.type === 'data-content-block-reasoning') {
+      return {
+        type: 'reasoning',
+        index,
+        text: part.data.text,
+        id: part.id,
+      } as MessageBlock<TLanggraphData>;
+    } else if (part.type.startsWith('tool-')) {
+      return {
+        type: 'tool_call',
+        index,
+        toolCallId: part.data?.toolCallId || part.toolCallId,
+        toolName: part.type.replace('tool-', ''),
+        input: part.data?.input || part.input,
+        output: part.data?.output || part.output,
+        state: (part.data?.errorText || part.errorText) ? 'error' : ((part.data?.output || part.output) ? 'complete' : 'running'),
+        errorText: part.data?.errorText || part.errorText,
+        id: part.id || crypto.randomUUID(),
+      } as MessageBlock<TLanggraphData>;
+    }
+    
+    return {
+      type: 'text',
+      index: 0,
+      text: JSON.stringify(part),
+      id: crypto.randomUUID(),
+    } as MessageBlock<TLanggraphData>;
+  }
 
   const tools = useMemo(() => {
     const lastAIMessage = chat.messages.filter(m => m.role === 'assistant').at(-1);
