@@ -1,5 +1,5 @@
 import { n as LanggraphData, r as LanggraphUIMessage, t as InferMessageSchema } from "./types-B-dK0AsM.js";
-import { AIMessage, AIMessageChunk, BaseMessage } from "@langchain/core/messages";
+import { AIMessage, AIMessageChunk, BaseMessage, ContentBlock } from "@langchain/core/messages";
 import { InferUIMessageChunk, UIMessage } from "ai";
 import { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as drizzle_orm_pg_core0 from "drizzle-orm/pg-core";
@@ -245,16 +245,34 @@ declare function getPool(): Pool;
  */
 declare function isInitialized(): boolean;
 //#endregion
-//#region src/rawJSONParser.d.ts
-declare class RawJSONParser {
+//#region src/toStructuredMessage.d.ts
+interface ParsedBlock {
+  type: 'text' | 'tool_call' | 'structured' | 'reasoning' | 'image';
+  index: number;
+  id: string;
+  sourceText?: string;
+  parsed?: Record<string, any>;
+  toolCallId?: string;
+  toolName?: string;
+  toolArgs?: string;
+}
+declare class TextBlockParser {
   messageBuffer: string;
   hasSeenJsonStart: boolean;
   hasSeenJsonEnd: boolean;
-  parse(message: AIMessage | AIMessageChunk): Promise<[boolean, Record<string, any> | undefined]>;
+  index: number;
+  id: string;
+  textId: string;
+  structuredId: string;
+  hasEmittedPreamble: boolean;
+  constructor(index?: number);
+  append(text: string): void;
+  getContent(): string;
+  getPreamble(): string | undefined;
+  hasJsonStart(): boolean;
+  parse(block: ContentBlock.Text): Promise<[boolean, Record<string, any> | undefined]>;
+  tryParseStructured(): Promise<[boolean, Record<string, any> | undefined]>;
 }
+declare function toStructuredMessage<TSchema extends Record<string, any> = Record<string, any>>(result: AIMessage | AIMessageChunk): Promise<AIMessage | AIMessageChunk | null>;
 //#endregion
-//#region src/toStructuredMessage.d.ts
-declare function toStructuredMessage<TSchema extends Record<string, any> = Record<string, any>>(result: AIMessage | AIMessageChunk): Promise<AIMessage | null>;
-declare function parseStructuredChunk<TSchema extends Record<string, any> = Record<string, any>>(result: AIMessage | AIMessageChunk): Promise<AIMessage | null>;
-//#endregion
-export { InferMessageSchema, LanggraphBridgeConfig, LanggraphData, LanggraphUIMessage, RawJSONParser, createLanggraphStreamResponse, createLanggraphUIStream, fetchLanggraphHistory, getDb, getPool, getSchemaKeys, initializeLanggraph, isInitialized, loadThreadHistory, parseStructuredChunk, streamLanggraph, toStructuredMessage };
+export { InferMessageSchema, LanggraphBridgeConfig, LanggraphData, LanggraphUIMessage, ParsedBlock, TextBlockParser, createLanggraphStreamResponse, createLanggraphUIStream, fetchLanggraphHistory, getDb, getPool, getSchemaKeys, initializeLanggraph, isInitialized, loadThreadHistory, streamLanggraph, toStructuredMessage };

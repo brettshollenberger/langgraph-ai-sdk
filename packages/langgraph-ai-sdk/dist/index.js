@@ -1,6 +1,6 @@
 import { n as __export } from "./chunk-C3Lxiq5Q.js";
-import { n as toStructuredMessage, r as RawJSONParser, t as parseStructuredChunk } from "./toStructuredMessage-B5CV0Hy0.js";
-import { AIMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
+import { n as toStructuredMessage, t as TextBlockParser } from "./toStructuredMessage-BmsdOUw_.js";
+import { AIMessage, AIMessageChunk, HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { createUIMessageStream, createUIMessageStreamResponse, parsePartialJson } from "ai";
 import { kebabCase } from "change-case";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -17,24 +17,6 @@ const isNull = (value) => {
 const isString = (value) => {
 	return typeof value === "string";
 };
-function writeStructuredParts({ parsed, schemaKeys, toolValues, messagePartIds, writer }) {
-	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return;
-	Object.entries(parsed).forEach(([key, value]) => {
-		if (schemaKeys.includes(key) && !isUndefined(value) && !isNull(value)) {
-			if (toolValues[key] !== value) {
-				toolValues[key] = JSON.stringify(value);
-				const messagePartId = messagePartIds[key] || crypto.randomUUID();
-				messagePartIds[key] = messagePartId;
-				const structuredMessagePart = {
-					type: `data-message-${key}`,
-					id: messagePartId,
-					data: value
-				};
-				writer.write(structuredMessagePart);
-			}
-		}
-	});
-}
 function getSchemaKeys(schema) {
 	if (!schema) return [];
 	if (Array.isArray(schema)) {
@@ -51,42 +33,6 @@ var Handler = class {
 	constructor(writer, messageSchema) {
 		this.writer = writer;
 		this.messageSchema = messageSchema;
-	}
-};
-var StructuredMessageToolHandler = class extends Handler {
-	messagePartIds = {};
-	schemaKeys;
-	toolArgsBuffer = "";
-	toolValues = {};
-	currentToolName;
-	constructor(writer, messageSchema) {
-		super(writer, messageSchema);
-		this.schemaKeys = messageSchema ? getSchemaKeys(messageSchema) : [];
-	}
-	async handle(chunk) {
-		if (!this.messageSchema) return;
-		if (chunk[0] !== "messages" && !(Array.isArray(chunk[0]) && chunk[1] === "messages")) return;
-		const [message, metadata] = Array.isArray(chunk[0]) ? chunk[2] : chunk[1];
-		if (!metadata.tags?.includes("notify")) return;
-		if (!message || !("tool_call_chunks" in message) || typeof message.tool_call_chunks !== "object" || !Array.isArray(message.tool_call_chunks)) return;
-		if (message.tool_call_chunks.length === 0) return;
-		for (const chunk$1 of message.tool_call_chunks) {
-			if (isString(chunk$1.name)) this.currentToolName = chunk$1.name;
-			if (!this.currentToolName?.match(/^extract/)) continue;
-			const toolArgs = chunk$1.args;
-			this.toolArgsBuffer += toolArgs;
-			await this.writeToolCall();
-		}
-	}
-	async writeToolCall() {
-		const parsed = (await parsePartialJson(this.toolArgsBuffer)).value;
-		writeStructuredParts({
-			parsed,
-			schemaKeys: this.schemaKeys,
-			toolValues: this.toolValues,
-			messagePartIds: this.messagePartIds,
-			writer: this.writer
-		});
 	}
 };
 var OtherToolHandler = class extends Handler {
@@ -150,22 +96,12 @@ var OtherToolHandler = class extends Handler {
 	}
 };
 var ToolCallHandler = class extends Handler {
-	messagePartIds = {};
-	schemaKeys;
-	toolArgsBuffer = "";
-	toolValues = {};
-	currentToolName;
 	handlers;
 	constructor(writer, messageSchema) {
 		super(writer, messageSchema);
-		this.schemaKeys = messageSchema ? getSchemaKeys(messageSchema) : [];
-		this.handlers = {
-			structured_messages: new StructuredMessageToolHandler(writer, messageSchema),
-			other_tools: new OtherToolHandler(writer, messageSchema)
-		};
+		this.handlers = { other_tools: new OtherToolHandler(writer, messageSchema) };
 	}
 	async handle(chunk) {
-		await this.handlers.structured_messages.handle(chunk);
 		await this.handlers.other_tools.handle(chunk);
 	}
 	async handleToolEnd(toolName, chunk) {
@@ -176,47 +112,84 @@ var ToolCallHandler = class extends Handler {
 	}
 };
 var RawMessageHandler = class extends Handler {
-	messageBuffer = "";
-	messagePartId;
-	schemaKeys;
-	toolValues = {};
-	messagePartIds = {};
-	parser;
+	parsers = /* @__PURE__ */ new Map();
 	constructor(writer, messageSchema) {
 		super(writer, messageSchema);
-		this.schemaKeys = messageSchema ? getSchemaKeys(messageSchema) : [];
-		this.parser = new RawJSONParser();
 	}
 	isRawMessageChunk = (chunk) => {
 		if (chunk[0] !== "messages" && !(Array.isArray(chunk[0]) && chunk[1] === "messages")) return false;
 		return true;
 	};
+	getOrCreateParser(index) {
+		if (!this.parsers.has(index)) this.parsers.set(index, new TextBlockParser(index));
+		return this.parsers.get(index);
+	}
 	async handle(chunk) {
-		if (this.messageSchema) return this.handleRawMessagesAsJSON(chunk);
 		if (!this.isRawMessageChunk(chunk)) return;
 		const [message, metadata] = Array.isArray(chunk[0]) ? chunk[2] : chunk[1];
 		if (!metadata.tags?.includes("notify")) return;
-		if (isUndefined(this.messagePartId)) this.messagePartId = crypto.randomUUID();
-		const content = typeof message.content === "string" ? message.content : "";
-		this.messageBuffer += content;
-		this.writer.write({
-			type: "data-message-text",
-			id: this.messagePartId,
-			data: this.messageBuffer
-		});
+		if (!AIMessageChunk.isInstance(message)) return;
+		if (!message.content || !Array.isArray(message.content)) return;
+		for (const block of message.content) await this.handleContentBlock(block);
 	}
-	async handleRawMessagesAsJSON(chunk) {
-		const [message, metadata] = Array.isArray(chunk[0]) ? chunk[2] : chunk[1];
-		if (!metadata.tags?.includes("notify")) return;
-		const [success, parsed] = await this.parser.parse(message);
-		if (!success || !parsed) return;
-		writeStructuredParts({
-			parsed,
-			schemaKeys: this.schemaKeys,
-			toolValues: this.toolValues,
-			messagePartIds: this.messagePartIds,
-			writer: this.writer
-		});
+	async handleContentBlock(block) {
+		const index = block.index ?? 0;
+		if (block.type === "text") {
+			const parser = this.getOrCreateParser(index);
+			parser.append(block.text);
+			if (this.messageSchema) {
+				const [isStructured, parsed] = await parser.tryParseStructured();
+				if (parser.hasJsonStart() && !parser.hasEmittedPreamble) {
+					const preamble = parser.getPreamble();
+					if (preamble) {
+						parser.hasEmittedPreamble = true;
+						this.writer.write({
+							type: "data-content-block-text",
+							id: parser.textId,
+							data: {
+								index: parser.index,
+								text: preamble
+							}
+						});
+					}
+				}
+				if (parser.hasJsonStart() && isStructured && parsed) this.writer.write({
+					type: "data-content-block-structured",
+					id: parser.structuredId,
+					data: {
+						index: parser.index + 1,
+						data: parsed,
+						sourceText: parser.getContent()
+					}
+				});
+				else if (!parser.hasJsonStart()) this.writer.write({
+					type: "data-content-block-text",
+					id: parser.textId,
+					data: {
+						index: parser.index,
+						text: parser.getContent()
+					}
+				});
+			} else this.writer.write({
+				type: "data-content-block-text",
+				id: parser.textId,
+				data: {
+					index: parser.index,
+					text: parser.getContent()
+				}
+			});
+		} else if (block.type === "reasoning") {
+			const parser = this.getOrCreateParser(index);
+			parser.append(block.text);
+			this.writer.write({
+				type: "data-content-block-reasoning",
+				id: parser.id,
+				data: {
+					index,
+					text: parser.getContent()
+				}
+			});
+		}
 	}
 };
 var StateHandler = class extends Handler {
@@ -377,25 +350,52 @@ async function loadThreadHistory(graph, threadId, messageSchema) {
 	return {
 		messages: messages.map((msg, idx) => {
 			const isUser = msg._getType() === "human";
-			const content = typeof msg.content === "string" ? msg.content : "";
 			const parts = [];
-			if (isUser) parts.push({
-				type: "text",
-				id: crypto.randomUUID(),
-				text: content
-			});
-			else if (messageSchema) Object.entries(msg.response_metadata).forEach(([key, value]) => {
+			if (isUser) {
+				const content = typeof msg.content === "string" ? msg.content : "";
 				parts.push({
-					type: `data-message-${key}`,
+					type: "text",
 					id: crypto.randomUUID(),
-					data: value
+					text: content
 				});
-			});
-			else parts.push({
-				type: "data-message-text",
-				id: crypto.randomUUID(),
-				data: content
-			});
+			} else {
+				const parsedBlocks = msg.response_metadata?.parsed_blocks;
+				if (parsedBlocks && Array.isArray(parsedBlocks)) parsedBlocks.forEach((block) => {
+					if (block.type === "structured" && block.parsed) parts.push({
+						type: "data-content-block-structured",
+						id: block.id,
+						data: {
+							index: block.index ?? 0,
+							data: block.parsed,
+							sourceText: block.sourceText
+						}
+					});
+					else if (block.type === "text") parts.push({
+						type: "data-content-block-text",
+						id: block.id,
+						data: {
+							index: block.index ?? 0,
+							text: block.sourceText
+						}
+					});
+					else if (block.type === "reasoning") parts.push({
+						type: "data-content-block-reasoning",
+						id: block.id,
+						data: {
+							index: block.index ?? 0,
+							text: block.sourceText
+						}
+					});
+					else if (block.type === "tool_call") parts.push({
+						type: `tool-${block.toolName}`,
+						id: block.id,
+						index: block.index ?? 0,
+						toolCallId: block.toolCallId,
+						toolName: block.toolName,
+						input: block.toolArgs ? JSON.parse(block.toolArgs) : {}
+					});
+				});
+			}
 			return {
 				id: `msg-${idx}`,
 				role: isUser ? "user" : "assistant",
@@ -522,4 +522,4 @@ function isInitialized() {
 }
 
 //#endregion
-export { RawJSONParser, createLanggraphStreamResponse, createLanggraphUIStream, fetchLanggraphHistory, getDb, getPool, getSchemaKeys, initializeLanggraph, isInitialized, loadThreadHistory, parseStructuredChunk, streamLanggraph, toStructuredMessage };
+export { TextBlockParser, createLanggraphStreamResponse, createLanggraphUIStream, fetchLanggraphHistory, getDb, getPool, getSchemaKeys, initializeLanggraph, isInitialized, loadThreadHistory, streamLanggraph, toStructuredMessage };
