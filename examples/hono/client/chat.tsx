@@ -1,6 +1,6 @@
 import React from 'react';
 import { useState, useEffect, useRef } from 'react';
-import { Wrapper, ChatInput, Message, ThinkingIndicator } from './components.tsx';
+import { Wrapper, ChatInput, Message } from './components.tsx';
 import { type AgentLanggraphData, type GraphLanggraphData } from '../types.ts';
 import { useLanggraph } from 'langgraph-ai-sdk-react';
 
@@ -94,8 +94,6 @@ function ChatContent({ endpoint }: { endpoint: EndpointKey }) {
     );
   }
 
-  const hasToolsRunning = tools.some(t => t.state === 'running');
-
   return (
     <Wrapper>
       {/* User Context Panel - Only show for agent endpoint */}
@@ -157,15 +155,13 @@ function ChatContent({ endpoint }: { endpoint: EndpointKey }) {
         <Message
           key={message.id}
           message={message}
+          status={status}
           onExampleClick={(text) => {
             setInput(text);
             setTimeout(() => inputRef.current?.focus(), 0);
           }}
         />
       ))}
-      {(hasToolsRunning || (status === 'streaming' && messages.length > 0)) && (
-        <ThinkingIndicator tools={tools} />
-      )}
       <div ref={messagesEndRef} />
       <ChatInput
         inputRef={inputRef}

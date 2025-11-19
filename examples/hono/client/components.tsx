@@ -2,6 +2,7 @@ import type { AppMessage, GraphLanggraphData, AgentLanggraphData } from '../type
 import type { MessageWithBlocks, MessageBlock, TextMessageBlock, StructuredMessageBlock, ToolCallMessageBlock, ReasoningMessageBlock } from 'langgraph-ai-sdk-types';
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
+import { type ChatStatus } from 'ai';
 
 export const Wrapper = (props: {
   children: React.ReactNode;
@@ -189,12 +190,16 @@ const BlockRenderer = <T extends GraphLanggraphData | AgentLanggraphData>({ bloc
 
 export const Message = <T extends GraphLanggraphData | AgentLanggraphData>({
   message,
+  status,
   onExampleClick,
 }: {
   message: MessageWithBlocks<T>;
+  status?: ChatStatus;
   onExampleClick?: (text: string) => void;
 }) => {
   const isUser = message.role === 'user';
+  const hasNoBlocks = message.blocks.length === 0;
+  const isLoading = (status === 'submitted' || status === 'streaming') && hasNoBlocks;
   
   const structuredBlocks = message.blocks.filter(b => b.type === 'structured');
   const isMarketingTemplate = structuredBlocks.some(b => 
@@ -214,38 +219,19 @@ export const Message = <T extends GraphLanggraphData | AgentLanggraphData>({
           ? 'bg-gradient-to-br from-purple-900 to-indigo-900 text-white border-2 border-purple-400 shadow-2xl'
           : 'bg-gray-600 text-white'
       }`}>
-        <div className="space-y-3">
-          {message.blocks.map((block) => (
-            <BlockRenderer<T> key={block.id} block={block} />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export const ThinkingIndicator = ({ tools }: { tools: any[] }) => {
-  if (!tools || tools.length === 0) return null;
-  
-  return (
-    <div className="flex w-full mb-4 justify-start">
-      <div className="max-w-[70%] rounded-lg p-4 bg-gray-700 text-white">
-        <div className="text-xs opacity-70 mb-2">AI is thinking...</div>
-        <div className="space-y-2">
-          {tools.map((tool, idx) => (
-            <div key={idx} className="text-sm">
-              <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${
-                  tool.state === 'complete' ? 'bg-green-500' :
-                  tool.state === 'error' ? 'bg-red-500' :
-                  'bg-yellow-500 animate-pulse'
-                }`} />
-                <span className="font-medium">{tool.toolName}</span>
-                <span className="text-xs opacity-70">({tool.state})</span>
-              </div>
-            </div>
-          ))}
-        </div>
+        {isLoading ? (
+          <div className="flex items-center gap-1">
+            <span className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+            <span className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+            <span className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {message.blocks.map((block) => (
+              <BlockRenderer<T> key={block.id} block={block} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -210,7 +210,7 @@ export function useLanggraph<
         role: msg.role,
         blocks,
       } 
-    });
+    }) as MessageWithBlocks<TLanggraphData>[];
   }, [chat.messages]);
 
   function convertPartToBlock(part: any, index: number): MessageBlock<TLanggraphData> {
