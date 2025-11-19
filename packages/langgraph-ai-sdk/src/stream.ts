@@ -634,29 +634,68 @@ export async function loadThreadHistory<
   
   const uiMessages = messages.map((msg, idx) => {
     const isUser = msg._getType() === 'human';
-    const content = typeof msg.content === 'string' ? msg.content : '';
     const parts = [];
     
     if (isUser) {
+      const content = typeof msg.content === 'string' ? msg.content : '';
       parts.push({
         type: 'text',
         id: crypto.randomUUID(),
         text: content
       });
-    } else if (messageSchema) {
-      Object.entries(msg.response_metadata).forEach(([key, value]) => {
-        parts.push({
-          type: `data-message-${key}`,
-          id: crypto.randomUUID(),
-          data: value
-        });
-      });
     } else {
-      parts.push({
-        type: 'data-message-text',
-        id: crypto.randomUUID(),
-        data: content
-      });
+      // Check if content is an array of blocks (new format)
+      if (Array.isArray(msg.content)) {
+        let hasStructuredBlocks = false;
+        
+        msg.content.forEach((block: any) => {
+          if (block.type === 'structured' && block.parsed && messageSchema) {
+            hasStructuredBlocks = true;
+            // Convert structured blocks to data-message-* parts
+            Object.entries(block.parsed).forEach(([key, value]) => {
+              parts.push({
+                type: `data-message-${key}`,
+                id: block.id || crypto.randomUUID(),
+                data: value
+              });
+            });
+          } else if (block.type === 'text') {
+            parts.push({
+              type: 'data-message-text',
+              id: block.id || crypto.randomUUID(),
+              data: block.text
+            });
+          }
+        });
+        
+        // If no structured blocks found but messageSchema exists, try response_metadata fallback
+        if (!hasStructuredBlocks && messageSchema) {
+          Object.entries(msg.response_metadata || {}).forEach(([key, value]) => {
+            parts.push({
+              type: `data-message-${key}`,
+              id: crypto.randomUUID(),
+              data: value
+            });
+          });
+        }
+      } else if (messageSchema) {
+        // Old format: response_metadata
+        Object.entries(msg.response_metadata || {}).forEach(([key, value]) => {
+          parts.push({
+            type: `data-message-${key}`,
+            id: crypto.randomUUID(),
+            data: value
+          });
+        });
+      } else {
+        // Fallback: plain text
+        const content = typeof msg.content === 'string' ? msg.content : '';
+        parts.push({
+          type: 'data-message-text',
+          id: crypto.randomUUID(),
+          data: content
+        });
+      }
     }
     
     return {
