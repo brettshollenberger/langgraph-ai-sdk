@@ -72,11 +72,26 @@ class StructuredMessageParser<TSchema extends Record<string, any> = Record<strin
       if (result.type === 'structured') {
         const structuredBlock = result as StructuredContentBlock<TSchema>;
         
-        // Store parsed data separately
+        // Check if there's a preamble before the JSON fence
+        const jsonStart = structuredBlock.text.indexOf('```json');
+        if (jsonStart > 0) {
+          const preamble = structuredBlock.text.substring(0, jsonStart).trim();
+          if (preamble) {
+            // Save preamble as separate text block
+            parsedBlocks.push({
+              type: 'text',
+              index: structuredBlock.index ?? idx,
+              id: crypto.randomUUID(),
+              sourceText: preamble,
+            });
+          }
+        }
+        
+        // Store parsed structured data
         parsedBlocks.push({
           type: 'structured',
-          index: structuredBlock.index ?? idx,
-          id: structuredBlock.id || crypto.randomUUID(),
+          index: (structuredBlock.index ?? idx) + 1, // After preamble
+          id: crypto.randomUUID(),
           sourceText: structuredBlock.text,
           parsed: structuredBlock.parsed,
         });
@@ -172,7 +187,6 @@ export async function toStructuredMessage<TSchema extends Record<string, any> = 
 ): Promise<AIMessage | AIMessageChunk | null> {
   return new StructuredMessageParser(result).parse();
 }
-
 export class TextBlockParser {
     messageBuffer: string = '';
     hasSeenJsonStart: boolean = false;

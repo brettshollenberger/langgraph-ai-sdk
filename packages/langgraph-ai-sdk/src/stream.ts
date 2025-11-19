@@ -10,7 +10,7 @@ import {
 import type { CompiledStateGraph } from '@langchain/langgraph';
 import type { StreamEvent } from "@langchain/core/tracers/log_stream";
 import { BaseMessage, AIMessageChunk, ContentBlock } from '@langchain/core/messages';
-import { RawJSONParser } from './rawJSONParser';
+import { TextBlockParser } from './toStructuredMessage';
 import type { 
   LanggraphData,
   LanggraphUIMessage,
@@ -255,50 +255,34 @@ class BlockBuffer {
   id: string;
   textId: string;
   structuredId: string;
-  hasJsonStart: boolean = false;
-  hasJsonEnd: boolean = false;
+  parser: TextBlockParser;
   hasEmittedPreamble: boolean = false;
-  hasEmittedStructured: boolean = false;
   
   constructor(index: number) {
     this.index = index;
     this.id = crypto.randomUUID();
     this.textId = crypto.randomUUID();
     this.structuredId = crypto.randomUUID();
+    this.parser = new TextBlockParser();
   }
   
   append(text: string): void {
     this.content += text;
-    // Detect JSON fence start
-    if (!this.hasJsonStart && this.content.includes('```json')) {
-      this.hasJsonStart = true;
-    }
   }
   
   getPreamble(): string | undefined {
-    if (!this.hasJsonStart) return undefined;
     const jsonStart = this.content.indexOf('```json');
-    if (jsonStart === -1) return undefined;
+    if (jsonStart === -1 || jsonStart === 0) return undefined;
     return this.content.substring(0, jsonStart).trim();
   }
   
+  hasJsonStart(): boolean {
+    return this.parser.hasSeenJsonStart || this.content.includes('```json');
+  }
+  
   async tryParseStructured(): Promise<[boolean, Record<string, any> | undefined]> {
-    let buffer = this.content;
-    if (buffer.includes('```json')) {
-      const start = buffer.indexOf('```json') + '```json'.length;
-      buffer = buffer.substring(start);
-      this.hasJsonStart = true;
-    }
-    if (this.hasJsonStart && buffer.includes('```')) {
-      buffer = buffer.replace(/```/g, '');
-      this.hasJsonEnd = true;
-    }
-    
-    const parseResult = await parsePartialJson(buffer);
-    const parsed = parseResult.value;
-    if (!parsed || typeof parsed !== 'object') return [false, undefined];
-    
-    return [true, parsed];
+    const block = { type: 'text' as const, text: this.content, index: this.index };
+    return await this.parser.parse(block);
   }
 }
 
@@ -348,7 +332,7 @@ class RawMessageHandler<TGraphData extends LanggraphData<any, any>> extends Hand
         const [isStructured, parsed] = await buffer.tryParseStructured();
         
         // Emit preamble text before JSON fence (once)
-        if (buffer.hasJsonStart && !buffer.hasEmittedPreamble) {
+        if (buffer.hasJsonStart() && !buffer.hasEmittedPreamble) {
           const preamble = buffer.getPreamble();
           if (preamble) {
             buffer.hasEmittedPreamble = true;
@@ -363,7 +347,7 @@ class RawMessageHandler<TGraphData extends LanggraphData<any, any>> extends Hand
           }
         }
         
-        if (buffer.hasJsonStart && isStructured && parsed) {
+        if (buffer.hasJsonStart() && isStructured && parsed) {
           // Stream partial/complete structured data incrementally
           this.writer.write({
             type: 'data-content-block-structured',
@@ -374,7 +358,7 @@ class RawMessageHandler<TGraphData extends LanggraphData<any, any>> extends Hand
               sourceText: buffer.content,
             },
           } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
-        } else if (!buffer.hasJsonStart) {
+        } else if (!buffer.hasJsonStart()) {
           // No JSON fence yet - stream text
           this.writer.write({
             type: 'data-content-block-text',
@@ -695,12 +679,10 @@ export async function loadThreadHistory<
             parts.push({
               type: `tool-${block.toolName}`,
               id: block.id,
-              data: {
-                index: block.index ?? 0,
-                toolCallId: block.toolCallId,
-                toolName: block.toolName,
-                input: block.toolArgs ? JSON.parse(block.toolArgs) : {},
-              },
+              index: block.index ?? 0,
+              toolCallId: block.toolCallId,
+              toolName: block.toolName,
+              input: block.toolArgs ? JSON.parse(block.toolArgs) : {},
             });
           }
         });
