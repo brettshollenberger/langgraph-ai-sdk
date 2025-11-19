@@ -253,16 +253,33 @@ class BlockBuffer {
   content: string = '';
   index: number;
   id: string;
+  textId: string;
+  structuredId: string;
   hasJsonStart: boolean = false;
   hasJsonEnd: boolean = false;
+  hasEmittedPreamble: boolean = false;
+  hasEmittedStructured: boolean = false;
   
-  constructor(index: number, id: string) {
+  constructor(index: number) {
     this.index = index;
-    this.id = id;
+    this.id = crypto.randomUUID();
+    this.textId = crypto.randomUUID();
+    this.structuredId = crypto.randomUUID();
   }
   
   append(text: string): void {
     this.content += text;
+    // Detect JSON fence start
+    if (!this.hasJsonStart && this.content.includes('```json')) {
+      this.hasJsonStart = true;
+    }
+  }
+  
+  getPreamble(): string | undefined {
+    if (!this.hasJsonStart) return undefined;
+    const jsonStart = this.content.indexOf('```json');
+    if (jsonStart === -1) return undefined;
+    return this.content.substring(0, jsonStart).trim();
   }
   
   async tryParseStructured(): Promise<[boolean, Record<string, any> | undefined]> {
@@ -299,7 +316,7 @@ class RawMessageHandler<TGraphData extends LanggraphData<any, any>> extends Hand
 
   getOrCreateBuffer(index: number): BlockBuffer {
     if (!this.blockBuffers.has(index)) {
-      this.blockBuffers.set(index, new BlockBuffer(index, crypto.randomUUID()));
+      this.blockBuffers.set(index, new BlockBuffer(index));
     }
     return this.blockBuffers.get(index)!;
   }
@@ -330,22 +347,38 @@ class RawMessageHandler<TGraphData extends LanggraphData<any, any>> extends Hand
       if (this.messageSchema) {
         const [isStructured, parsed] = await buffer.tryParseStructured();
         
-        if (isStructured && parsed && buffer.hasJsonEnd) {
-          // Only write structured when JSON is complete
+        // Emit preamble text before JSON fence (once)
+        if (buffer.hasJsonStart && !buffer.hasEmittedPreamble) {
+          const preamble = buffer.getPreamble();
+          if (preamble) {
+            buffer.hasEmittedPreamble = true;
+            this.writer.write({
+              type: 'data-content-block-text',
+              id: buffer.textId,
+              data: {
+                index: buffer.index,
+                text: preamble,
+              },
+            } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+          }
+        }
+        
+        if (buffer.hasJsonStart && isStructured && parsed) {
+          // Stream partial/complete structured data incrementally
           this.writer.write({
             type: 'data-content-block-structured',
-            id: buffer.id,
+            id: buffer.structuredId,
             data: {
-              index: buffer.index,
+              index: buffer.index + 1, // Structured block comes after preamble
               data: parsed,
               sourceText: buffer.content,
             },
           } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
-        } else {
-          // Stream text incrementally
+        } else if (!buffer.hasJsonStart) {
+          // No JSON fence yet - stream text
           this.writer.write({
             type: 'data-content-block-text',
-            id: buffer.id,
+            id: buffer.textId,
             data: {
               index: buffer.index,
               text: buffer.content,
@@ -353,10 +386,10 @@ class RawMessageHandler<TGraphData extends LanggraphData<any, any>> extends Hand
           } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
         }
       } else {
-        // Stream text incrementally
+        // No schema - stream text incrementally
         this.writer.write({
           type: 'data-content-block-text',
-          id: buffer.id,
+          id: buffer.textId,
           data: {
             index: buffer.index,
             text: buffer.content,
