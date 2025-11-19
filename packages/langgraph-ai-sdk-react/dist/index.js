@@ -79,7 +79,9 @@ function useLanggraph({ api = "/api/chat", headers = {}, getInitialThreadId }) {
 		return [];
 	}, [chat.messages]);
 	const messages = useMemo(() => {
+		console.log(`here are the updates`);
 		return chat.messages.map((msg) => {
+			console.log(msg.role);
 			if (msg.role === "user") {
 				const textPart = msg.parts.find((p) => p.type === "text");
 				const text = textPart && "text" in textPart ? textPart.text : "";

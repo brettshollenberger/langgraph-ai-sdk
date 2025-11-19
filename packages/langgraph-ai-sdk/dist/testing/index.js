@@ -1,5 +1,5 @@
 import { i as __toESM, r as __require, t as __commonJS } from "../chunk-C3Lxiq5Q.js";
-import { n as toStructuredMessage } from "../toStructuredMessage-BmsdOUw_.js";
+import { n as toStructuredMessage } from "../toStructuredMessage-CalTndMp.js";
 import { AIMessage, AIMessageChunk, isAIMessage, isHumanMessage } from "@langchain/core/messages";
 import { kebabCase } from "change-case";
 import { FakeStreamingChatModel } from "@langchain/core/utils/testing";

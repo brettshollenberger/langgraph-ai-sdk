@@ -46,9 +46,46 @@ class StructuredMessageParser<TSchema extends Record<string, any> = Record<strin
     this.message = message;
   }
 
-  async parse(): Promise<AIMessage | AIMessageChunk> {
-    if (!AIMessageChunk.isInstance(this.message)) {
+  async parseAIMessage(): Promise<AIMessage> {
+    if (!this.message.content || typeof this.message.content !== 'string') {
       return this.message;
+    }
+
+    const parser = new TextBlockParser();
+    parser.append(this.message.content);
+    const [success, parsed] = await parser.tryParseStructured();
+
+    let blocks: ParsedBlock[] = [];
+    if (success && parsed) {
+      blocks = [{
+        type: 'structured',
+        index: 0,
+        id: crypto.randomUUID(),
+        sourceText: this.message.content,
+        parsed: parsed,
+      }]
+    } else {
+      blocks = [{
+        type: 'text',
+        index: 0,
+        id: crypto.randomUUID(),
+        sourceText: this.message.content,
+      }]
+    }
+
+    return new AIMessage({
+      ...this.message,
+      content: this.message.content,
+      response_metadata: {
+        ...this.message.response_metadata,
+        parsed_blocks: blocks,
+      },
+    })
+  }
+
+  async parse(): Promise<AIMessage | AIMessageChunk> {
+    if (AIMessage.isInstance(this.message)) {
+      return this.parseAIMessage();
     }
 
     if (!this.message.content || !Array.isArray(this.message.content)) {
@@ -115,11 +152,27 @@ class StructuredMessageParser<TSchema extends Record<string, any> = Record<strin
       }
     }
 
-    return new AIMessageChunk({
+    if (AIMessageChunk.isInstance(this.message)) {
+      return new AIMessageChunk({
+        content: nativeContent,
+        id: this.message.id,
+        tool_calls: this.message.tool_calls,
+        tool_call_chunks: this.message.tool_call_chunks,
+        invalid_tool_calls: this.message.invalid_tool_calls,
+        usage_metadata: this.message.usage_metadata,
+        response_metadata: {
+          ...this.message.response_metadata,
+          parsed_blocks: parsedBlocks.length > 0 ? parsedBlocks : undefined,
+        },
+        additional_kwargs: this.message.additional_kwargs,
+      });
+    }
+
+    debugger;
+    return new AIMessage({
       content: nativeContent,
       id: this.message.id,
       tool_calls: this.message.tool_calls,
-      tool_call_chunks: this.message.tool_call_chunks,
       invalid_tool_calls: this.message.invalid_tool_calls,
       usage_metadata: this.message.usage_metadata,
       response_metadata: {

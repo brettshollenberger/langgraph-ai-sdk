@@ -1,5 +1,5 @@
 import { n as __export } from "./chunk-C3Lxiq5Q.js";
-import { n as toStructuredMessage, t as TextBlockParser } from "./toStructuredMessage-BmsdOUw_.js";
+import { n as toStructuredMessage, t as TextBlockParser } from "./toStructuredMessage-CalTndMp.js";
 import { AIMessage, AIMessageChunk, HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { createUIMessageStream, createUIMessageStreamResponse, parsePartialJson } from "ai";
 import { kebabCase } from "change-case";
@@ -134,62 +134,57 @@ var RawMessageHandler = class extends Handler {
 	}
 	async handleContentBlock(block) {
 		const index = block.index ?? 0;
-		if (block.type === "text") {
-			const parser = this.getOrCreateParser(index);
-			parser.append(block.text);
-			if (this.messageSchema) {
-				const [isStructured, parsed] = await parser.tryParseStructured();
-				if (parser.hasJsonStart() && !parser.hasEmittedPreamble) {
-					const preamble = parser.getPreamble();
-					if (preamble) {
-						parser.hasEmittedPreamble = true;
-						this.writer.write({
-							type: "data-content-block-text",
-							id: parser.textId,
-							data: {
-								index: parser.index,
-								text: preamble
-							}
-						});
-					}
+		if (block.type === "text") await this.handleTextBlock(block, index);
+		else if (block.type === "reasoning") await this.handleReasoningBlock(block, index);
+	}
+	async handleReasoningBlock(block, index) {
+		const parser = this.getOrCreateParser(index);
+		parser.append(block.text);
+		this.writer.write({
+			type: "data-content-block-reasoning",
+			id: parser.id,
+			data: {
+				index,
+				text: parser.getContent()
+			}
+		});
+	}
+	async handleTextBlock(block, index) {
+		const parser = this.getOrCreateParser(index);
+		parser.append(block.text);
+		if (this.messageSchema) {
+			const [isStructured, parsed] = await parser.tryParseStructured();
+			if (parser.hasJsonStart() && !parser.hasEmittedPreamble) {
+				const preamble = parser.getPreamble();
+				if (preamble) {
+					parser.hasEmittedPreamble = true;
+					this.writer.write({
+						type: "data-content-block-text",
+						id: parser.textId,
+						data: {
+							index: parser.index,
+							text: preamble
+						}
+					});
 				}
-				if (parser.hasJsonStart() && isStructured && parsed) this.writer.write({
-					type: "data-content-block-structured",
-					id: parser.structuredId,
-					data: {
-						index: parser.index + 1,
-						data: parsed,
-						sourceText: parser.getContent()
-					}
-				});
-				else if (!parser.hasJsonStart()) this.writer.write({
-					type: "data-content-block-text",
-					id: parser.textId,
-					data: {
-						index: parser.index,
-						text: parser.getContent()
-					}
-				});
-			} else this.writer.write({
-				type: "data-content-block-text",
-				id: parser.textId,
+			}
+			if (parser.hasJsonStart() && isStructured && parsed) this.writer.write({
+				type: "data-content-block-structured",
+				id: parser.structuredId,
 				data: {
-					index: parser.index,
-					text: parser.getContent()
+					index: parser.index + 1,
+					data: parsed,
+					sourceText: parser.getContent()
 				}
 			});
-		} else if (block.type === "reasoning") {
-			const parser = this.getOrCreateParser(index);
-			parser.append(block.text);
-			this.writer.write({
-				type: "data-content-block-reasoning",
-				id: parser.id,
-				data: {
-					index,
-					text: parser.getContent()
-				}
-			});
-		}
+		} else this.writer.write({
+			type: "data-content-block-text",
+			id: parser.textId,
+			data: {
+				index: parser.index,
+				text: parser.getContent()
+			}
+		});
 	}
 };
 var StateHandler = class extends Handler {
@@ -347,61 +342,63 @@ async function loadThreadHistory(graph, threadId, messageSchema) {
 		const value = fullState[key];
 		if (value !== void 0 && value !== null) globalState[key] = value;
 	}
-	return {
-		messages: messages.map((msg, idx) => {
-			const isUser = msg._getType() === "human";
-			const parts = [];
-			if (isUser) {
-				const content = typeof msg.content === "string" ? msg.content : "";
-				parts.push({
-					type: "text",
-					id: crypto.randomUUID(),
-					text: content
-				});
-			} else {
-				const parsedBlocks = msg.response_metadata?.parsed_blocks;
-				if (parsedBlocks && Array.isArray(parsedBlocks)) parsedBlocks.forEach((block) => {
-					if (block.type === "structured" && block.parsed) parts.push({
-						type: "data-content-block-structured",
-						id: block.id,
-						data: {
-							index: block.index ?? 0,
-							data: block.parsed,
-							sourceText: block.sourceText
-						}
-					});
-					else if (block.type === "text") parts.push({
-						type: "data-content-block-text",
-						id: block.id,
-						data: {
-							index: block.index ?? 0,
-							text: block.sourceText
-						}
-					});
-					else if (block.type === "reasoning") parts.push({
-						type: "data-content-block-reasoning",
-						id: block.id,
-						data: {
-							index: block.index ?? 0,
-							text: block.sourceText
-						}
-					});
-					else if (block.type === "tool_call") parts.push({
-						type: `tool-${block.toolName}`,
-						id: block.id,
+	const uiMessages = messages.map((msg, idx) => {
+		const isUser = msg._getType() === "human";
+		const parts = [];
+		if (isUser) {
+			const content = typeof msg.content === "string" ? msg.content : "";
+			parts.push({
+				type: "text",
+				id: crypto.randomUUID(),
+				text: content
+			});
+		} else {
+			const parsedBlocks = msg.response_metadata?.parsed_blocks;
+			if (parsedBlocks && Array.isArray(parsedBlocks)) parsedBlocks.forEach((block) => {
+				if (block.type === "structured" && block.parsed) parts.push({
+					type: "data-content-block-structured",
+					id: block.id,
+					data: {
 						index: block.index ?? 0,
-						toolCallId: block.toolCallId,
-						toolName: block.toolName,
-						input: block.toolArgs ? JSON.parse(block.toolArgs) : {}
-					});
+						data: block.parsed,
+						sourceText: block.sourceText
+					}
 				});
-			}
-			return {
-				id: `msg-${idx}`,
-				role: isUser ? "user" : "assistant",
-				parts
-			};
-		}),
+				else if (block.type === "text") parts.push({
+					type: "data-content-block-text",
+					id: block.id,
+					data: {
+						index: block.index ?? 0,
+						text: block.sourceText
+					}
+				});
+				else if (block.type === "reasoning") parts.push({
+					type: "data-content-block-reasoning",
+					id: block.id,
+					data: {
+						index: block.index ?? 0,
+						text: block.sourceText
+					}
+				});
+				else if (block.type === "tool_call") parts.push({
+					type: `tool-${block.toolName}`,
+					id: block.id,
+					index: block.index ?? 0,
+					toolCallId: block.toolCallId,
+					toolName: block.toolName,
+					input: block.toolArgs ? JSON.parse(block.toolArgs) : {}
+				});
+			});
+		}
+		return {
+			id: `msg-${idx}`,
+			role: isUser ? "user" : "assistant",
+			parts
+		};
+	});
+	console.log(JSON.stringify(uiMessages));
+	return {
+		messages: uiMessages,
 		state: globalState
 	};
 }
