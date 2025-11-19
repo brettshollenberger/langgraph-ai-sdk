@@ -253,10 +253,13 @@ const dynamicPromptMiddleware = createMiddleware({
         const state = request.state;
         const systemPrompt = await getPrompt(state as any, request.runtime);
 
-        return toStructuredMessage(await handler({
+        const rawResponse =await handler({
             ...request,
             systemPrompt,
-        }));
+        });
+        const structuredResponse = await toStructuredMessage(rawResponse)
+        debugger;
+        return structuredResponse;
     },
 })
 
@@ -285,6 +288,7 @@ export const brainstormAgent = async (
 
       const updatedState = await agent.invoke(state as any, config);
       const agentResponse = lastAIMessage(updatedState);
+      const structuredResult = await toStructuredMessage(agentResponse);
 
       if (!agentResponse) {
         throw new Error("Agent response must be an AIMessage");
@@ -295,7 +299,7 @@ export const brainstormAgent = async (
       const remainingTopics = state.remainingTopics.filter(topic => !questionsAnswered.includes(topic));
 
       return {
-          messages: [agentResponse],
+          messages: [structuredResult],
           remainingTopics,
       };
     } catch (error) {

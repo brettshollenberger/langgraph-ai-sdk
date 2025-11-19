@@ -1,5 +1,7 @@
 import { parsePartialJson } from 'ai';
 import { AIMessage, AIMessageChunk } from '@langchain/core/messages';
+
+// TODO: Upgrade this to use blocks as well...
 export class RawJSONParser {
     messageBuffer: string = '';
     hasSeenJsonStart: boolean = false;
