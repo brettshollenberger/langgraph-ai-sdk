@@ -14,7 +14,6 @@ export const Wrapper = (props: {
 };
 
 const BlockRenderer = ({ block }: { block: MessageBlock<any> }) => {
-  console.log(block)
   switch (block.type) {
     case 'text':
       return (

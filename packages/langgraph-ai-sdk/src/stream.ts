@@ -9,7 +9,7 @@ import {
 } from 'ai';
 import type { CompiledStateGraph } from '@langchain/langgraph';
 import type { StreamEvent } from "@langchain/core/tracers/log_stream";
-import { BaseMessage } from '@langchain/core/messages';
+import { BaseMessage, AIMessageChunk, ContentBlock } from '@langchain/core/messages';
 import { RawJSONParser } from './rawJSONParser';
 import type { 
   LanggraphData,
@@ -134,65 +134,6 @@ abstract class Handler<TGraphData extends LanggraphData<any, any>> {
 
   abstract handle(chunk: StreamChunk): Promise<void>;
 }
-class StructuredMessageToolHandler<TGraphData extends LanggraphData<any, any>> extends Handler<TGraphData> {
-  blockId: string | undefined;
-  toolArgsBuffer: string = '';
-  currentToolName: string | undefined;
-
-  constructor(writer: UIMessageStreamWriter<LanggraphUIMessage<TGraphData>>, messageSchema?: InferMessageSchema<TGraphData>) {
-    super(writer, messageSchema);
-  }
-
-  async handle(chunk: StreamChunk): Promise<void> {
-    if (!this.messageSchema) return;
-    if (chunk[0] !== 'messages' && !(Array.isArray(chunk[0]) && chunk[1] === 'messages')) return;
-
-    const data = Array.isArray(chunk[0]) ? chunk[2] : chunk[1];
-    const [message, metadata] = data as StreamMessageOutput;
-
-    const notify = metadata.tags?.includes('notify');
-    if (!notify) return;
-
-    if (!message || !('tool_call_chunks' in message) || typeof message.tool_call_chunks !== 'object' || !Array.isArray(message.tool_call_chunks)) {
-      return;
-    }
-
-    if (message.tool_call_chunks.length === 0) {
-      return;
-    }
-
-    for (const chunk of message.tool_call_chunks) {
-      if (isString(chunk.name)) {
-        this.currentToolName = chunk.name;
-      }
-
-      if (!this.currentToolName?.match(/^extract/)) {
-        continue;
-      }
-
-      const toolArgs = chunk.args;
-      this.toolArgsBuffer += toolArgs;
-
-      await this.writeToolCall();
-    }
-  }
-
-  async writeToolCall(): Promise<void> {
-    const parseResult = await parsePartialJson(this.toolArgsBuffer);
-    const parsed = parseResult.value as Record<string, any>;
-
-    if (isUndefined(this.blockId)) {
-      this.blockId = crypto.randomUUID();
-    }
-
-    writeStructuredBlock({
-      parsed,
-      blockId: this.blockId,
-      index: 0,
-      writer: this.writer,
-    });
-  }
-}
 
 class OtherToolHandler<TGraphData extends LanggraphData<any, any>> extends Handler<TGraphData> {
   currentToolName: string | undefined;
@@ -285,27 +226,18 @@ class OtherToolHandler<TGraphData extends LanggraphData<any, any>> extends Handl
   }
 }
 class ToolCallHandler<TGraphData extends LanggraphData<any, any>> extends Handler<TGraphData> {
-  messagePartIds: Record<string, string> = {};
-  schemaKeys: string[];
-  toolArgsBuffer: string = '';
-  toolValues: Record<string, any> = {};
-  currentToolName: string | undefined;
   handlers: {
-    structured_messages: StructuredMessageToolHandler<TGraphData>;
     other_tools: OtherToolHandler<TGraphData>;
   }
 
   constructor(writer: UIMessageStreamWriter<LanggraphUIMessage<TGraphData>>, messageSchema?: InferMessageSchema<TGraphData>) {
     super(writer, messageSchema);
-    this.schemaKeys = messageSchema ? getSchemaKeys(messageSchema as any) : [];
     this.handlers = {
-      structured_messages: new StructuredMessageToolHandler<TGraphData>(writer, messageSchema),
       other_tools: new OtherToolHandler<TGraphData>(writer, messageSchema),
     };
   }
   
   async handle(chunk: StreamChunk): Promise<void> {
-    await this.handlers.structured_messages.handle(chunk);
     await this.handlers.other_tools.handle(chunk);
   }
 
@@ -317,26 +249,62 @@ class ToolCallHandler<TGraphData extends LanggraphData<any, any>> extends Handle
     await this.handlers.other_tools.handleToolError(toolName, error);
   }
 }
+class BlockBuffer {
+  content: string = '';
+  index: number;
+  id: string;
+  hasJsonStart: boolean = false;
+  hasJsonEnd: boolean = false;
+  
+  constructor(index: number, id: string) {
+    this.index = index;
+    this.id = id;
+  }
+  
+  append(text: string): void {
+    this.content += text;
+  }
+  
+  async tryParseStructured(): Promise<[boolean, Record<string, any> | undefined]> {
+    let buffer = this.content;
+    if (buffer.includes('```json')) {
+      const start = buffer.indexOf('```json') + '```json'.length;
+      buffer = buffer.substring(start);
+      this.hasJsonStart = true;
+    }
+    if (this.hasJsonStart && buffer.includes('```')) {
+      buffer = buffer.replace(/```/g, '');
+      this.hasJsonEnd = true;
+    }
+    
+    const parseResult = await parsePartialJson(buffer);
+    const parsed = parseResult.value;
+    if (!parsed || typeof parsed !== 'object') return [false, undefined];
+    
+    return [true, parsed];
+  }
+}
+
 class RawMessageHandler<TGraphData extends LanggraphData<any, any>> extends Handler<TGraphData> {
-  messageBuffer: string = '';
-  blockId: string | undefined;
-  parser: RawJSONParser;
+  private blockBuffers: Map<number, BlockBuffer> = new Map();
 
   constructor(writer: UIMessageStreamWriter<LanggraphUIMessage<TGraphData>>, messageSchema?: InferMessageSchema<TGraphData>) {
     super(writer, messageSchema);
-    this.parser = new RawJSONParser();
   }
 
   isRawMessageChunk = (chunk: StreamChunk): boolean => {
     if (chunk[0] !== 'messages' && !(Array.isArray(chunk[0]) && chunk[1] === 'messages')) return false;
     return true;
   }
+
+  getOrCreateBuffer(index: number): BlockBuffer {
+    if (!this.blockBuffers.has(index)) {
+      this.blockBuffers.set(index, new BlockBuffer(index, crypto.randomUUID()));
+    }
+    return this.blockBuffers.get(index)!;
+  }
   
   async handle(chunk: StreamChunk): Promise<void> {
-    if (this.messageSchema) {
-      return this.handleRawMessagesAsJSON(chunk);
-    }
-    
     if (!this.isRawMessageChunk(chunk)) return;
 
     const data = Array.isArray(chunk[0]) ? chunk[2] : chunk[1];
@@ -344,40 +312,70 @@ class RawMessageHandler<TGraphData extends LanggraphData<any, any>> extends Hand
     const notify = metadata.tags?.includes('notify');
     if (!notify) return;
 
-    if (isUndefined(this.blockId)) {
-      this.blockId = crypto.randomUUID();
+    if (!AIMessageChunk.isInstance(message)) return;
+    if (!message.content || !Array.isArray(message.content)) return;
+
+    for (const block of message.content) {
+      await this.handleContentBlock(block);
     }
-
-    const content = typeof message.content === 'string' ? message.content : '';
-    this.messageBuffer += content;
-
-    this.writer.write({
-      type: 'content-block-text',
-      index: 0,
-      id: this.blockId,
-      text: this.messageBuffer,
-    } as any);
   }
 
-  async handleRawMessagesAsJSON(chunk: StreamChunk): Promise<void> {
-    const data = Array.isArray(chunk[0]) ? chunk[2] : chunk[1];
-    const [message, metadata] = data as StreamMessageOutput;
-    const notify = metadata.tags?.includes('notify');
-    if (!notify) return;
+  async handleContentBlock(block: ContentBlock): Promise<void> {
+    const index = (block as any).index ?? 0;
 
-    const [success, parsed] = await this.parser.parse(message as any);
-    if (!success || !parsed) return;
+    if (block.type === 'text') {
+      const buffer = this.getOrCreateBuffer(index);
+      buffer.append((block as ContentBlock.Text).text);
 
-    if (isUndefined(this.blockId)) {
-      this.blockId = crypto.randomUUID();
+      if (this.messageSchema) {
+        const [isStructured, parsed] = await buffer.tryParseStructured();
+        
+        if (isStructured && parsed && buffer.hasJsonEnd) {
+          // Only write structured when JSON is complete
+          this.writer.write({
+            type: 'data-content-block-structured',
+            id: buffer.id,
+            data: {
+              index: buffer.index,
+              data: parsed,
+              sourceText: buffer.content,
+            },
+          } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+        } else {
+          // Stream text incrementally
+          this.writer.write({
+            type: 'data-content-block-text',
+            id: buffer.id,
+            data: {
+              index: buffer.index,
+              text: buffer.content,
+            },
+          } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+        }
+      } else {
+        // Stream text incrementally
+        this.writer.write({
+          type: 'data-content-block-text',
+          id: buffer.id,
+          data: {
+            index: buffer.index,
+            text: buffer.content,
+          },
+        } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
+      }
+    } else if (block.type === 'reasoning') {
+      const buffer = this.getOrCreateBuffer(index);
+      buffer.append((block as ContentBlock.Reasoning).text);
+      
+      this.writer.write({
+        type: 'data-content-block-reasoning',
+        id: buffer.id,
+        data: {
+          index,
+          text: buffer.content,
+        },
+      } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
     }
-
-    writeStructuredBlock({
-      parsed,
-      blockId: this.blockId,
-      index: 0,
-      writer: this.writer,
-    });
   }
 }
 
@@ -634,34 +632,42 @@ export async function loadThreadHistory<
         parsedBlocks.forEach((block: any) => {
           if (block.type === 'structured' && block.parsed) {
             parts.push({
-              type: 'content-block-structured',
-              index: block.index ?? 0,
+              type: 'data-content-block-structured',
               id: block.id,
-              data: block.parsed,
-              sourceText: block.sourceText
+              data: {
+                index: block.index ?? 0,
+                data: block.parsed,
+                sourceText: block.sourceText,
+              },
             });
           } else if (block.type === 'text') {
             parts.push({
-              type: 'content-block-text',
-              index: block.index ?? 0,
+              type: 'data-content-block-text',
               id: block.id,
-              text: block.sourceText
+              data: {
+                index: block.index ?? 0,
+                text: block.sourceText,
+              },
             });
           } else if (block.type === 'reasoning') {
             parts.push({
-              type: 'content-block-reasoning',
-              index: block.index ?? 0,
+              type: 'data-content-block-reasoning',
               id: block.id,
-              text: block.sourceText
+              data: {
+                index: block.index ?? 0,
+                text: block.sourceText,
+              },
             });
           } else if (block.type === 'tool_call') {
             parts.push({
               type: `tool-${block.toolName}`,
-              index: block.index ?? 0,
               id: block.id,
-              toolCallId: block.toolCallId,
-              toolName: block.toolName,
-              input: block.toolArgs ? JSON.parse(block.toolArgs) : {}
+              data: {
+                index: block.index ?? 0,
+                toolCallId: block.toolCallId,
+                toolName: block.toolName,
+                input: block.toolArgs ? JSON.parse(block.toolArgs) : {},
+              },
             });
           }
         });

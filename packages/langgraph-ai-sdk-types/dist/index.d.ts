@@ -24,7 +24,25 @@ type MessagePartKeys<TSchema> = TSchema extends readonly z.ZodSchema[] ? InferZo
 type StatePartKeys<TState> = TState extends ValidGraphState ? {
     [K in keyof Omit<InferState<TState>, 'messages'> as `state-${K & string}`]: InferState<TState>[K];
 } : never;
-export type LanggraphDataParts<T extends LanggraphData<any, any>> = StatePartKeys<T> & MessagePartKeys<InferMessageSchema<T>>;
+type ContentBlockParts<T extends LanggraphData<any, any>> = {
+    'data-content-block-text': {
+        index: number;
+        id: string;
+        text: string;
+    };
+    'data-content-block-structured': {
+        index: number;
+        id: string;
+        data: InferMessage<T>;
+        sourceText?: string;
+    };
+    'data-content-block-reasoning': {
+        index: number;
+        id: string;
+        text: string;
+    };
+};
+export type LanggraphDataParts<T extends LanggraphData<any, any>> = StatePartKeys<T> & MessagePartKeys<InferMessageSchema<T>> & ContentBlockParts<T>;
 export type LanggraphAISDKUIMessage<T extends LanggraphData<any, any>> = UIMessage<unknown, LanggraphDataParts<T>>;
 export type MessagePart<T extends LanggraphData<any, any>> = InferMessageSchema<T> extends readonly z.ZodSchema[] ? {
     [K in keyof InferMessage<T>]: {
@@ -76,4 +94,40 @@ export type _SimpleLanggraphUIMessage<T extends LanggraphData<any, any>> = {
     text: string;
 } | InferMessage<T>);
 export type SimpleLanggraphUIMessage<T extends LanggraphData<any, any>> = T extends any ? Prettify<_SimpleLanggraphUIMessage<T>> : never;
+export type MessageBlock<T extends LanggraphData<any, any>> = TextMessageBlock | StructuredMessageBlock<T> | ToolCallMessageBlock | ReasoningMessageBlock;
+export interface TextMessageBlock {
+    type: 'text';
+    index: number;
+    text: string;
+    id: string;
+}
+export interface StructuredMessageBlock<T extends LanggraphData<any, any>> {
+    type: 'structured';
+    index: number;
+    data: InferMessage<T>;
+    sourceText?: string;
+    id: string;
+}
+export interface ToolCallMessageBlock {
+    type: 'tool_call';
+    index: number;
+    toolCallId: string;
+    toolName: string;
+    input: any;
+    output?: any;
+    state: 'running' | 'complete' | 'error';
+    errorText?: string;
+    id: string;
+}
+export interface ReasoningMessageBlock {
+    type: 'reasoning';
+    index: number;
+    text: string;
+    id: string;
+}
+export type MessageWithBlocks<T extends LanggraphData<any, any>> = {
+    id: string;
+    role: 'system' | 'user' | 'assistant';
+    blocks: MessageBlock<T>[];
+};
 export {};

@@ -48,9 +48,16 @@ type StatePartKeys<TState> =
     ? { [K in keyof Omit<InferState<TState>, 'messages'> as `state-${K & string}`]: InferState<TState>[K] }
     : never
 
+type ContentBlockParts<T extends LanggraphData<any, any>> = {
+  'data-content-block-text': { index: number; id: string; text: string };
+  'data-content-block-structured': { index: number; id: string; data: InferMessage<T>; sourceText?: string };
+  'data-content-block-reasoning': { index: number; id: string; text: string };
+}
+
 export type LanggraphDataParts<T extends LanggraphData<any, any>> =
 & StatePartKeys<T>
 & MessagePartKeys<InferMessageSchema<T>>
+& ContentBlockParts<T>
 
 export type LanggraphAISDKUIMessage<T extends LanggraphData<any, any>> = UIMessage<
     unknown,

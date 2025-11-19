@@ -180,14 +180,14 @@ export function useLanggraph<
       const blocksByIndex = new Map<number, any[]>();
       
       msg.parts.forEach(part => {
-        if (part.type.startsWith('content-block-')) {
-          const index = (part as any).index ?? 0;
+        if (part.type.startsWith('data-content-block-')) {
+          const index = (part as any).data?.index ?? 0;
           if (!blocksByIndex.has(index)) {
             blocksByIndex.set(index, []);
           }
           blocksByIndex.get(index)!.push(part);
         } else if (part.type.startsWith('tool-')) {
-          const index = (part as any).index ?? 0;
+          const index = (part as any).data?.index ?? 0;
           if (!blocksByIndex.has(index)) {
             blocksByIndex.set(index, []);
           }
@@ -210,38 +210,38 @@ export function useLanggraph<
   }, [chat.messages]);
 
   function convertPartToBlock(part: any, index: number): MessageBlock<TLanggraphData> {
-    if (part.type === 'content-block-text') {
+    if (part.type === 'data-content-block-text') {
       return {
         type: 'text',
         index,
-        text: part.text,
+        text: part.data.text,
         id: part.id,
       };
-    } else if (part.type === 'content-block-structured') {
+    } else if (part.type === 'data-content-block-structured') {
       return {
         type: 'structured',
         index,
-        data: part.data,
-        sourceText: part.sourceText,
+        data: part.data.data,
+        sourceText: part.data.sourceText,
         id: part.id,
       };
-    } else if (part.type === 'content-block-reasoning') {
+    } else if (part.type === 'data-content-block-reasoning') {
       return {
         type: 'reasoning',
         index,
-        text: part.text,
+        text: part.data.text,
         id: part.id,
       };
     } else if (part.type.startsWith('tool-')) {
       return {
         type: 'tool_call',
         index,
-        toolCallId: part.toolCallId,
+        toolCallId: part.data.toolCallId,
         toolName: part.type.replace('tool-', ''),
-        input: part.input,
-        output: part.output,
-        state: part.errorText ? 'error' : (part.output ? 'complete' : 'running'),
-        errorText: part.errorText,
+        input: part.data.input,
+        output: part.data.output,
+        state: part.data.errorText ? 'error' : (part.data.output ? 'complete' : 'running'),
+        errorText: part.data.errorText,
         id: part.id || crypto.randomUUID(),
       };
     }
@@ -280,6 +280,7 @@ export function useLanggraph<
           };
         });
   }, [chat.messages]);
+  console.log(chat.messages)
 
   return {
     ...chat,
