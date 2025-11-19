@@ -236,12 +236,12 @@ export function useLanggraph<
       return {
         type: 'tool_call',
         index,
-        toolCallId: part.data.toolCallId,
+        toolCallId: part.data?.toolCallId || part.toolCallId,
         toolName: part.type.replace('tool-', ''),
-        input: part.data.input,
-        output: part.data.output,
-        state: part.data.errorText ? 'error' : (part.data.output ? 'complete' : 'running'),
-        errorText: part.data.errorText,
+        input: part.data?.input || part.input,
+        output: part.data?.output || part.output,
+        state: (part.data?.errorText || part.errorText) ? 'error' : ((part.data?.output || part.output) ? 'complete' : 'running'),
+        errorText: part.data?.errorText || part.errorText,
         id: part.id || crypto.randomUUID(),
       };
     }
