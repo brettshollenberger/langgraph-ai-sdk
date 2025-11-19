@@ -1,6 +1,4 @@
 import { AIMessage, AIMessageChunk, ContentBlock } from '@langchain/core/messages';
-import { RawJSONParser } from './rawJSONParser';
-import { isAIMessage } from '@langchain/core/messages';
 import { parsePartialJson } from 'ai';
 export interface ParsedBlock {
   type: 'text' | 'tool_call' | 'structured' | 'reasoning' | 'image';
@@ -49,19 +47,14 @@ class StructuredMessageParser<TSchema extends Record<string, any> = Record<strin
   }
 
   async parse(): Promise<AIMessage | AIMessageChunk> {
-    // Return non-chunk messages as-is
     if (!AIMessageChunk.isInstance(this.message)) {
       return this.message;
     }
 
-    // Handle empty or string content
     if (!this.message.content || !Array.isArray(this.message.content)) {
       return this.message;
     }
 
-    // Parse each content block and separate into:
-    // 1. Native LangChain blocks (for content array - sent to LLM)
-    // 2. Parsed blocks (for response_metadata - for frontend reification)
     const nativeContent: ContentBlock[] = [];
     const parsedBlocks: ParsedBlock[] = [];
 
@@ -72,31 +65,27 @@ class StructuredMessageParser<TSchema extends Record<string, any> = Record<strin
       if (result.type === 'structured') {
         const structuredBlock = result as StructuredContentBlock<TSchema>;
         
-        // Check if there's a preamble before the JSON fence
-        const jsonStart = structuredBlock.text.indexOf('```json');
-        if (jsonStart > 0) {
-          const preamble = structuredBlock.text.substring(0, jsonStart).trim();
-          if (preamble) {
-            // Save preamble as separate text block
-            parsedBlocks.push({
-              type: 'text',
-              index: structuredBlock.index ?? idx,
-              id: crypto.randomUUID(),
-              sourceText: preamble,
-            });
-          }
+        const parser = new TextBlockParser();
+        parser.append(structuredBlock.text);
+        const preamble = parser.getPreamble();
+        
+        if (preamble) {
+          parsedBlocks.push({
+            type: 'text',
+            index: structuredBlock.index ?? idx,
+            id: crypto.randomUUID(),
+            sourceText: preamble,
+          });
         }
         
-        // Store parsed structured data
         parsedBlocks.push({
           type: 'structured',
-          index: (structuredBlock.index ?? idx) + 1, // After preamble
+          index: (structuredBlock.index ?? idx) + 1,
           id: crypto.randomUUID(),
           sourceText: structuredBlock.text,
           parsed: structuredBlock.parsed,
         });
         
-        // Keep only native text block in content for LLM
         nativeContent.push({
           type: 'text',
           text: structuredBlock.text,
@@ -104,10 +93,8 @@ class StructuredMessageParser<TSchema extends Record<string, any> = Record<strin
           id: structuredBlock.id,
         } as ContentBlock.Text);
       } else {
-        // Native blocks (text, tool_call, etc.) go directly to content
         nativeContent.push(result);
         
-        // Also track in parsed_blocks for consistency
         if (isTextBlock(result)) {
           parsedBlocks.push({
             type: 'text',
@@ -128,7 +115,6 @@ class StructuredMessageParser<TSchema extends Record<string, any> = Record<strin
       }
     }
 
-    // Create new AIMessageChunk with clean content and parsed_blocks in metadata
     return new AIMessageChunk({
       content: nativeContent,
       id: this.message.id,
@@ -153,7 +139,6 @@ class ContentBlockParser<TSchema extends Record<string, any> = Record<string, an
   }
 
   async parse(): Promise<ContentBlock | StructuredContentBlock<TSchema>> {
-    // Pass through non-text blocks unchanged
     if (isToolCallBlock(this.block) ||
         isToolCallChunkBlock(this.block) ||
         isReasoningBlock(this.block) ||
@@ -161,10 +146,10 @@ class ContentBlockParser<TSchema extends Record<string, any> = Record<string, an
       return this.block;
     }
 
-    // Try to parse text blocks as structured content
     if (isTextBlock(this.block)) {
       const parser = new TextBlockParser();
-      const [success, parsed] = await parser.parse(this.block);
+      parser.append(this.block.text);
+      const [success, parsed] = await parser.tryParseStructured();
 
       if (success && parsed) {
         return {
@@ -177,24 +162,47 @@ class ContentBlockParser<TSchema extends Record<string, any> = Record<string, an
       }
     }
 
-    // Return original block if parsing failed or not a text block
     return this.block;
   }
-}
-
-export async function toStructuredMessage<TSchema extends Record<string, any> = Record<string,any>>(
-  result: AIMessage | AIMessageChunk
-): Promise<AIMessage | AIMessageChunk | null> {
-  return new StructuredMessageParser(result).parse();
 }
 export class TextBlockParser {
     messageBuffer: string = '';
     hasSeenJsonStart: boolean = false;
     hasSeenJsonEnd: boolean = false;
+    index: number;
+    id: string;
+    textId: string;
+    structuredId: string;
+    hasEmittedPreamble: boolean = false;
+
+    constructor(index: number = 0) {
+        this.index = index;
+        this.id = crypto.randomUUID();
+        this.textId = crypto.randomUUID();
+        this.structuredId = crypto.randomUUID();
+    }
+
+    append(text: string): void {
+        this.messageBuffer += text;
+    }
+
+    getContent(): string {
+        return this.messageBuffer;
+    }
+
+    getPreamble(): string | undefined {
+        const jsonStart = this.messageBuffer.indexOf('```json');
+        if (jsonStart === -1 || jsonStart === 0) return undefined;
+        return this.messageBuffer.substring(0, jsonStart).trim();
+    }
+
+    hasJsonStart(): boolean {
+        return this.hasSeenJsonStart || this.messageBuffer.includes('```json');
+    }
 
     async parse(block: ContentBlock.Text): Promise<[boolean, Record<string, any> | undefined]> {
         try {
-            this.messageBuffer += block.text;
+            this.append(block.text);
 
             if (this.messageBuffer.includes('```json')) {
                 const indexOfJsonStart = this.messageBuffer.indexOf('```json');
@@ -219,107 +227,33 @@ export class TextBlockParser {
             return [false, undefined];
         }
     }
-}
 
-// export async function parseStructuredChunk<TSchema extends Record<string, any> = Record<string, any>>(
-//   result: AIMessage | AIMessageChunk
-// ): Promise<AIMessage | null> {
-//   const parser = new RawJSONParser();
-//   const [success, parsed] = await parser.parse(result);
-  
-//   // If we already have one, merge into the existing response_metadata
-//   if (isAIMessage(result) && !isChunk(result)) {
-//     if (result.response_metadata) {
-//       result.response_metadata = {
-//         ...result.response_metadata,
-//         ...parsed,
-//       };
-//     }
-//     return result;
-//   }
+    async tryParseStructured(): Promise<[boolean, Record<string, any> | undefined]> {
+        try {
+            let buffer = this.messageBuffer;
 
-//   if (success && parsed) {
-//     const aiMessage = new AIMessage({
-//       content: JSON.stringify(parsed),
-//       response_metadata: parsed as TSchema,
-//     });
-//     return aiMessage;
-//   }
-  
-//   debugger;
-//   return null;
-// }
+            if (buffer.includes('```json')) {
+                const indexOfJsonStart = buffer.indexOf('```json');
+                buffer = buffer.substring(indexOfJsonStart + '```json'.length);
+            }
+            
+            if (buffer.includes('```')) {
+                buffer = buffer.replace(/```/g, '');
+            }
 
-const isToolCall = (message: AIMessageChunk): boolean => {
-  if (!message.content || !message.content[0]) {
-    return false;
-  }
+            const parseResult = await parsePartialJson(buffer);
+            const parsed = parseResult.value;
+            if (!parsed || typeof parsed !== 'object') return [false, undefined];
 
-  let content = message.content[0];
-  if (typeof content !== 'object' || !('type' in content)) {
-    return false;
-  }
-  return content.type === "tool_use";
-}
-
-const isChunk = (message: AIMessage | AIMessageChunk): boolean => {
-  if (Array.isArray(message.content)) return true;
-
-  return 'tool_call_chunks' in message;
-}
-
-// export async function toStructuredMessage<TSchema extends Record<string, any> = Record<string, any>>(
-//     result: AIMessage | AIMessageChunk
-// ): Promise<AIMessage | null> {
-//   if (!result) { 
-//       throw new Error("Handler result must be an AIMessage or an object with messages and structuredResponse properties");
-//   }
-
-//   if (isToolCall(result)) {
-//     console.log(`it's a tool call`)
-//     return result;
-//   }
-
-//   // If it's already an AIMessage, return it
-//   if (isAIMessage(result) && !isChunk(result)) {
-//     console.log(`it's an AI message`)
-//     if (typeof result.content === 'string' && result.content.match('```json')) {
-//       return parseStructuredChunk(result);
-//     }
-//     return result;
-//   }
-
-//   // AIMessageChunk
-//   console.log(`it's a CHONK`)
-//   return await parseStructuredChunk<TSchema>(result);
-// }
-
-// If array of chunks, keep everything as chunk.
-//
-export async function parseStructuredChunk<TSchema extends Record<string, any> = Record<string, any>>(
-  result: AIMessage | AIMessageChunk
-): Promise<AIMessage | null> {
-  const parser = new RawJSONParser();
-  const [success, parsed] = await parser.parse(result);
-  
-  // If we already have one, merge into the existing response_metadata
-  if (isAIMessage(result) && !isChunk(result)) {
-    if (result.response_metadata) {
-      result.response_metadata = {
-        ...result.response_metadata,
-        ...parsed,
-      };
+            return [true, parsed];
+        } catch (e) {
+            return [false, undefined];
+        }
     }
-    return result;
-  }
+}
 
-  if (success && parsed) {
-    const aiMessage = new AIMessage({
-      content: JSON.stringify(parsed),
-      response_metadata: parsed as TSchema,
-    });
-    return aiMessage;
-  }
-  
-  return null;
+export async function toStructuredMessage<TSchema extends Record<string, any> = Record<string,any>>(
+  result: AIMessage | AIMessageChunk
+): Promise<AIMessage | AIMessageChunk | null> {
+  return new StructuredMessageParser<TSchema>(result).parse();
 }

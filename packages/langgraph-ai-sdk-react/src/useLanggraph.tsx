@@ -280,7 +280,6 @@ export function useLanggraph<
           };
         });
   }, [chat.messages]);
-  console.log(chat.messages)
 
   return {
     ...chat,

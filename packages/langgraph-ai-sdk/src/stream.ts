@@ -67,29 +67,6 @@ const isString = (value: unknown): value is string => {
     return typeof value === 'string';
 }
 
-interface WriteStructuredBlockOptions<TGraphData extends LanggraphData<any, any>> {
-  parsed: Record<string, any>;
-  blockId: string;
-  index: number;
-  writer: UIMessageStreamWriter<LanggraphUIMessage<TGraphData>>;
-}
-
-function writeStructuredBlock<TGraphData extends LanggraphData<any, any>>({
-  parsed,
-  blockId,
-  index,
-  writer,
-}: WriteStructuredBlockOptions<TGraphData>): void {
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return;
-
-  writer.write({
-    type: 'content-block-structured',
-    index,
-    id: blockId,
-    data: parsed,
-  } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
-}
-
 export function getSchemaKeys<T extends z.ZodObject<any> | readonly z.ZodObject<any>[]>(
   schema: T | undefined
 ): string[] {
@@ -122,7 +99,6 @@ export interface LanggraphBridgeConfig<
   messageSchema?: InferMessageSchema<TGraphData>;
   state?: Partial<InferState<TGraphData>>;
 }
-
 abstract class Handler<TGraphData extends LanggraphData<any, any>> {
   protected writer: UIMessageStreamWriter<LanggraphUIMessage<TGraphData>>;
   protected messageSchema?: InferMessageSchema<TGraphData>;
@@ -249,45 +225,8 @@ class ToolCallHandler<TGraphData extends LanggraphData<any, any>> extends Handle
     await this.handlers.other_tools.handleToolError(toolName, error);
   }
 }
-class BlockBuffer {
-  content: string = '';
-  index: number;
-  id: string;
-  textId: string;
-  structuredId: string;
-  parser: TextBlockParser;
-  hasEmittedPreamble: boolean = false;
-  
-  constructor(index: number) {
-    this.index = index;
-    this.id = crypto.randomUUID();
-    this.textId = crypto.randomUUID();
-    this.structuredId = crypto.randomUUID();
-    this.parser = new TextBlockParser();
-  }
-  
-  append(text: string): void {
-    this.content += text;
-  }
-  
-  getPreamble(): string | undefined {
-    const jsonStart = this.content.indexOf('```json');
-    if (jsonStart === -1 || jsonStart === 0) return undefined;
-    return this.content.substring(0, jsonStart).trim();
-  }
-  
-  hasJsonStart(): boolean {
-    return this.parser.hasSeenJsonStart || this.content.includes('```json');
-  }
-  
-  async tryParseStructured(): Promise<[boolean, Record<string, any> | undefined]> {
-    const block = { type: 'text' as const, text: this.content, index: this.index };
-    return await this.parser.parse(block);
-  }
-}
-
 class RawMessageHandler<TGraphData extends LanggraphData<any, any>> extends Handler<TGraphData> {
-  private blockBuffers: Map<number, BlockBuffer> = new Map();
+  private parsers: Map<number, TextBlockParser> = new Map();
 
   constructor(writer: UIMessageStreamWriter<LanggraphUIMessage<TGraphData>>, messageSchema?: InferMessageSchema<TGraphData>) {
     super(writer, messageSchema);
@@ -298,11 +237,11 @@ class RawMessageHandler<TGraphData extends LanggraphData<any, any>> extends Hand
     return true;
   }
 
-  getOrCreateBuffer(index: number): BlockBuffer {
-    if (!this.blockBuffers.has(index)) {
-      this.blockBuffers.set(index, new BlockBuffer(index));
+  getOrCreateParser(index: number): TextBlockParser {
+    if (!this.parsers.has(index)) {
+      this.parsers.set(index, new TextBlockParser(index));
     }
-    return this.blockBuffers.get(index)!;
+    return this.parsers.get(index)!;
   }
   
   async handle(chunk: StreamChunk): Promise<void> {
@@ -325,71 +264,67 @@ class RawMessageHandler<TGraphData extends LanggraphData<any, any>> extends Hand
     const index = (block as any).index ?? 0;
 
     if (block.type === 'text') {
-      const buffer = this.getOrCreateBuffer(index);
-      buffer.append((block as ContentBlock.Text).text);
+      const parser = this.getOrCreateParser(index);
+      parser.append((block as ContentBlock.Text).text);
 
       if (this.messageSchema) {
-        const [isStructured, parsed] = await buffer.tryParseStructured();
+        const [isStructured, parsed] = await parser.tryParseStructured();
         
-        // Emit preamble text before JSON fence (once)
-        if (buffer.hasJsonStart() && !buffer.hasEmittedPreamble) {
-          const preamble = buffer.getPreamble();
+        if (parser.hasJsonStart() && !parser.hasEmittedPreamble) {
+          const preamble = parser.getPreamble();
           if (preamble) {
-            buffer.hasEmittedPreamble = true;
+            parser.hasEmittedPreamble = true;
             this.writer.write({
               type: 'data-content-block-text',
-              id: buffer.textId,
+              id: parser.textId,
               data: {
-                index: buffer.index,
+                index: parser.index,
                 text: preamble,
               },
             } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
           }
         }
         
-        if (buffer.hasJsonStart() && isStructured && parsed) {
-          // Stream partial/complete structured data incrementally
+        if (parser.hasJsonStart() && isStructured && parsed) {
           this.writer.write({
             type: 'data-content-block-structured',
-            id: buffer.structuredId,
+            id: parser.structuredId,
             data: {
-              index: buffer.index + 1, // Structured block comes after preamble
+              index: parser.index + 1,
               data: parsed,
-              sourceText: buffer.content,
+              sourceText: parser.getContent(),
             },
           } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
-        } else if (!buffer.hasJsonStart()) {
-          // No JSON fence yet - stream text
+        } else if (!parser.hasJsonStart()) {
           this.writer.write({
             type: 'data-content-block-text',
-            id: buffer.textId,
+            id: parser.textId,
             data: {
-              index: buffer.index,
-              text: buffer.content,
+              index: parser.index,
+              text: parser.getContent(),
             },
           } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
         }
       } else {
-        // No schema - stream text incrementally
         this.writer.write({
           type: 'data-content-block-text',
-          id: buffer.textId,
+          id: parser.textId,
           data: {
-            index: buffer.index,
-            text: buffer.content,
+            index: parser.index,
+            text: parser.getContent(),
           },
         } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
       }
     } else if (block.type === 'reasoning') {
-      const buffer = this.getOrCreateBuffer(index);
-      buffer.append((block as ContentBlock.Reasoning).text);
+      const parser = this.getOrCreateParser(index);
+      parser.append((block as ContentBlock.Reasoning).text);
       
       this.writer.write({
         type: 'data-content-block-reasoning',
-        id: buffer.id,
+        id: parser.id,
         data: {
           index,
-          text: buffer.content,
+          text: parser.getContent(),
         },
       } as InferUIMessageChunk<LanggraphUIMessage<TGraphData>>);
     }
