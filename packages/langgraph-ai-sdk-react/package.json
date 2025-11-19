@@ -1,6 +1,6 @@
 {
   "name": "langgraph-ai-sdk-react",
-  "version": "1.0.23",
+  "version": "1.0.24",
   "description": "React hooks for LangGraph AI SDK",
   "main": "index.js",
   "type": "module",
