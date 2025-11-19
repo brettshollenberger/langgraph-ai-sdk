@@ -342,63 +342,61 @@ async function loadThreadHistory(graph, threadId, messageSchema) {
 		const value = fullState[key];
 		if (value !== void 0 && value !== null) globalState[key] = value;
 	}
-	const uiMessages = messages.map((msg, idx) => {
-		const isUser = msg._getType() === "human";
-		const parts = [];
-		if (isUser) {
-			const content = typeof msg.content === "string" ? msg.content : "";
-			parts.push({
-				type: "text",
-				id: crypto.randomUUID(),
-				text: content
-			});
-		} else {
-			const parsedBlocks = msg.response_metadata?.parsed_blocks;
-			if (parsedBlocks && Array.isArray(parsedBlocks)) parsedBlocks.forEach((block) => {
-				if (block.type === "structured" && block.parsed) parts.push({
-					type: "data-content-block-structured",
-					id: block.id,
-					data: {
-						index: block.index ?? 0,
-						data: block.parsed,
-						sourceText: block.sourceText
-					}
-				});
-				else if (block.type === "text") parts.push({
-					type: "data-content-block-text",
-					id: block.id,
-					data: {
-						index: block.index ?? 0,
-						text: block.sourceText
-					}
-				});
-				else if (block.type === "reasoning") parts.push({
-					type: "data-content-block-reasoning",
-					id: block.id,
-					data: {
-						index: block.index ?? 0,
-						text: block.sourceText
-					}
-				});
-				else if (block.type === "tool_call") parts.push({
-					type: `tool-${block.toolName}`,
-					id: block.id,
-					index: block.index ?? 0,
-					toolCallId: block.toolCallId,
-					toolName: block.toolName,
-					input: block.toolArgs ? JSON.parse(block.toolArgs) : {}
-				});
-			});
-		}
-		return {
-			id: `msg-${idx}`,
-			role: isUser ? "user" : "assistant",
-			parts
-		};
-	});
-	console.log(JSON.stringify(uiMessages));
 	return {
-		messages: uiMessages,
+		messages: messages.map((msg, idx) => {
+			const isUser = msg._getType() === "human";
+			const parts = [];
+			if (isUser) {
+				const content = typeof msg.content === "string" ? msg.content : "";
+				parts.push({
+					type: "text",
+					id: crypto.randomUUID(),
+					text: content
+				});
+			} else {
+				const parsedBlocks = msg.response_metadata?.parsed_blocks;
+				if (parsedBlocks && Array.isArray(parsedBlocks)) parsedBlocks.forEach((block) => {
+					if (block.type === "structured" && block.parsed) parts.push({
+						type: "data-content-block-structured",
+						id: block.id,
+						data: {
+							index: block.index ?? 0,
+							data: block.parsed,
+							sourceText: block.sourceText
+						}
+					});
+					else if (block.type === "text") parts.push({
+						type: "data-content-block-text",
+						id: block.id,
+						data: {
+							index: block.index ?? 0,
+							text: block.sourceText
+						}
+					});
+					else if (block.type === "reasoning") parts.push({
+						type: "data-content-block-reasoning",
+						id: block.id,
+						data: {
+							index: block.index ?? 0,
+							text: block.sourceText
+						}
+					});
+					else if (block.type === "tool_call") parts.push({
+						type: `tool-${block.toolName}`,
+						id: block.id,
+						index: block.index ?? 0,
+						toolCallId: block.toolCallId,
+						toolName: block.toolName,
+						input: block.toolArgs ? JSON.parse(block.toolArgs) : {}
+					});
+				});
+			}
+			return {
+				id: `msg-${idx}`,
+				role: isUser ? "user" : "assistant",
+				parts
+			};
+		}),
 		state: globalState
 	};
 }

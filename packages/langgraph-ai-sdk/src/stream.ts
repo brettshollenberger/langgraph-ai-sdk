@@ -630,7 +630,6 @@ export async function loadThreadHistory<
       parts
     } as LanggraphUIMessage<TGraphData>;
   });
-  console.log(JSON.stringify(uiMessages))
   
   return { messages: uiMessages, state: globalState };
 }

@@ -30,12 +30,10 @@ const EndpointConfig: Record<EndpointKey, EndpointOptions> = {
 type AllGraphData = GraphLanggraphData | AgentLanggraphData;
 
 const setThreadGraphType = (threadId: string, graphType: EndpointKey) => {
-  console.log(`Setting thread ${threadId} to ${graphType}`);
   localStorage.setItem(`thread-${threadId}`, graphType);
 }
 
 const getThreadGraphType = (threadId: string): EndpointKey => {
-  console.log(`Getting thread ${threadId}`);
   return (localStorage.getItem(`thread-${threadId}`) || "agent") as EndpointKey;
 }
 
