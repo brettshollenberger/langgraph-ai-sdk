@@ -3,6 +3,17 @@ import { RawJSONParser } from './rawJSONParser';
 import { isAIMessage } from '@langchain/core/messages';
 import { parsePartialJson } from 'ai';
 
+export interface ParsedBlock {
+  type: 'text' | 'tool_call' | 'structured' | 'reasoning' | 'image';
+  index: number;
+  id: string;
+  sourceText?: string;
+  parsed?: Record<string, any>;
+  toolCallId?: string;
+  toolName?: string;
+  toolArgs?: string;
+}
+
 const isTextBlock = (block: ContentBlock): block is ContentBlock.Text => {
   return block.type === "text";
 };
@@ -50,22 +61,72 @@ class StructuredMessageParser<TSchema extends Record<string, any> = Record<strin
       return this.message;
     }
 
-    // Parse each content block
-    const parsedContent = await Promise.all(
-      this.message.content.map(async (block: ContentBlock) => {
-        return new ContentBlockParser<TSchema>(block).parse();
-      })
-    );
+    // Parse each content block and separate into:
+    // 1. Native LangChain blocks (for content array - sent to LLM)
+    // 2. Parsed blocks (for response_metadata - for frontend reification)
+    const nativeContent: ContentBlock[] = [];
+    const parsedBlocks: ParsedBlock[] = [];
 
-    // Create new AIMessageChunk with parsed content
+    for (let idx = 0; idx < this.message.content.length; idx++) {
+      const block = this.message.content[idx];
+      const result = await new ContentBlockParser<TSchema>(block).parse();
+      
+      if (result.type === 'structured') {
+        const structuredBlock = result as StructuredContentBlock<TSchema>;
+        
+        // Store parsed data separately
+        parsedBlocks.push({
+          type: 'structured',
+          index: structuredBlock.index ?? idx,
+          id: structuredBlock.id || crypto.randomUUID(),
+          sourceText: structuredBlock.text,
+          parsed: structuredBlock.parsed,
+        });
+        
+        // Keep only native text block in content for LLM
+        nativeContent.push({
+          type: 'text',
+          text: structuredBlock.text,
+          index: structuredBlock.index,
+          id: structuredBlock.id,
+        } as ContentBlock.Text);
+      } else {
+        // Native blocks (text, tool_call, etc.) go directly to content
+        nativeContent.push(result);
+        
+        // Also track in parsed_blocks for consistency
+        if (isTextBlock(result)) {
+          parsedBlocks.push({
+            type: 'text',
+            index: result.index ?? idx,
+            id: result.id || crypto.randomUUID(),
+            sourceText: result.text,
+          });
+        } else if (isToolCallBlock(result)) {
+          parsedBlocks.push({
+            type: 'tool_call',
+            index: result.index ?? idx,
+            id: result.id,
+            toolCallId: result.id,
+            toolName: result.name,
+            toolArgs: JSON.stringify(result.input),
+          });
+        }
+      }
+    }
+
+    // Create new AIMessageChunk with clean content and parsed_blocks in metadata
     return new AIMessageChunk({
-      content: parsedContent,
+      content: nativeContent,
       id: this.message.id,
       tool_calls: this.message.tool_calls,
       tool_call_chunks: this.message.tool_call_chunks,
       invalid_tool_calls: this.message.invalid_tool_calls,
       usage_metadata: this.message.usage_metadata,
-      response_metadata: this.message.response_metadata,
+      response_metadata: {
+        ...this.message.response_metadata,
+        parsed_blocks: parsedBlocks.length > 0 ? parsedBlocks : undefined,
+      },
       additional_kwargs: this.message.additional_kwargs,
     });
   }

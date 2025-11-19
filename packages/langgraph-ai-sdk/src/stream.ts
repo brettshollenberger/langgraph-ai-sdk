@@ -644,48 +644,41 @@ export async function loadThreadHistory<
         text: content
       });
     } else {
-      // Check if content is an array of blocks (new format)
-      if (Array.isArray(msg.content)) {
-        let hasStructuredBlocks = false;
-        
-        msg.content.forEach((block: any) => {
+      // Check for parsed_blocks in response_metadata (new format)
+      const parsedBlocks = msg.response_metadata?.parsed_blocks;
+      
+      if (parsedBlocks && Array.isArray(parsedBlocks)) {
+        // Use block-based format from response_metadata
+        parsedBlocks.forEach((block: any) => {
           if (block.type === 'structured' && block.parsed && messageSchema) {
-            hasStructuredBlocks = true;
             // Convert structured blocks to data-message-* parts
             Object.entries(block.parsed).forEach(([key, value]) => {
               parts.push({
                 type: `data-message-${key}`,
-                id: block.id || crypto.randomUUID(),
+                id: block.id,
                 data: value
               });
             });
           } else if (block.type === 'text') {
             parts.push({
               type: 'data-message-text',
-              id: block.id || crypto.randomUUID(),
-              data: block.text
+              id: block.id,
+              data: block.sourceText
             });
+          } else if (block.type === 'tool_call') {
+            // Handle tool calls if needed
           }
         });
-        
-        // If no structured blocks found but messageSchema exists, try response_metadata fallback
-        if (!hasStructuredBlocks && messageSchema) {
-          Object.entries(msg.response_metadata || {}).forEach(([key, value]) => {
+      } else if (messageSchema) {
+        // Fallback to old format: response_metadata keys directly
+        Object.entries(msg.response_metadata || {}).forEach(([key, value]) => {
+          if (key !== 'parsed_blocks' && key !== 'usage') {
             parts.push({
               type: `data-message-${key}`,
               id: crypto.randomUUID(),
               data: value
             });
-          });
-        }
-      } else if (messageSchema) {
-        // Old format: response_metadata
-        Object.entries(msg.response_metadata || {}).forEach(([key, value]) => {
-          parts.push({
-            type: `data-message-${key}`,
-            id: crypto.randomUUID(),
-            data: value
-          });
+          }
         });
       } else {
         // Fallback: plain text
