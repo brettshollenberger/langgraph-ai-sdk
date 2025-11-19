@@ -122,7 +122,6 @@ export interface TextMessageBlock {
   text: string;
   id: string;
 }
-
 export interface StructuredMessageBlock<T extends LanggraphData<any, any>> {
   type: 'structured';
   index: number;

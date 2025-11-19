@@ -11,6 +11,10 @@ import type {
   _SimpleLanggraphUIMessage,
   MessageWithBlocks,
   MessageBlock,
+  TextMessageBlock,
+  StructuredMessageBlock,
+  ReasoningMessageBlock,
+  ToolCallMessageBlock,
 } from 'langgraph-ai-sdk-types';
 import { DefaultChatTransport } from 'ai';
 import { v7 as uuidv7 } from 'uuid';
@@ -205,7 +209,7 @@ export function useLanggraph<
         id: msg.id,
         role: msg.role,
         blocks,
-      };
+      } 
     });
   }, [chat.messages]);
 
@@ -214,9 +218,9 @@ export function useLanggraph<
       return {
         type: 'text',
         index,
-        text: part.data.text,
-        id: part.id,
-      };
+        text: part.data.text as string,
+        id: part.id as string,
+      } as MessageBlock<TLanggraphData>;
     } else if (part.type === 'data-content-block-structured') {
       return {
         type: 'structured',
@@ -224,14 +228,14 @@ export function useLanggraph<
         data: part.data.data,
         sourceText: part.data.sourceText,
         id: part.id,
-      };
+      } as MessageBlock<TLanggraphData>;
     } else if (part.type === 'data-content-block-reasoning') {
       return {
         type: 'reasoning',
         index,
         text: part.data.text,
         id: part.id,
-      };
+      } as MessageBlock<TLanggraphData>;
     } else if (part.type.startsWith('tool-')) {
       return {
         type: 'tool_call',
@@ -243,7 +247,7 @@ export function useLanggraph<
         state: (part.data?.errorText || part.errorText) ? 'error' : ((part.data?.output || part.output) ? 'complete' : 'running'),
         errorText: part.data?.errorText || part.errorText,
         id: part.id || crypto.randomUUID(),
-      };
+      } as MessageBlock<TLanggraphData>;
     }
     
     return {
@@ -251,7 +255,7 @@ export function useLanggraph<
       index: 0,
       text: JSON.stringify(part),
       id: crypto.randomUUID(),
-    };
+    } as MessageBlock<TLanggraphData>;
   }
 
   const tools = useMemo(() => {

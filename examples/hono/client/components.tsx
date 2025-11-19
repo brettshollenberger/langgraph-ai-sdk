@@ -1,5 +1,5 @@
-import type { AppMessage } from '../types.ts';
-import type { MessageWithBlocks, MessageBlock } from 'langgraph-ai-sdk-types';
+import type { AppMessage, GraphLanggraphData, AgentLanggraphData } from '../types.ts';
+import type { MessageWithBlocks, MessageBlock, TextMessageBlock, StructuredMessageBlock, ToolCallMessageBlock, ReasoningMessageBlock } from 'langgraph-ai-sdk-types';
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 
@@ -13,21 +13,53 @@ export const Wrapper = (props: {
   );
 };
 
-const BlockRenderer = ({ block }: { block: MessageBlock<any> }) => {
+const BlockRenderer = <T extends GraphLanggraphData | AgentLanggraphData>({ block }: { block: MessageBlock<T> }) => {
   switch (block.type) {
-    case 'text':
+    case 'text': {
+      const textBlock = block as TextMessageBlock;
       return (
         <div className="prose prose-sm prose-invert max-w-none">
-          <ReactMarkdown>{block.text}</ReactMarkdown>
+          <ReactMarkdown>{textBlock.text}</ReactMarkdown>
         </div>
       );
+    }
     
-    case 'structured':
-      const data = block.data;
-      const isQuestion = (data as any).type === "question";
-      const isMarketingTemplate = (data as any).type === "marketing_template"
-      
-      if (isMarketingTemplate) {
+    case 'structured': {
+      const structuredBlock = block as StructuredMessageBlock<T>;
+      const data = structuredBlock.data;
+
+      if (data.type === "question") {
+        return (
+          <div className="space-y-3">
+            {'text' in data && (
+              <div className="prose prose-sm prose-invert max-w-none font-medium">
+                <ReactMarkdown>{String(data.text)}</ReactMarkdown>
+              </div>
+            )}
+            {'examples' in data && Array.isArray(data.examples) && (
+              <div className="space-y-2 mt-3">
+                <div className="text-xs font-semibold text-blue-300 mb-2">Sample Answers:</div>
+                {data.examples.map((item: any, i: number) => (
+                  <div
+                    key={i}
+                    className="w-full text-left p-3 bg-gray-700 rounded-lg border border-gray-500 text-sm"
+                  >
+                    <div className="font-medium text-blue-300 text-xs mb-1">Example {i + 1}:</div>
+                    <div>{String(item)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {'conclusion' in data && (
+              <div className="mt-3 pt-3 border-t border-gray-500">
+                <div className="prose prose-sm prose-invert max-w-none italic opacity-90">
+                  <ReactMarkdown>{String(data.conclusion)}</ReactMarkdown>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      } else if (data.type === "marketingTemplate") {
         return (
           <div className="space-y-4">
             <div className="flex items-center gap-2 border-b border-purple-400 pb-3">
@@ -88,39 +120,6 @@ const BlockRenderer = ({ block }: { block: MessageBlock<any> }) => {
         );
       }
       
-      if (isQuestion) {
-        return (
-          <div className="space-y-3">
-            {'text' in data && (
-              <div className="prose prose-sm prose-invert max-w-none font-medium">
-                <ReactMarkdown>{String(data.text)}</ReactMarkdown>
-              </div>
-            )}
-            {'examples' in data && Array.isArray(data.examples) && (
-              <div className="space-y-2 mt-3">
-                <div className="text-xs font-semibold text-blue-300 mb-2">Sample Answers:</div>
-                {data.examples.map((item: any, i: number) => (
-                  <div
-                    key={i}
-                    className="w-full text-left p-3 bg-gray-700 rounded-lg border border-gray-500 text-sm"
-                  >
-                    <div className="font-medium text-blue-300 text-xs mb-1">Example {i + 1}:</div>
-                    <div>{String(item)}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-            {'conclusion' in data && (
-              <div className="mt-3 pt-3 border-t border-gray-500">
-                <div className="prose prose-sm prose-invert max-w-none italic opacity-90">
-                  <ReactMarkdown>{String(data.conclusion)}</ReactMarkdown>
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      }
-      
       return (
         <div className="space-y-2">
           {Object.entries(data)
@@ -143,51 +142,56 @@ const BlockRenderer = ({ block }: { block: MessageBlock<any> }) => {
             ))}
         </div>
       );
+    }
     
-    case 'tool_call':
+    case 'tool_call': {
+      const toolBlock = block as ToolCallMessageBlock;
       return (
         <div className="text-xs p-3 bg-gray-700 rounded border border-gray-600">
           <div className="flex items-center gap-2 mb-2">
             <div className={`w-2 h-2 rounded-full ${
-              block.state === 'complete' ? 'bg-green-500' :
-              block.state === 'error' ? 'bg-red-500' :
+              toolBlock.state === 'complete' ? 'bg-green-500' :
+              toolBlock.state === 'error' ? 'bg-red-500' :
               'bg-yellow-500'
             }`} />
-            <span className="font-semibold">🔧 {block.toolName}</span>
-            <span className="text-gray-400">({block.state})</span>
+            <span className="font-semibold">🔧 {toolBlock.toolName}</span>
+            <span className="text-gray-400">({toolBlock.state})</span>
           </div>
-          {block.output && (
+          {toolBlock.output && (
             <div className="mt-2 text-xs">
               <div className="text-gray-400">Result:</div>
-              <pre className="mt-1 text-green-400 overflow-x-auto">{JSON.stringify(block.output, null, 2)}</pre>
+              <pre className="mt-1 text-green-400 overflow-x-auto">{JSON.stringify(toolBlock.output, null, 2)}</pre>
             </div>
           )}
-          {block.errorText && (
+          {toolBlock.errorText && (
             <div className="mt-2 text-red-400 text-xs">
-              Error: {block.errorText}
+              Error: {toolBlock.errorText}
             </div>
           )}
         </div>
       );
+    }
     
-    case 'reasoning':
+    case 'reasoning': {
+      const reasoningBlock = block as ReasoningMessageBlock;
       return (
         <div className="text-xs p-3 bg-blue-900/30 rounded border border-blue-700 italic">
           <div className="font-semibold mb-1">💭 Reasoning:</div>
-          <div className="opacity-90">{block.text}</div>
+          <div className="opacity-90">{reasoningBlock.text}</div>
         </div>
       );
+    }
     
     default:
       return null;
   }
 };
 
-export const Message = ({
+export const Message = <T extends GraphLanggraphData | AgentLanggraphData>({
   message,
   onExampleClick,
 }: {
-  message: MessageWithBlocks<any>;
+  message: MessageWithBlocks<T>;
   onExampleClick?: (text: string) => void;
 }) => {
   const isUser = message.role === 'user';
@@ -212,7 +216,7 @@ export const Message = ({
       }`}>
         <div className="space-y-3">
           {message.blocks.map((block) => (
-            <BlockRenderer key={block.id} block={block} />
+            <BlockRenderer<T> key={block.id} block={block} />
           ))}
         </div>
       </div>
