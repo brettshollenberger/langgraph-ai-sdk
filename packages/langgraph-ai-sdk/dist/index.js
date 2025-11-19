@@ -1,5 +1,5 @@
 import { n as __export } from "./chunk-C3Lxiq5Q.js";
-import { n as toStructuredMessage, t as TextBlockParser } from "./toStructuredMessage-CalTndMp.js";
+import { n as toStructuredMessage, t as TextBlockParser } from "./toStructuredMessage-BeoZpY70.js";
 import { AIMessage, AIMessageChunk, HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { createUIMessageStream, createUIMessageStreamResponse, parsePartialJson } from "ai";
 import { kebabCase } from "change-case";

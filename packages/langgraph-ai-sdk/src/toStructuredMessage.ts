@@ -168,7 +168,6 @@ class StructuredMessageParser<TSchema extends Record<string, any> = Record<strin
       });
     }
 
-    debugger;
     return new AIMessage({
       content: nativeContent,
       id: this.message.id,

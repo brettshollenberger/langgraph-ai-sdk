@@ -113,7 +113,6 @@ var StructuredMessageParser = class {
 			},
 			additional_kwargs: this.message.additional_kwargs
 		});
-		debugger;
 		return new AIMessage({
 			content: nativeContent,
 			id: this.message.id,
