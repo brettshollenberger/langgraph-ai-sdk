@@ -172,12 +172,12 @@ export function useLanggraph<
         return {
           id: msg.id,
           role: msg.role,
-          blocks: [{
+          blocks: text ? [{
             type: 'text' as const,
             index: 0,
             text,
             id: crypto.randomUUID(),
-          }]
+          }] : []
         };
       }
       
