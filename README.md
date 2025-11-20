@@ -102,7 +102,7 @@ const message = await llm // Don't use structured output!
   .withConfig({ tags: ["notify"] }) // Attach tags: ["notify"]!
   .invoke(prompt);
 
-// Helper to convert the message to a structured message
+// Helper to convert the message to a structured output
 const structuredMessage = await toStructuredMessage(message);
 
 return {

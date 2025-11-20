@@ -249,7 +249,7 @@ const dynamicPromptMiddleware = createMiddleware({
         const state = request.state;
         const systemPrompt = await getPrompt(state as any, request.runtime);
 
-        const rawResponse =await handler({
+        const rawResponse = await handler({
             ...request,
             systemPrompt,
         });
@@ -278,15 +278,17 @@ export const brainstormAgent = async (
           model: llm,
           tools,
           middleware: [dynamicPromptMiddleware],
-        //   responseFormat: agentOutputSchema,
       });
 
       const updatedState = await agent.invoke(state as any, config);
       const agentResponse = lastAIMessage(updatedState);
-      const structuredResult = await toStructuredMessage(agentResponse);
 
       if (!agentResponse) {
         throw new Error("Agent response must be an AIMessage");
+      }
+      const structuredResult = await toStructuredMessage(agentResponse);
+      if (!structuredResult) {
+        throw new Error("Failed to convert agent response to structured message");
       }
 
       const answers = await readAnswersFromJSON<Brainstorm>();

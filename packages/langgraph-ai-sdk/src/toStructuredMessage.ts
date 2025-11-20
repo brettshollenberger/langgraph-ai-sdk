@@ -1,4 +1,4 @@
-import { AIMessage, AIMessageChunk, ContentBlock } from '@langchain/core/messages';
+import { AIMessage, AIMessageChunk, BaseMessage, ContentBlock } from '@langchain/core/messages';
 import { parsePartialJson } from 'ai';
 export interface ParsedBlock {
   type: 'text' | 'tool_call' | 'structured' | 'reasoning' | 'image';
@@ -40,15 +40,15 @@ interface StructuredContentBlock<TSchema extends Record<string, any> = Record<st
   [key: string]: unknown; // Required for BaseContentBlock compatibility
 }
 class StructuredMessageParser<TSchema extends Record<string, any> = Record<string, any>> {
-  message: AIMessage | AIMessageChunk;
+  message: BaseMessage | AIMessage | AIMessageChunk;
 
-  constructor(message: AIMessage | AIMessageChunk) {
+  constructor(message: BaseMessage | AIMessage | AIMessageChunk) {
     this.message = message;
   }
 
   async parseAIMessage(): Promise<AIMessage> {
     if (!this.message.content || typeof this.message.content !== 'string') {
-      return this.message;
+      return this.message as AIMessage;
     }
 
     const parser = new TextBlockParser();
@@ -89,7 +89,7 @@ class StructuredMessageParser<TSchema extends Record<string, any> = Record<strin
     }
 
     if (!this.message.content || !Array.isArray(this.message.content)) {
-      return this.message;
+      return this.message as AIMessage;
     }
 
     const nativeContent: ContentBlock[] = [];
@@ -97,7 +97,9 @@ class StructuredMessageParser<TSchema extends Record<string, any> = Record<strin
 
     for (let idx = 0; idx < this.message.content.length; idx++) {
       const block = this.message.content[idx];
-      const result = await new ContentBlockParser<TSchema>(block).parse();
+      const result = await new ContentBlockParser<TSchema>(
+        block as ContentBlock
+      ).parse();
       
       if (result.type === 'structured') {
         const structuredBlock = result as StructuredContentBlock<TSchema>;
@@ -308,7 +310,7 @@ export class TextBlockParser {
 }
 
 export async function toStructuredMessage<TSchema extends Record<string, any> = Record<string,any>>(
-  result: AIMessage | AIMessageChunk
+  result: BaseMessage | AIMessage | AIMessageChunk
 ): Promise<AIMessage | AIMessageChunk | null> {
   return new StructuredMessageParser<TSchema>(result).parse();
 }
